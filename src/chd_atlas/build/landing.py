@@ -96,7 +96,7 @@ from chd_atlas.corpus import Corpus
 # literal because there is no data source for it to drift out of sync with; a
 # wrong repository link is a code review problem, not a silent-evidence-loss
 # one.
-_REPOSITORY_URL = "https://github.com/enriquea/chd-atlas"
+_REPOSITORY_URL = "https://github.com/chd-atlas/chd-atlas"
 
 # A caption that told a reader to wait for something that had already happened.
 #
