@@ -71,6 +71,48 @@ def _validity_mirrors_missing(root: Path) -> None:
     (root / "mirrors" / "sources.yaml").write_text(VALID_SOURCES_YAML)
 
 
+def _orphanet_mirrors_missing(root: Path) -> None:
+    """One Orphanet-scoped term, and none of the three mirrors its warrant is read from.
+
+    Everything else loads cleanly -- the term's label agrees with the one GenCC
+    row naming it, and the gene registry resolves that row's symbol -- so SCP006
+    is the *only* error. Measured when written: the report is exactly SCP006
+    (error) and SCP008 (warning). Without the error, SCP008 would arrive alone in
+    a report `ok` calls clean, and every gene the term admits would publish on a
+    warrant nobody checked.
+    """
+    (root / "curation").mkdir()
+    (root / "curation" / ".id_registry.yaml").write_text("{}\n")
+    (root / "curation" / "chd_scope.yaml").write_text(
+        "diseases:\n"
+        "  - id: MONDO:0018997\n"
+        "    label: Noonan syndrome\n"
+        "    reason: Orphanet records abnormal pulmonary valve morphology at Frequent.\n"
+        "    admitted_by: orphanet_phenotype_frequency\n"
+        "    attributed_to: Orphanet\n"
+        "    orphanet: ORPHA:648\n"
+        "    admitted_on: 2026-10-25\n"
+    )
+    (root / "mirrors").mkdir()
+    (root / "mirrors" / "sources.yaml").write_text(VALID_SOURCES_YAML)
+    (root / "mirrors" / "genes.tsv").write_text(
+        "hgnc_id\tsymbol\tname\taliases\tprev_symbols\tensembl_gene\tncbi_gene\tlocus\t"
+        "uniprot\tmane_select\n"
+        "HGNC:9644\tPTPN11\tprotein tyrosine phosphatase non-receptor type 11\t\t\t"
+        "ENSG00000179295\t5781\t12q24.13\tQ06124\tNM_002834.5\n"
+    )
+    (root / "mirrors" / "clingen_gene_validity.tsv").write_text(
+        "gene\tgene_symbol\tdisease\tdisease_label\tmoi\tsop\tclassification\t"
+        "classification_date\tgcep\treport_url\n"
+    )
+    (root / "mirrors" / "gencc_submissions.tsv").write_text(
+        "sgc_id\tgene\tgene_symbol\tdisease\tdisease_label\tmoi\tclassification\t"
+        "submitter\tsubmitted_on\treport_url\n"
+        "SGC-1\tHGNC:9644\tPTPN11\tMONDO:0018997\tNoonan syndrome\tAD\tDefinitive\tG2P\t"
+        "2023-01-01\thttps://x\n"
+    )
+
+
 def _gene_registry_missing(root: Path) -> None:
     """Validity mirrors present, gene registry absent. Isolates GEN000's cause.
 
@@ -511,6 +553,13 @@ def test_a_gap_warning_is_reported_without_blocking_the_build() -> None:
             {"PRF000"},
             {"PRF013"},
             id="phase-vocabulary-empty",
+        ),
+        # SCP008's own cause: an Orphanet-scoped term with no Orphanet mirrors.
+        pytest.param(
+            _orphanet_mirrors_missing,
+            {"SCP008"},
+            {"SCP006"},
+            id="orphanet-mirrors-missing",
         ),
     ],
 )
@@ -1093,3 +1142,34 @@ def test_a_combined_row_is_checked_by_the_real_validator(
     report = validate_repository(root)
     codes = sorted(issue.code for issue in report.issues if issue.severity is Severity.ERROR)
     assert codes == expected
+
+
+@pytest.mark.parametrize("validity_mirrors", ["readable", "missing"])
+def test_an_orphanet_warrant_is_checked_on_both_validity_branches(
+    tmp_path: Path, validity_mirrors: str
+) -> None:
+    """SCP006 is one call site, reached whether or not the validity mirrors read (§4.34).
+
+    Noonan syndrome nominated on Costello syndrome's Orphanet code: MONDO:0018997
+    does not reach ORPHA:3071, so the warrant fails on either branch.
+    """
+    root = _real_repo(tmp_path)
+    scope = root / "curation" / "chd_scope.yaml"
+    scope.write_text(
+        scope.read_text(encoding="utf-8") + "  - id: MONDO:0018997\n"
+        "    label: Noonan syndrome\n"
+        "    reason: A nomination on the wrong Orphanet code.\n"
+        "    admitted_by: orphanet_phenotype_frequency\n"
+        "    attributed_to: Orphanet\n"
+        "    orphanet: ORPHA:3071\n"
+        "    admitted_on: 2026-10-25\n",
+        encoding="utf-8",
+    )
+    if validity_mirrors == "missing":
+        (root / "mirrors" / "clingen_gene_validity.tsv").unlink()
+        (root / "mirrors" / "gencc_submissions.tsv").unlink()
+
+    report = validate_repository(root)
+    refusals = [i for i in report.issues if i.code == "SCP006"]
+    assert len(refusals) == 1
+    assert "does not reach ORPHA:3071" in refusals[0].message

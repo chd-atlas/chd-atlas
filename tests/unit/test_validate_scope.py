@@ -7,12 +7,17 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from chd_atlas.issues import Severity
 from chd_atlas.models.scope import ScopeEntry
+from chd_atlas.orphanet_scope import Annotation, OrphanetTables
 from chd_atlas.validate.scope import (
     CHD_EXPERT_PANEL,
+    orphanet_candidates,
     scope_candidates,
     validate_curation_is_in_scope,
+    validate_orphanet_warrants,
     validate_scope_attribution,
     validate_scope_terms,
 )
@@ -321,3 +326,106 @@ def test_a_commercial_submitters_term_cannot_be_relabelled_as_clingens_chd_panel
             attributed_to="Hearing Loss Gene Curation Expert Panel",
         )
     ) == ["SCP005"]
+
+
+# --- The Orphanet frequency warrant (issue #8 part 1, 2026-10-25) ---------------
+
+_STRUCTURAL = frozenset({"HP:0001642", "HP:0001631"})
+_PULMONIC = Annotation("HP:0001642", "Pulmonic stenosis", "Frequent (79-30%)")
+_HCM = Annotation("HP:0001638", "Cardiomyopathy", "Very frequent (99-80%)")
+_TABLES = OrphanetTables(
+    annotations={"ORPHA:648": (_PULMONIC,), "ORPHA:79": (_HCM,), "ORPHA:3071": (_PULMONIC,)},
+    names={"ORPHA:648": "Noonan syndrome", "ORPHA:79": "Fabry disease", "ORPHA:3071": "Costello"},
+    omim_links={("ORPHA:648", "OMIM:610733"): ("BTNT", "Validated")},
+    xrefs={
+        "MONDO:0018997": frozenset({"ORPHA:648"}),
+        "MONDO:0012547": frozenset({"OMIM:610733"}),
+        "MONDO:0010526": frozenset({"ORPHA:79"}),
+        "MONDO:0009026": frozenset({"ORPHA:3071"}),
+    },
+)
+
+
+def _orphanet_entry(**overrides: object) -> ScopeEntry:
+    fields: dict[str, object] = {
+        "id": "MONDO:0018997",
+        "label": "Noonan syndrome",
+        "admitted_by": "orphanet_phenotype_frequency",
+        "attributed_to": "Orphanet",
+        "orphanet": "ORPHA:648",
+    }
+    return _entry(**{**fields, **overrides})
+
+
+def test_attribution_leaves_an_orphanet_warrant_to_its_own_check() -> None:
+    """SCP005 would otherwise look "Orphanet" up among ClinGen panels and refuse it."""
+    panels = {"MONDO:0018997": frozenset({"RASopathy Gene Curation Expert Panel"})}
+    issues = validate_scope_attribution([_orphanet_entry()], panels, {}, _LOCATION)
+    assert issues == []
+
+
+def test_a_nominated_syndrome_and_its_subtype_with_a_warrant_pass() -> None:
+    subtype = _orphanet_entry(id="MONDO:0012547", label="Noonan syndrome 4")
+    assert (
+        validate_orphanet_warrants([_orphanet_entry(), subtype], _TABLES, _STRUCTURAL, _LOCATION)
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    ("entry", "reason"),
+    [
+        # The term does not reach the code it names: a wrong `orphanet` field.
+        pytest.param(_orphanet_entry(orphanet="ORPHA:3071"), "does not reach", id="unreachable"),
+        # It reaches its code, and Orphanet records only cardiomyopathy there.
+        pytest.param(
+            _orphanet_entry(id="MONDO:0010526", label="Fabry disease", orphanet="ORPHA:79"),
+            "no structural heart phenotype",
+            id="not-qualifying",
+        ),
+    ],
+)
+def test_a_nomination_orphanet_does_not_support_is_refused_saying_why(
+    entry: ScopeEntry, reason: str
+) -> None:
+    """SCP006, one case per half of the rule, because the two are fixed differently."""
+    issues = validate_orphanet_warrants([entry], _TABLES, _STRUCTURAL, _LOCATION)
+    assert [issue.code for issue in issues] == ["SCP006"]
+    assert issues[0].severity is Severity.ERROR
+    assert reason in issues[0].message
+
+
+@pytest.mark.parametrize(
+    ("tables", "structural"),
+    [pytest.param(None, _STRUCTURAL, id="mirrors"), pytest.param(_TABLES, None, id="hpo")],
+)
+def test_an_unreadable_input_is_one_error_and_one_skip_never_a_refusal_per_term(
+    tables: OrphanetTables | None, structural: frozenset[str] | None
+) -> None:
+    """SCP008 is a skip warning, so it must arrive with the error that caused it (§4.41)."""
+    entries = [_orphanet_entry(), _orphanet_entry(id="MONDO:0012547", label="Noonan syndrome 4")]
+    issues = validate_orphanet_warrants(entries, tables, structural, _LOCATION)
+    assert [(issue.code, issue.severity) for issue in issues] == [
+        ("SCP006", Severity.ERROR),
+        ("SCP008", Severity.WARNING),
+    ]
+    assert "2 Orphanet-scoped term(s)" in issues[0].message
+    # And with nothing to check, nothing at all: a skip with no work is a lone warning.
+    assert validate_orphanet_warrants([_entry()], tables, structural, _LOCATION) == []
+
+
+def test_an_unnominated_term_that_would_qualify_is_listed_once_and_a_nominated_one_is_not() -> None:
+    """SCP007: the review signal that makes a non-nomination a visible choice."""
+    labels = {
+        "MONDO:0018997": "Noonan syndrome",
+        "MONDO:0009026": "Costello syndrome",
+        "MONDO:0012547": "Noonan syndrome 4",
+        "MONDO:0010526": "Fabry disease",
+    }
+    issues = orphanet_candidates({"MONDO:0018997"}, labels, _TABLES, _STRUCTURAL, _LOCATION)
+    assert [(issue.code, issue.severity) for issue in issues] == [("SCP007", Severity.WARNING)]
+    message = issues[0].message
+    assert message.startswith("2 disease term(s) not in scope")
+    # Sorted by term id; Fabry (cardiomyopathy only) and Noonan (nominated) absent.
+    assert message.index("MONDO:0009026") < message.index("MONDO:0012547")
+    assert "MONDO:0010526" not in message and "MONDO:0018997 " not in message
