@@ -5438,3 +5438,26 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_under_the_validit
         "cases</strong>)"
     ) in rule
     assert "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)" in rule
+
+
+def test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The sentence went false when Costello and CFC syndrome entered scope (2026-10-25).
+
+    It read "No gene here was disputed or refuted by an expert panel for a disease
+    an external authority treats as congenital heart disease". ClinGen's RASopathy
+    panel disputes six published genes for those two syndromes, and PTPN11's page
+    carried the denial beside two `Disputed` rows. Pinned on built bytes, both
+    ways: the replacement present, the denial absent (CLAUDE.md section 4.35).
+    """
+    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
+    key = _slice_between(page, '<details class="grade-key">', ("</details>",))
+    assert (
+        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
+        "may still have disputed the same gene for a different disease. Where that disease "
+        "is one an external authority treats as congenital heart disease, the record is in "
+        "the table below, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries "
+        "a <em>conflicting evidence</em> flag."
+    ) in key
+    assert "No gene here was disputed or refuted" not in page

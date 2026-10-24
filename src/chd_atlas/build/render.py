@@ -572,6 +572,20 @@ def grade_legend() -> str:
     sentence denying it. Hence the second half, which tells the reader the table
     is scope-filtered rather than complete.
 
+    **And then the in-scope half went false too, on 2026-10-25.** The sentence
+    read "No gene here was disputed or refuted by an expert panel for a disease an
+    external authority treats as congenital heart disease". The Orphanet scope
+    path brought Costello and cardiofaciocutaneous syndrome into scope, and
+    ClinGen's RASopathy panel disputes six published genes for them -- BRAF,
+    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, every one Definitive for Noonan syndrome.
+    PTPN11's page carried the denial beside its own `conflicting evidence` chip
+    and two `Disputed` rows. What stays true on every page is narrower and is
+    what the sentence now says: no gene is *headlined* by a contested grade (the
+    headline is the admitting record's, at `Limited` or better), an in-scope
+    dispute is listed in the table and sets `has_conflicting_evidence` (every
+    published gene has a supportive record, so the flag's other half always
+    holds), and an out-of-scope one is not shown.
+
     The qualifier deliberately avoids the phrase "this atlas's CHD scope", which
     `test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas`
     asserts is absent from every page: it told 24 pages that this atlas decides
@@ -592,11 +606,13 @@ def grade_legend() -> str:
         "Curation Coalition submitters grade on the same ladder, and also use "
         "<em>Supportive</em>, which asserts an association without grading its evidence "
         "and which this atlas maps to no rung. "
-        "<strong>No gene here was disputed or refuted by an expert panel for a disease "
-        "an external authority treats as congenital heart disease.</strong> A panel may "
-        "have disputed the same gene for some other disease: the records below are only "
-        "those for diseases in this atlas&#x27;s remit, so this page is not a complete "
-        "account of what ClinGen has said about the gene.</p>"
+        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
+        "may still have disputed the same gene for a different disease. Where that disease "
+        "is one an external authority treats as congenital heart disease, the record is in "
+        "the table below, marked <em>Disputed</em> or <em>Refuted</em>, and the gene "
+        "carries a <em>conflicting evidence</em> flag. Where it is not, the record is not "
+        "shown: the records below are only those for diseases in this atlas&#x27;s remit, "
+        "so this page is not a complete account of what ClinGen has said about the gene.</p>"
         f"<dl>{rows}</dl></details>"
     )
 
