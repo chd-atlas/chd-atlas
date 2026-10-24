@@ -1031,7 +1031,10 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     # figure is a census of the committed corpus, not a property of the code,
     # so it moves whenever a mirror does -- which is the point of pinning it:
     # a silent change in what gets pattern-checked is exactly what it catches.
-    assert total_compared == 122_980
+    #
+    # **122,980 -> 123,250 on 2026-10-24**, when `burden_combined.tsv` landed:
+    # 90 rows x 3 pattern-checked columns (`study`, `gene`, `combines`) = 270.
+    assert total_compared == 123_250
 
     for pattern in patterns:
         compiled = re.compile(pattern)
