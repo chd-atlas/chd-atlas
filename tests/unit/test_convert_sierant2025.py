@@ -21,18 +21,23 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from chd_atlas.tables import BURDEN, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from burden_mirror import COMBINED_ORDER, COMBINED_SORT_KEY  # noqa: E402
 from convert_sierant2025 import (  # noqa: E402
+    _BAND_ROW,
     _BLOCKS,
+    _EXPECTED_BANDS,
     _EXPECTED_HEADERS,
     _HEADER_ROW,
     GENE_COLUMN,
     _case_control_row,
+    _check_bands,
     _check_layout,
+    _combined_row,
     _de_novo_row,
 )
 
@@ -422,7 +427,7 @@ def test_a_header_row_too_short_to_hold_the_layout_is_refused_by_name() -> None:
 
 
 def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
-    """`_BLOCKS` is 36 bare integers, and a transposition among them is silent.
+    """`_BLOCKS` is 42 bare integers, and a transposition among them is silent.
 
     Point the damaging block's `dnm_obs` at column 30 -- the loss-of-function
     column -- and every gate stays green: the value is a real observed count, the
@@ -447,8 +452,8 @@ def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
     against the real sheet on every run, so the two halves meet.
     """
     used = [index for block in _BLOCKS.values() for index in block.values()]
-    assert len(used) == 36
-    assert len(set(used)) == 36, "two blocks read the same column"
+    assert len(used) == 42
+    assert len(set(used)) == 42, "two blocks read the same column"
 
     role_label = {
         "obs": "Obs",
@@ -467,3 +472,85 @@ def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
                 f"{consequence}.{key} points at column {index}, whose header is "
                 f"{_EXPECTED_HEADERS[index]!r} and not {role_label[role]!r}"
             )
+
+
+def test_the_combination_is_read_from_its_own_columns_never_from_fishers() -> None:
+    """Driven through `_combined_row` on a synthetic record (CLAUDE.md §4.23).
+
+    The JL-FDR block and the Fisher block both end in `P-Val`, `FDR`, so a
+    transposed index is the plausible defect: the row would publish Fisher's
+    case-control p as the combination's and every gate would pass. Every cell
+    here differs, so reading any neighbour fails.
+    """
+    record = [""] * 70
+    record[GENE_COLUMN] = "KMT2D"
+    ix = _BLOCKS["lof"]
+    record[ix["cc_p"]] = "5.4935e-4"
+    record[ix["cc_fdr"]] = "1.2385e-2"
+    record[ix["meta_p"]] = "1.6582e-38"
+    record[ix["meta_fdr"]] = "2.6973e-34"
+
+    row = _combined_row("HGNC:7133", "lof", record, ix)
+
+    assert (row["pvalue"], row["local_fdr"]) == ("1.6582e-38", "2.6973e-34")
+    assert row["combines"] == "mutation_model;control_cohort"
+    assert row["method"] == "joint_local_fdr"
+    assert (row["study"], row["gene"], row["consequence_class"]) == (STUDY, "HGNC:7133", "lof")
+    assert (row["cohort_stratum"], row["lesion_group"]) == ("all", "")
+    assert tuple(row) == COMBINED_ORDER == BURDEN_COMBINED.column_names
+    assert BURDEN_COMBINED.sort_key == COMBINED_SORT_KEY
+
+
+# Row 6 of the real workbook at the indices `_EXPECTED_BANDS` checks, written out
+# so a change to the constant has to be made twice deliberately.
+_REAL_BANDS = {
+    23: "Fisher's Exact",
+    27: "JL-FDR",
+    42: "Fisher's Exact",
+    46: "JL-FDR",
+    61: "Fisher's Exact",
+    65: "JL-FDR",
+}
+
+
+def test_a_workbook_whose_fisher_and_jl_fdr_bands_are_swapped_is_refused() -> None:
+    """The leaf labels cannot tell the two blocks apart; the band row can.
+
+    `_check_layout` reads row 7 only, where both the Fisher block and the
+    JL-FDR block read `P-Val`, `FDR`. A supplement that swapped them would pass
+    it and transcribe Fisher's p as the combination. `_check_bands` reads row 6.
+    """
+    assert _BAND_ROW == 6
+    assert _EXPECTED_BANDS == _REAL_BANDS
+    good = [""] * 70
+    for index, label in _REAL_BANDS.items():
+        good[index] = label
+    _check_bands(good)  # the real band row: no exception
+
+    swapped = list(good)
+    swapped[23], swapped[27] = good[27], good[23]
+    with pytest.raises(SystemExit) as raised:
+        _check_bands(swapped)
+    assert "band row" in str(raised.value)
+    assert "column 23" in str(raised.value)
+
+
+def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
+    """90 = the 30 registered panel genes x 3 consequence classes.
+
+    Reads the committed mirror, so it catches a *stale* mirror rather than a
+    converter defect (the direct test above does that). Every combined row must
+    sit over the two arm rows it combines -- BUR020 checks that in the
+    validator; this pins that the converter wrote one per pair and no more.
+    """
+    combined, issues = read_table(REPO_ROOT / "mirrors" / "burden_combined.tsv", BURDEN_COMBINED)
+    assert combined is not None, issues
+    arms, _ = read_table(REPO_ROOT / "mirrors" / "burden.tsv", BURDEN)
+    assert arms is not None
+    mine = arms.filter(pl.col("study") == STUDY)
+    assert combined.height == mine.height // 2 == 90
+    assert set(combined["method"].unique()) == {"joint_local_fdr"}
+    assert combined.filter(pl.col("local_fdr") < pl.col("pvalue")).height > 0, (
+        "the local FDR is below its own p for about half the panel; if no row "
+        "shows that, the columns were read from a corrected-p block"
+    )

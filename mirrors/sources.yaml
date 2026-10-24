@@ -25,8 +25,8 @@ sources:
     name: >-
       Sierant et al. 2025, PNAS 122(13) e2420343122, Dataset S6
       (gene-level meta-analysis over all 248 MIPseq panel genes: Poisson de novo
-      enrichment in trios, and Fisher case-control of ultra-rare TUVs against
-      gnomAD)
+      enrichment in trios, Fisher case-control of ultra-rare TUVs against
+      gnomAD, and the JL-FDR meta-analysis combining the two)
     version: "sha256:d8e9f7777b329c810adde8b9f4a0f91a4d1a6211b760daeb9329ae6f36606daa"
     retrieved_on: 2026-08-05
     # The canonical location. RETRIEVED VIA PMC, not from here: pnas.org answers

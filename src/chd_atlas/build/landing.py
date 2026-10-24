@@ -203,6 +203,7 @@ def _render(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    combined_results: int,
 ) -> str:
     assertion_count = len(corpus.assertions)
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
@@ -246,6 +247,11 @@ def _render(
         (
             _stat("Genes published", _number(published_gene_count)),
             _stat("Burden statistics", _number(census.rows)),
+            # Directly under the statistics it combines. "Within-study" is in
+            # the label because "combined burden results" alone, on the front
+            # page of an atlas that refuses to pool studies (D33), reads as
+            # exactly the pooling it refuses.
+            _stat("Within-study combined burden results", _number(combined_results)),
             _stat("Independent datasets", _number(census.families)),
             # Beside "Independent datasets" rather than at the end, because the
             # two answer the same reader's question one level apart: how many
@@ -357,6 +363,7 @@ def build_landing(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    combined_results: int,
     emitter: Emitter,
 ) -> None:
     """Emit `index.html`.
@@ -390,7 +397,14 @@ def build_landing(
     with no default for the identical reason: a whole evidence layer has landed
     with this page never touched before (CLAUDE.md section 4.29's burden
     precedent), and a silently-defaulted zero is exactly how that happens again.
+
+    `combined_results` is `burden.combined_census`'s return, the same integer
+    `write_manifest` publishes as `counts.burden_combined`, and it has no default
+    for the same reason. The 2.14 spec first left this page unchanged; the
+    one-census test refused that, because this page is documented as stating
+    every key of `counts`.
     """
     emitter.write_text(
-        LANDING, _render(corpus, symbols, validity, published, census, profile_census)
+        LANDING,
+        _render(corpus, symbols, validity, published, census, profile_census, combined_results),
     )

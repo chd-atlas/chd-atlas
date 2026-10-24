@@ -154,6 +154,7 @@ def _build(
     published: set[str] | None = None,
     census: BurdenCensus = _NO_BURDEN,
     profile_census: ProfileCensus = _NO_PROFILES,
+    combined_results: int = 0,
 ) -> str:
     """Render the page.
 
@@ -183,6 +184,7 @@ def _build(
         ),
         census=census,
         profile_census=profile_census,
+        combined_results=combined_results,
         emitter=emitter,
     )
     return (tmp_path / LANDING).read_text(encoding="utf-8")
@@ -347,6 +349,7 @@ def test_the_page_is_published_through_write_text_and_reaches_the_checksums(
         published={TBX5},
         census=_NO_BURDEN,
         profile_census=_NO_PROFILES,
+        combined_results=0,
         emitter=emitter,
     )
 
@@ -752,6 +755,7 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
     # label because "Phenotype terms (HPO)" carries regex metacharacters.
     cards = {
         "assertions": "Curated gene-disease assertions",
+        "burden_combined": "Within-study combined burden results",
         "burden_rows": "Burden statistics",
         "cohort_families": "Independent datasets",
         "cohorts": "Sample collections",

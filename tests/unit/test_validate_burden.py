@@ -14,8 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from chd_atlas.tables import BURDEN
-from chd_atlas.validate.burden import validate_burden, validate_burden_references
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED
+from chd_atlas.validate.burden import (
+    validate_burden,
+    validate_burden_combined,
+    validate_burden_combined_references,
+    validate_burden_references,
+)
 
 _ROW: dict[str, str] = {
     "study": "PMID:42230622",
@@ -527,3 +532,120 @@ def test_de_novo_mutations_cannot_be_counted_in_a_set_that_is_not_de_novo(
     assert "BUR019" not in _codes(tmp_path, {**offending, "origin": "de_novo"})
     assert "BUR019" not in _codes(tmp_path, {**_ROW, "count_unit": "alleles"})
     assert "BUR019" not in _codes(tmp_path, {**_ROW, "count_unit": "individuals"})
+
+
+# PMID:40127276's two arms for one gene and consequence, and the study's own
+# combination of them. Only the fields BUR020 matches on differ from `_ROW`.
+_ARM_KEY = {
+    "study": "PMID:40127276",
+    "gene": "HGNC:7133",
+    "cohort_stratum": "all",
+    "consequence_class": "lof",
+}
+_CASE_CONTROL_ARM = {
+    **_ROW,
+    **_ARM_KEY,
+    "case_cohorts": "pcgc",
+    "control_cohorts": "gnomad_controls",
+}
+_DE_NOVO_ARM = {**_DE_NOVO, **_ARM_KEY, "case_cohorts": "pcgc"}
+_COMBINED: dict[str, str] = {
+    **_ARM_KEY,
+    "lesion_group": "",
+    "combines": "mutation_model;control_cohort",
+    "method": "joint_local_fdr",
+    "pvalue": "1.6582e-38",
+    "local_fdr": "2.6973e-34",
+    "method_note": "",
+    "source": "sierant2025_ds6",
+}
+
+
+def _write_combined(root: Path, *rows: dict[str, str]) -> Path:
+    mirrors = root / "mirrors"
+    mirrors.mkdir(parents=True, exist_ok=True)
+    header = "\t".join(BURDEN_COMBINED.column_names)
+    body = ["\t".join(row[name] for name in BURDEN_COMBINED.column_names) for row in rows]
+    path = mirrors / "burden_combined.tsv"
+    path.write_text("\n".join([header, *body]) + "\n", encoding="utf-8")
+    return root
+
+
+def _combined_codes(
+    tmp_path: Path, arms: list[dict[str, str]], *combined: dict[str, str]
+) -> list[str]:
+    root = _write_combined(_write(tmp_path, *arms) if arms else tmp_path, *combined)
+    return sorted(issue.code for issue in validate_burden_combined(root))
+
+
+def test_a_combination_over_both_of_its_arms_passes(tmp_path: Path) -> None:
+    """The smoke test the cases below rest on (see the first test in this file)."""
+    assert _combined_codes(tmp_path, [_DE_NOVO_ARM, _CASE_CONTROL_ARM], _COMBINED) == []
+
+
+@pytest.mark.parametrize(
+    "arms",
+    [
+        pytest.param([_CASE_CONTROL_ARM], id="de-novo-arm-missing"),
+        pytest.param([_DE_NOVO_ARM], id="case-control-arm-missing"),
+        # The arm exists for the same gene and stratum but another consequence:
+        # a check that matched on (study, gene, stratum) alone would pass this.
+        pytest.param(
+            [{**_DE_NOVO_ARM, "consequence_class": "damaging"}, _CASE_CONTROL_ARM],
+            id="arm-only-for-another-consequence",
+        ),
+    ],
+)
+def test_a_combination_whose_arm_is_not_published_is_refused(
+    tmp_path: Path, arms: list[dict[str, str]]
+) -> None:
+    """BUR020: a combined p over an arm no reader can see is a claim with no rows under it."""
+    assert _combined_codes(tmp_path, arms, _COMBINED) == ["BUR020"]
+
+
+def test_a_combination_with_no_burden_mirror_at_all_is_reported_once(tmp_path: Path) -> None:
+    """Absent `burden.tsv`: one issue naming the cause, not one per combined row."""
+    codes = _combined_codes(tmp_path, [], _COMBINED, {**_COMBINED, "consequence_class": "damaging"})
+    assert codes == ["BUR020"]
+
+
+@pytest.mark.parametrize(
+    "combines",
+    [
+        pytest.param("mutation_model", id="one-arm"),
+        pytest.param("mutation_model;mutation_model", id="one-arm-twice"),
+        pytest.param("mutation_model;case_control", id="unknown-comparator"),
+    ],
+)
+def test_a_combination_must_name_at_least_two_distinct_known_arms(
+    tmp_path: Path, combines: str
+) -> None:
+    """BUR021: one arm relabelled as a combination is a single test with a new name."""
+    arms = [_DE_NOVO_ARM, _CASE_CONTROL_ARM]
+    assert _combined_codes(tmp_path, arms, {**_COMBINED, "combines": combines}) == ["BUR021"]
+
+
+@pytest.mark.parametrize("column", ["pvalue", "local_fdr"])
+def test_a_combined_statistic_of_exactly_zero_is_refused(tmp_path: Path, column: str) -> None:
+    """BUR023: an underflowed transcription, as BUR013 is for an arm's p."""
+    arms = [_DE_NOVO_ARM, _CASE_CONTROL_ARM]
+    assert _combined_codes(tmp_path, arms, {**_COMBINED, column: "0"}) == ["BUR023"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("study", "PMID:99999999", id="unknown-study"),
+        pytest.param("gene", "HGNC:99999", id="unknown-gene"),
+    ],
+)
+def test_a_combined_row_citing_nothing_a_registry_defines_is_reported(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    """BUR022, with the `None`-means-unreadable rule the arm references follow."""
+    root = _write_combined(tmp_path, {**_COMBINED, field: value})
+    issues = validate_burden_combined_references(
+        root, known_genes={"HGNC:7133"}, known_studies={"PMID:40127276"}
+    )
+    assert [issue.code for issue in issues] == ["BUR022"]
+    assert validate_burden_combined_references(root, known_genes=None, known_studies=None) == []

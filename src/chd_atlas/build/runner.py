@@ -24,7 +24,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from chd_atlas.build.bundles import build_genes
-from chd_atlas.build.burden import build_cohorts, burden_census, cohort_registry, load_burden
+from chd_atlas.build.burden import (
+    build_cohorts,
+    burden_census,
+    cohort_registry,
+    combined_census,
+    load_burden,
+    load_combined,
+)
 from chd_atlas.build.concordance import (
     cohort_families,
     evidence_axes,
@@ -262,6 +269,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # `published` and `symbols` are: a gene page and the bundle it links to
     # rendering different burden rows is the failure a single source removes.
     burden = load_burden(root)
+    # Loaded once beside `burden` for the same reason: the bundle, the page and
+    # the manifest census all read this one mapping.
+    combined = load_combined(root)
 
     emitter = Emitter(root=out)
     # `build_omics` skips this table outright -- it is keyed on `_GENE_COLUMN`,
@@ -385,6 +395,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         burden=burden,
         concordance=concordance,
         profiles=expression_profiles,
+        combined=combined,
     )
     build_literature(corpus, emitter)
     # The resolution table for the bare cohort ids every burden row carries.
@@ -399,6 +410,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     registry, _ = load_sources(root)
     build_sources(registry, emitter)
     build_search(corpus, emitter, genes=genes, published=published)
+    # One integer, handed to the front page here and to the manifest below, for
+    # the reason `census` is threaded rather than recomputed.
+    combined_results = combined_census(combined, published)
     build_landing(
         corpus,
         symbols=symbols,
@@ -406,6 +420,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         published=published,
         census=census,
         profile_census=profile_stats,
+        combined_results=combined_results,
         emitter=emitter,
     )
     # The HTML over everything above. Wired here and nowhere else: until this
@@ -438,6 +453,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # trajectory and the phase sentence under the stage it covers cannot
         # come from two different readings of `curation/cardiac_phases.yaml`.
         phases=corpus.cardiac_phases,
+        # The same mapping the bundles were built from, so a page cannot state a
+        # combination its own bundle does not carry.
+        combined=combined,
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`
@@ -472,6 +490,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         counts={
             "genes": len(published),
             "burden_rows": census.rows,
+            # Combined results reaching a published bundle (75), not the
+            # mirror's 90 -- the same convention as `burden_rows`.
+            "burden_combined": combined_results,
             "cohort_families": census.families,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],

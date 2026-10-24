@@ -1,5 +1,5 @@
 # scripts/burden_mirror.py
-"""Shared writer for `mirrors/burden.tsv`, which now holds more than one study.
+"""Shared writer for the burden mirrors, which hold more than one study.
 
 `convert_burden.py` wrote the whole file. With a second study that stops being
 safe: whichever converter ran last would silently delete the other's rows, and
@@ -66,6 +66,29 @@ _SORT_KEY: tuple[str, ...] = (
     "maf_max",
 )
 
+# `TABLE_SCHEMAS["burden_combined"]`'s column order and sort key, written out
+# for the same reason `ORDER` is.
+COMBINED_ORDER: tuple[str, ...] = (
+    "study",
+    "gene",
+    "cohort_stratum",
+    "lesion_group",
+    "consequence_class",
+    "combines",
+    "method",
+    "pvalue",
+    "local_fdr",
+    "method_note",
+    "source",
+)
+COMBINED_SORT_KEY: tuple[str, ...] = (
+    "gene",
+    "study",
+    "cohort_stratum",
+    "lesion_group",
+    "consequence_class",
+)
+
 
 def _sort_value(row: dict[str, str], column: str) -> object:
     """One sort-key cell, compared the way `validate_sort_order` compares it.
@@ -83,8 +106,17 @@ def _sort_value(row: dict[str, str], column: str) -> object:
     return (1, value) if value else (0, "")
 
 
-def merge_study(out: Path, study: str, rows: list[dict[str, str]]) -> tuple[int, int]:
+def merge_study(
+    out: Path,
+    study: str,
+    rows: list[dict[str, str]],
+    order: tuple[str, ...] = ORDER,
+    sort_key: tuple[str, ...] = _SORT_KEY,
+) -> tuple[int, int]:
     """Replace `study`'s rows in `out` with `rows`. Returns (kept, written).
+
+    `order` and `sort_key` default to `burden.tsv`'s layout; the combined
+    mirror passes `COMBINED_ORDER` and `COMBINED_SORT_KEY`.
 
     `kept` counts rows belonging to other studies that survived untouched --
     printed by every converter, because "0 kept" on a mirror that should hold a
@@ -103,12 +135,10 @@ def merge_study(out: Path, study: str, rows: list[dict[str, str]]) -> tuple[int,
             # `.get` keeps the merge working across a schema addition rather
             # than raising and leaving the mirror half-written.
             if existing.get("study") != study:
-                kept.append({name: existing.get(name, "") for name in ORDER})
+                kept.append({name: existing.get(name, "") for name in order})
 
-    merged = sorted(
-        kept + rows, key=lambda row: tuple(_sort_value(row, name) for name in _SORT_KEY)
-    )
-    body = "\n".join("\t".join(row[name] for name in ORDER) for row in merged)
+    merged = sorted(kept + rows, key=lambda row: tuple(_sort_value(row, name) for name in sort_key))
+    body = "\n".join("\t".join(row[name] for name in order) for row in merged)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\t".join(ORDER) + "\n" + body + "\n", encoding="utf-8")
+    out.write_text("\t".join(order) + "\n" + body + "\n", encoding="utf-8")
     return len(kept), len(rows)

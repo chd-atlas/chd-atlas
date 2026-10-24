@@ -4,10 +4,11 @@
 Run locally by a curator, never by CI or the build -- design decision D6.
 
     .venv/bin/python scripts/convert_sierant2025.py \\
-        local/data/sierant2025/pnas.2420343122.sd06.xlsx mirrors/burden.tsv
+        local/data/sierant2025/pnas.2420343122.sd06.xlsx \\
+        mirrors/burden.tsv mirrors/burden_combined.tsv
 
 Merges beside the rows other studies already contributed rather than replacing
-the file; see `burden_mirror.merge_study`.
+either file; see `burden_mirror.merge_study`.
 
     Sierant MC, Jin SC, Bilguvar K, et al. (2025) Genomic analysis of 11,555
     probands identifies 60 dominant congenital heart disease genes.
@@ -82,13 +83,24 @@ case-control `Obs` of 108 is 12 plus 96.
 the headline rather than as a third independent finding, and `pages.py` states
 the relationship outright.
 
+THE COMBINATION GOES IN ITS OWN TABLE
+-------------------------------------
+The JL-FDR columns combine the two arms and are a *local* false discovery rate
+rather than a step-up adjusted p: measured over the 248 genes, the JL-FDR is
+**smaller** than its own meta p for 118 damaging, 135 LOF and 129 D-Mis genes.
+In `pvalue_adjusted` it would trip BUR018, correctly. Since 2026-10-24 it goes to
+`mirrors/burden_combined.tsv` as `local_fdr`, beside the meta p, one row per arm
+pair, and BUR020 checks both arms exist. The meta p is the study's own: measured
+against Fisher's method on the two printed arm p-values it agrees within 10% for
+only 116/133/144 genes, and NODAL's damaging meta p (7.57e-10) is weaker than its
+case-control p alone (9.86e-14), so it is transcribed, never recomputed.
+
+Row 7 reads `P-Val`, `FDR` under both the Fisher block and the JL-FDR block, so
+`_check_bands` also reads row 6, which names them. Without it, a supplement that
+swapped the two blocks would publish Fisher's case-control p as the combination.
+
 WHAT IS NOT MIRRORED, AND WHY
 -----------------------------
-* **The JL-FDR meta-analysis columns.** They combine the two arms, and are a
-  *local* false discovery rate rather than a step-up adjusted p: measured over
-  the 248 genes, the JL-FDR is **smaller** than its own p-value for 118 damaging,
-  135 LOF and 129 D-Mis genes. Putting it in `pvalue_adjusted` would trip BUR018,
-  which is right to refuse it -- "corrected p" it is not.
 * **`pLI` and `MisZ`** are gnomAD constraint scores, a property of the gene
   rather than a burden statistic of this study.
 * **Dataset S7's TDT** is a third design again (transmission disequilibrium in
@@ -129,7 +141,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
-from burden_mirror import merge_study
+from burden_mirror import COMBINED_ORDER, COMBINED_SORT_KEY, merge_study
 from convert_burden import gene_symbols, read_sheet_rows
 
 STUDY: Final = "PMID:40127276"
@@ -172,16 +184,19 @@ _BLOCKS: Final[dict[str, dict[str, int]]] = {
         "dnm_obs": 7, "dnm_exp": 8, "dnm_effect": 9, "dnm_p": 10, "dnm_fdr": 11,
         "cc_obs": 15, "cc_total": 16, "cc_ctrl": 20, "cc_ctrl_total": 21,
         "cc_effect": 23, "cc_p": 24, "cc_fdr": 25,
+        "meta_p": 27, "meta_fdr": 28,
     },
     "lof": {
         "dnm_obs": 30, "dnm_exp": 31, "dnm_effect": 32, "dnm_p": 33, "dnm_fdr": 34,
         "cc_obs": 36, "cc_total": 37, "cc_ctrl": 39, "cc_ctrl_total": 40,
         "cc_effect": 42, "cc_p": 43, "cc_fdr": 44,
+        "meta_p": 46, "meta_fdr": 47,
     },
     "missense_damaging": {
         "dnm_obs": 49, "dnm_exp": 50, "dnm_effect": 51, "dnm_p": 52, "dnm_fdr": 53,
         "cc_obs": 55, "cc_total": 56, "cc_ctrl": 58, "cc_ctrl_total": 59,
         "cc_effect": 61, "cc_p": 62, "cc_fdr": 63,
+        "meta_p": 65, "meta_fdr": 66,
     },
 }
 
@@ -191,10 +206,24 @@ _EXPECTED_HEADERS: Final[dict[int, str]] = {
     GENE_COLUMN: "",  # row 7 is blank under "Gene", which sits on row 6
     7: "Obs", 8: "Exp", 9: "Enrich", 10: "P-Val", 11: "FDR",
     15: "Obs", 16: "Total", 20: "Obs", 21: "Total", 23: "Enrich", 24: "P-Val", 25: "FDR",
+    27: "P-Val", 28: "FDR",
     30: "Obs", 31: "Exp", 32: "Enrich", 33: "P-Val", 34: "FDR",
     36: "Obs", 37: "Total", 39: "Obs", 40: "Total", 42: "Enrich", 43: "P-Val", 44: "FDR",
+    46: "P-Val", 47: "FDR",
     49: "Obs", 50: "Exp", 51: "Enrich", 52: "P-Val", 53: "FDR",
     55: "Obs", 56: "Total", 58: "Obs", 59: "Total", 61: "Enrich", 62: "P-Val", 63: "FDR",
+    65: "P-Val", 66: "FDR",
+}
+
+# Row 6 names each block's test. Checked because row 7 cannot tell the Fisher
+# block from the JL-FDR block -- both end `P-Val`, `FDR` -- so a supplement that
+# swapped them would pass `_check_layout` and publish Fisher's case-control p as
+# the study's combination.
+_BAND_ROW: Final = 6
+_EXPECTED_BANDS: Final[dict[int, str]] = {
+    23: "Fisher's Exact", 27: "JL-FDR",
+    42: "Fisher's Exact", 46: "JL-FDR",
+    61: "Fisher's Exact", 65: "JL-FDR",
 }
 # fmt: on
 _HEADER_ROW: Final = 7
@@ -210,6 +239,14 @@ METHOD_NOTE: Final = (
     "rows, not an independent third result."
 )
 
+COMBINED_NOTE: Final = (
+    "The study's own meta-analysis of its de novo and case-control arms, by the "
+    "joint local false discovery rate method (Jiang & Yu 2017, PMID:28011772). The "
+    "local FDR is not a corrected p-value and can be smaller than the p beside it. "
+    "The meta-analysis p does not reproduce as Fisher's method on the two printed arm "
+    "p-values. The study's genome-wide threshold is p < 2.6e-6."
+)
+
 
 def _check_layout(header: list[str]) -> None:
     """Refuse a workbook whose columns are not where `_BLOCKS` says they are.
@@ -221,20 +258,43 @@ def _check_layout(header: list[str]) -> None:
     plausible. That is this project's characteristic failure with the sign
     flipped -- not evidence lost, but evidence relabelled.
     """
-    # `found` is computed before the comparison rather than inside it: a header
-    # short enough to be missing the index would otherwise raise `IndexError`
-    # from the message-building expression itself, turning "this workbook is the
-    # wrong shape" into a traceback that names neither the column nor the file.
-    wrong = []
-    for index, expected in sorted(_EXPECTED_HEADERS.items()):
-        found = header[index].strip() if index < len(header) else "<past the end of the row>"
-        if found != expected:
-            wrong.append(f"column {index}: expected {expected!r}, found {found!r}")
+    wrong = _mismatches(header, _EXPECTED_HEADERS)
     if wrong:
         raise SystemExit(
             "the workbook's header row does not match the layout this converter "
             "was written against, so every column index below is suspect:\n  " + "\n  ".join(wrong)
         )
+
+
+def _check_bands(band: list[str]) -> None:
+    """Refuse a workbook whose test bands are not where `_BLOCKS` expects them.
+
+    The Fisher and JL-FDR blocks share leaf labels, so `_check_layout` cannot
+    tell them apart; row 6 names them.
+    """
+    wrong = _mismatches(band, _EXPECTED_BANDS)
+    if wrong:
+        raise SystemExit(
+            "the workbook's band row does not name the tests this converter was "
+            "written against, so a Fisher column may be read as the JL-FDR one:\n  "
+            + "\n  ".join(wrong)
+        )
+
+
+def _mismatches(row: list[str], expected: dict[int, str]) -> list[str]:
+    """Every expected cell that does not read as expected, named by column.
+
+    `found` is computed before the comparison rather than inside it: a row too
+    short to hold the index would otherwise raise `IndexError` from the
+    message-building expression itself, turning "this workbook is the wrong
+    shape" into a traceback that names neither the column nor the file.
+    """
+    wrong = []
+    for index, label in sorted(expected.items()):
+        found = row[index].strip() if index < len(row) else "<past the end of the row>"
+        if found != label:
+            wrong.append(f"column {index}: expected {label!r}, found {found!r}")
+    return wrong
 
 
 def _cell(row: list[str], index: int) -> str:
@@ -341,13 +401,37 @@ def _case_control_row(
     }
 
 
-def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]], list[str]]:
-    """Build the mirror rows, and the report lines describing what was dropped."""
+def _combined_row(
+    gene: str, consequence: str, record: list[str], ix: dict[str, int]
+) -> dict[str, str]:
+    """The study's own JL-FDR combination of the two arm rows built above."""
+    return {
+        "study": STUDY,
+        "gene": gene,
+        "cohort_stratum": "all",
+        "lesion_group": "",
+        "consequence_class": consequence,
+        # In the order the page names them: "de novo, trios + case-control".
+        "combines": "mutation_model;control_cohort",
+        "method": "joint_local_fdr",
+        "pvalue": _number(record, ix["meta_p"]),
+        "local_fdr": _number(record, ix["meta_fdr"]),
+        "method_note": COMBINED_NOTE,
+        "source": SOURCE,
+    }
+
+
+def convert(
+    source: Path, symbols: dict[str, str]
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[str]]:
+    """Build the arm rows, the combined rows, and the report lines describing what was dropped."""
     sheet = read_sheet_rows(source, SHEET)
     _check_layout(sheet[_HEADER_ROW])
+    _check_bands(sheet[_BAND_ROW])
 
     records = [row for row in sheet[FIRST_DATA_ROW:] if _cell(row, GENE_COLUMN)]
     rows: list[dict[str, str]] = []
+    combined: list[dict[str, str]] = []
     seen: set[str] = set()
 
     for record in records:
@@ -359,11 +443,13 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
         for consequence, ix in _BLOCKS.items():
             rows.append(_de_novo_row(hgnc, consequence, record, ix))
             rows.append(_case_control_row(hgnc, consequence, record, ix))
+            combined.append(_combined_row(hgnc, consequence, record, ix))
 
     kept = {row["gene"] for row in rows}
     missing = sorted(symbol for symbol, hgnc in symbols.items() if hgnc not in kept)
     report = [
         f"{len(rows)} row(s) for {len(kept)} of the {len(symbols)} registered genes",
+        f"{len(combined)} combined row(s) for {len(kept)} genes",
         f"{len(seen)} genes on the panel; {len(seen) - len(kept)} not in mirrors/genes.tsv",
     ]
     if missing:
@@ -371,22 +457,29 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
             f"WARNING: {len(missing)} registered gene(s) are not on this study's 248-gene "
             f"panel, so they will show no burden from it: {', '.join(missing)}"
         )
-    return rows, report
+    return rows, combined, report
 
 
 def main(argv: list[str]) -> int:
-    if not 2 <= len(argv) <= 3:
+    if not 3 <= len(argv) <= 4:
         print(__doc__, file=sys.stderr)
         return 2
-    source, out = Path(argv[0]), Path(argv[1])
-    root = Path(argv[2]) if len(argv) == 3 else Path.cwd()
+    source, out, combined_out = Path(argv[0]), Path(argv[1]), Path(argv[2])
+    root = Path(argv[3]) if len(argv) == 4 else Path.cwd()
 
-    rows, report = convert(source, gene_symbols(root))
+    rows, combined, report = convert(source, gene_symbols(root))
     kept, written = merge_study(out, STUDY, rows)
+    combined_kept, combined_written = merge_study(
+        combined_out, STUDY, combined, COMBINED_ORDER, COMBINED_SORT_KEY
+    )
 
     for line in report:
         print(line)
     print(f"wrote {written} row(s) for {STUDY}, keeping {kept} row(s) from other studies")
+    print(
+        f"wrote {combined_written} combined row(s) for {STUDY}, "
+        f"keeping {combined_kept} from other studies"
+    )
     print(f"sha256 of {source.name}: {hashlib.sha256(source.read_bytes()).hexdigest()}")
     return 0
 

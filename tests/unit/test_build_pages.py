@@ -13,7 +13,7 @@ from typing import Final
 
 import pytest
 
-from chd_atlas.build.burden import BurdenRow
+from chd_atlas.build.burden import BurdenRow, CombinedRow
 from chd_atlas.build.concordance import cohort_families, evidence_axes
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
@@ -5250,3 +5250,101 @@ def test_a_chart_label_refuses_an_anchor_outside_svgs_own_vocabulary() -> None:
     # and the vocabulary it does accept still works
     for anchor in ("start", "middle", "end"):
         assert f'text-anchor="{anchor}"' in _forest_text(0.0, 0.0, Markup("x"), anchor=anchor)
+
+
+def _combined(**overrides: object) -> CombinedRow:
+    """KMT2D's loss-of-function JL-FDR row from DS6, at the precision the mirror holds."""
+    payload: dict[str, object] = {
+        "study": "PMID:40127276",
+        "gene": GATA4,
+        "cohort_stratum": "all",
+        "lesion_group": None,
+        "consequence_class": "lof",
+        "combines": ("mutation_model", "control_cohort"),
+        "method": "joint_local_fdr",
+        "pvalue": 1.6582359932982601e-38,
+        "local_fdr": 2.6973631548392e-34,
+        "method_note": "The study's own meta-analysis of its de novo and case-control arms.",
+        "source": "sierant2025_ds6",
+    }
+    payload.update(overrides)
+    return CombinedRow(**payload)  # type: ignore[arg-type]
+
+
+def _study_block(section: str, pmid_number: str) -> str:
+    """One study's block within the burden section: from its `<h3>` to the next."""
+    blocks = section.split("<h3>")[1:]
+    matches = [block for block in blocks if pmid_number in block.split("</h3>", 1)[0]]
+    assert len(matches) == 1, f"expected one block for {pmid_number}"
+    return matches[0]
+
+
+def test_a_study_s_own_combination_is_stated_in_its_block_and_labelled_for_what_it_is(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The line, its label, and its caveat, pinned against literals (§4.38).
+
+    Three things a reader would get wrong without the wording:
+
+    * the number is the *authors'* combination within one cohort, not a pooling
+      this atlas did -- D33 forbids the latter and the page must not look like it;
+    * the second statistic is a **joint local FDR**, not a corrected p: it is
+      smaller than its own p for about half the panel, so a reader who took it
+      for one would conclude impossible things;
+    * it combines two named arms, which the rows below it show.
+
+    Scoped to the study's block (§4.19): the other study on the page carries no
+    combination and must render none.
+    """
+    sierant = [
+        _burden_row(
+            study="PMID:40127276",
+            cohort_stratum="all",
+            comparator="mutation_model",
+            origin="de_novo",
+            count_unit="de_novo_mutations",
+            n_case_carriers=21,
+            n_cases=3887,
+            n_control_carriers=None,
+            n_controls=None,
+            control_cohorts=(),
+            expected_count=0.17,
+            effect=126.8,
+            effect_measure="enrichment_ratio",
+            effect_bound=None,
+            ci_low=None,
+            pvalue=6.65e-37,
+            pvalue_test="poisson",
+            case_cohorts=("pcgc",),
+        ),
+    ]
+    rows = [*sierant, _burden_row()]
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: _validity()},
+        assertions={},
+        publications={_PUBLICATION.id: _PUBLICATION, **_SIERANT_PUBLICATION},
+        burden={GATA4: rows},
+        cohorts=_COHORTS,
+        families=cohort_families(rows),
+        axes=evidence_axes(rows),
+        combined={GATA4: [_combined()]},
+    )
+    section = _burden_section_text(_page(tmp_path, "HGNC_4173.html"))
+    block = _study_block(section, "40127276")
+
+    assert (
+        "<strong>Combined across this study&#x27;s arms</strong> (de novo, trios + "
+        "case-control, by the joint local FDR method): loss-of-function p 1.66e-38, "
+        "joint local FDR 2.7e-34."
+    ) in block
+    assert "the authors&#x27; own meta-analysis of the rows below, within one cohort" in block
+    assert "not a corrected p-value" in block
+    # Never a bare "FDR" beside the number: every occurrence is "joint local FDR".
+    assert block.count("FDR 2.7e-34") == block.count("joint local FDR 2.7e-34") == 1
+    # The row's method note reaches the page with the arms' footnotes.
+    assert "own meta-analysis of its de novo and case-control arms." in block
+    assert "Combined across" not in _study_block(section, "42230622")

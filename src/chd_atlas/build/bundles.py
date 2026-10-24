@@ -34,7 +34,7 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, cast
 
-from chd_atlas.build.burden import BurdenRow, burden_payload
+from chd_atlas.build.burden import BurdenRow, CombinedRow, burden_payload, combined_payload
 from chd_atlas.build.derive import GeneFacts, gene_facts
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.omics import ModalitySummary
@@ -260,6 +260,7 @@ def build_genes(
     burden: Mapping[str, Sequence[BurdenRow]],
     concordance: Mapping[str, Json],
     profiles: Mapping[str, ExpressionProfile],
+    combined: Mapping[str, Sequence[CombinedRow]] | None = None,
 ) -> dict[str, GeneFacts]:
     """Emit `genes/index.json` and one bundle per published gene, and return the facts.
 
@@ -301,6 +302,10 @@ def build_genes(
     applies: no external authority has admitted them under D21, so the atlas
     publishes no page for them. Their rows are still published in the shards
     those two modules wrote — the gene index simply does not link to them.
+
+    `combined` is `burden.load_combined`'s return. It defaults to `None` so a
+    caller that predates it publishes an empty `burden_combined` array rather
+    than failing.
 
     `profiles` is `gene_expression_profiles`' return (`build/profiles.py`):
     the derived percentile placement, tau and phase assignment for every gene
@@ -441,6 +446,10 @@ def build_genes(
                 # `omics` above. An absent key would make "no study reported
                 # this gene" indistinguishable from "the build dropped it".
                 "burden": burden_payload(burden.get(gene, ())),
+                # Always present, empty when the gene has none, for the reason
+                # `burden` is. A study's own combination of its arms -- never a
+                # pooling across studies -- whose `local_fdr` is not a corrected p.
+                "burden_combined": combined_payload((combined or {}).get(gene, ())),
                 # Always present, empty ({"datasets": []}) when no profile
                 # dataset's mirror covers this gene -- same rule as `omics`
                 # and `burden` above, for the same reason: an absent key

@@ -373,7 +373,16 @@ from chd_atlas.corpus import Corpus
 # for?", where showing both is the only honest answer and the reader picks.
 # Filtering ambiguous retired symbols out of the index to make the two agree
 # would make `MADH7` unfindable, which serves nobody.
-SCHEMA_VERSION: Final = "2.13"
+#
+# 2.14 adds `burden_combined` to every gene bundle and `burden_combined` to
+# `counts`: one study's own combination of two of its burden arms, from
+# `mirrors/burden_combined.tsv`. Additive, so MINOR: the key is always present,
+# `[]` where the gene has none. Measured on the committed corpus: 75 objects over
+# 25 published genes, all PMID:40127276's JL-FDR meta-analysis, against 90
+# mirrored rows for 30 registered genes. Its `local_fdr` is a local false
+# discovery rate -- smaller than its own `pvalue` for about half that study's
+# panel -- and a consumer must never present it as a corrected p.
+SCHEMA_VERSION: Final = "2.14"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is
