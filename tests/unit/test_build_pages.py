@@ -3288,8 +3288,11 @@ def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> No
             assert gloss in dd, f"{name}: {label} is not glossed by {gloss!r}"
 
         # The scope-qualified claim, on both page kinds. Unqualified it was false
-        # for 5 published genes carrying an out-of-scope ClinGen `Disputed`.
-        assert "disputed or refuted by an expert panel for a disease" in key
+        # for 5 published genes carrying an out-of-scope ClinGen `Disputed`; and
+        # its in-scope half went false on 2026-10-25, when six published
+        # RASopathy genes gained an in-scope `Disputed` for Costello or CFC.
+        assert "No gene here is published on a disputed or refuted grade." in key
+        assert "No gene here was disputed or refuted by an expert panel" not in page
         assert "not published here at all" not in page
 
 
