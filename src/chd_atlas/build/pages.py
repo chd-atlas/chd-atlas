@@ -64,7 +64,7 @@ import html
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
 
-from chd_atlas.build.burden import BurdenRow, _sort_key, shared_cohorts
+from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
 from chd_atlas.build.concordance import FamilyState, family_state
 from chd_atlas.build.derive import GeneFacts
@@ -284,6 +284,20 @@ _COMPARATOR_LABEL: Final[dict[str, str]] = {
     "control_cohort": "case-control",
     "mutation_model": "de novo, trios",
     "none": "case series",
+}
+
+# How a combination method is named on the page, what its second statistic is
+# called, and the caveat that must sit beside it. An unknown method renders its
+# raw token and no caveat rather than nothing -- the rule `_count` applies to an
+# unknown unit -- because a missing name is worse than an unpolished one.
+_COMBINATION_LABEL: Final[dict[str, tuple[str, str, str]]] = {
+    "joint_local_fdr": (
+        "the joint local FDR method",
+        "joint local FDR",
+        "A joint local FDR is <strong>not a corrected p-value</strong>: it can be "
+        "smaller than the p beside it, so it is not comparable with the "
+        "Benjamini-Hochberg column.",
+    ),
 }
 
 _STATE_GLYPH: Final[dict[str, str]] = {
@@ -957,6 +971,7 @@ def _burden_section(
     cohorts: Mapping[str, Cohort],
     families: tuple[frozenset[str], ...] = (),
     axes: tuple[tuple[str, str], ...] = (),
+    combined: Sequence[CombinedRow] = (),
 ) -> str:
     """Published rare-variant burden, one table per study.
 
@@ -1001,6 +1016,7 @@ def _burden_section(
     blocks: list[str] = []
     for study in sorted({row.study for row in rows}):
         study_rows = [row for row in rows if row.study == study]
+        study_combined = [row for row in combined if row.study == study]
         table = data_table(
             _BURDEN_HEADERS,
             [
@@ -1066,9 +1082,10 @@ def _burden_section(
             f"{warning}"
             f"{counted}"
             f"{_composite_note(study_rows)}"
+            f"{_combined_line(study_combined)}"
             f"{forests or _NO_EFFECT_MEASURE}"
             f"{figures}"
-            f"{_footnotes(study_rows)}"
+            f"{_footnotes(study_rows, study_combined)}"
         )
 
     shared = "".join(
@@ -2224,7 +2241,47 @@ def _composite_note(rows: Sequence[BurdenRow]) -> str:
     )
 
 
-def _footnotes(rows: Sequence[BurdenRow]) -> str:
+def _combined_line(rows: Sequence[CombinedRow]) -> str:
+    """A study's own combination of its arms, stated above the arms' figures.
+
+    PMID:40127276's primary result is neither arm but their combination, and
+    until schema 2.14 it reached no page, because it could not go where a
+    corrected p goes (BUR018 refuses it there, correctly). Rendered outside every
+    fold because it is particular to this gene.
+
+    One paragraph per distinct (arms, method) pair, in sorted order; every study
+    today has at most one. Conditional, like `_composite_note`: a study with no
+    combination renders nothing, because an absent combination is not a claim.
+    """
+    paragraphs = []
+    for combines, method in sorted({(row.combines, row.method) for row in rows}):
+        group = [row for row in rows if (row.combines, row.method) == (combines, method)]
+        arms = " + ".join(_COMPARATOR_LABEL.get(c, c) for c in combines)
+        name, statistic, caveat = _COMBINATION_LABEL.get(method, (method, method, ""))
+        results = " &middot; ".join(
+            (
+                f"{html.escape(_STRATUM_LABEL.get(row.cohort_stratum, row.cohort_stratum))}, "
+                if row.cohort_stratum != "all"
+                else ""
+            )
+            + html.escape(_CONSEQUENCE_LABEL.get(row.consequence_class, row.consequence_class))
+            + f" p {row.pvalue:.3g}, {html.escape(statistic)} {row.local_fdr:.3g}"
+            for row in group
+        )
+        paragraphs.append(
+            '<p class="notice-inline"><strong>'
+            + html.escape("Combined across this study's arms")
+            + f"</strong> ({html.escape(arms)}, by {html.escape(name)}): {results}. "
+            + html.escape(
+                "This is the authors' own meta-analysis of the rows below, within one cohort"
+            )
+            + " &mdash; not a statistic this atlas computed, and not a pooling across "
+            + f"studies. {caveat}</p>"
+        )
+    return "".join(paragraphs)
+
+
+def _footnotes(rows: Sequence[BurdenRow], combined: Sequence[CombinedRow] = ()) -> str:
     """`method_note`, rendered -- which `tables.py` said it was and it was not.
 
     The column's comment reads "rendered verbatim as a row footnote", and no
@@ -2232,8 +2289,12 @@ def _footnotes(rows: Sequence[BurdenRow]) -> str:
     different things in different papers (any overlap, exonic, whole gene), so
     the first curator to need it would have got a green build, a correct bundle
     and no page text.
+
+    A combined row's note joins the arms', so the method it names is footnoted
+    under the figures it combines.
     """
-    notes = sorted({row.method_note.strip() for row in rows if row.method_note})
+    raw = [row.method_note for row in rows] + [row.method_note for row in combined]
+    notes = sorted({note.strip() for note in raw if note})
     if not notes:
         return ""
     items = "".join(f"<li>{html.escape(note)}</li>" for note in notes)
@@ -3814,6 +3875,7 @@ def build_gene_pages(
     profiles: Mapping[str, ExpressionProfile] | None = None,
     datasets: Mapping[str, Dataset] | None = None,
     phases: CardiacPhaseFile | None = None,
+    combined: Mapping[str, Sequence[CombinedRow]] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -3858,6 +3920,7 @@ def build_gene_pages(
     """
     profile_by_gene = profiles or {}
     dataset_registry = datasets or {}
+    combined_by_gene = combined or {}
     for gene in sorted(facts):
         fact = facts[gene]
         symbol = symbols.get(gene, gene)
@@ -3888,7 +3951,14 @@ def build_gene_pages(
             # would put nine rows of statistics -- which are not classifications
             # -- inside what it refers to. It also keeps the atlas's own curation
             # adjacent to the notice about whether there is any.
-            + _burden_section(burden.get(gene, ()), publications, cohorts, families, axes)
+            + _burden_section(
+                burden.get(gene, ()),
+                publications,
+                cohorts,
+                families,
+                axes,
+                combined_by_gene.get(gene, ()),
+            )
             # Last: burden and expression are both mirrored/derived evidence
             # layers rather than the atlas's own curation, and expression is
             # the newer of the two -- appending keeps every existing section's

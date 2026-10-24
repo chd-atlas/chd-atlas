@@ -449,6 +449,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # trajectory and the phase sentence under the stage it covers cannot
         # come from two different readings of `curation/cardiac_phases.yaml`.
         phases=corpus.cardiac_phases,
+        # The same mapping the bundles were built from, so a page cannot state a
+        # combination its own bundle does not carry.
+        combined=combined,
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`
