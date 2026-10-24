@@ -22,7 +22,12 @@ from chd_atlas.tables import (
     unexpected_mirror_entries,
     validate_table,
 )
-from chd_atlas.validate.burden import validate_burden, validate_burden_references
+from chd_atlas.validate.burden import (
+    validate_burden,
+    validate_burden_combined,
+    validate_burden_combined_references,
+    validate_burden_references,
+)
 from chd_atlas.validate.genes import validate_mirror_symbols
 from chd_atlas.validate.ids import load_id_registry, validate_ids
 from chd_atlas.validate.ontology import (
@@ -486,6 +491,9 @@ def validate_repository(root: Path) -> ValidationReport:
     # burden table's cross-column rules read nothing but the table itself, so a
     # corpus that failed to load must not silently take these checks with it.
     issues.extend(validate_burden(root))
+    # Unconditional for the same reason: it reads the two burden mirrors and
+    # nothing else.
+    issues.extend(validate_burden_combined(root))
     # Same reasoning again: `profiles`/`profile_quantiles` internal consistency
     # reads nothing but the two mirrors themselves.
     issues.extend(validate_profiles(root))
@@ -637,7 +645,14 @@ def validate_repository(root: Path) -> ValidationReport:
                 known_studies=study_ids or None,
             )
         )
-        # Inside the same branch as the two above, and for the same reason: it
+        issues.extend(
+            validate_burden_combined_references(
+                root,
+                known_genes=known_genes or None,
+                known_studies=study_ids or None,
+            )
+        )
+        # Inside the same branch as the reference checks above, and for the same reason: it
         # reads the gene registry, so on a corpus that failed to load it would
         # report a missing accession for every gene at once.
         issues.extend(validate_ptm_evidence_is_reachable(root, corpus))

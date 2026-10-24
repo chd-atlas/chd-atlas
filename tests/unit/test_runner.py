@@ -1062,3 +1062,34 @@ def test_a_programmer_error_in_the_gate_propagates_rather_than_silencing_prf009(
     monkeypatch.setattr("chd_atlas.validate.runner.gene_validity", boom)
     with pytest.raises(TypeError, match="simulated refactor regression"):
         validate_repository(Path("."))
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "expected"),
+    [
+        # No burden row has comparator `none` for this study: BUR020 only.
+        pytest.param("combines", "mutation_model;none", ["BUR020"], id="arm-missing"),
+        # An unknown study: BUR022 from the references call, and one BUR020 per
+        # arm, because neither arm carries that study.
+        pytest.param("study", "PMID:99999999", ["BUR020", "BUR020", "BUR022"], id="unknown-study"),
+    ],
+)
+def test_a_combined_row_is_checked_by_the_real_validator(
+    tmp_path: Path, column: str, value: str, expected: list[str]
+) -> None:
+    """Both combined validators are reached from `validate_repository` (§4.34).
+
+    The *last* row is edited so the file stays sorted: the key is gene, then
+    study, and the last row is its gene's last.
+    """
+    root = _real_repo(tmp_path)
+    path = root / "mirrors" / "burden_combined.tsv"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = lines[0].split("\t")
+    last = lines[-1].split("\t")
+    last[header.index(column)] = value
+    path.write_text("\n".join([*lines[:-1], "\t".join(last)]) + "\n", encoding="utf-8")
+
+    report = validate_repository(root)
+    codes = sorted(issue.code for issue in report.issues if issue.severity is Severity.ERROR)
+    assert codes == expected
