@@ -97,8 +97,13 @@ sources:
     # recorded as the version: the download's own `last-modified` header reads
     # Fri, 31 Jul 2026 12:53:50 GMT, and `https://rest.genenames.org/info`
     # reports lastModified 2026-07-31T11:49:58.141Z.
-    version: "2026-07-31"
-    retrieved_on: 2026-08-04
+    #
+    # Refreshed 2026-10-25, when the Orphanet scope path widened the keep set
+    # from 154 genes to 185: the complete set's `last-modified` header read
+    # Fri, 16 Oct 2026 13:36:15 GMT (sha256 12363916be36…2f91). None of the
+    # 154 rows already mirrored changed.
+    version: "2026-10-16"
+    retrieved_on: 2026-10-25
     url: https://www.genenames.org/
     # "all data is released under the Creative Commons Public Domain (CC0)
     # License ... any form of reuse of the content is permitted"

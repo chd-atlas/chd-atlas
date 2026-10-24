@@ -17,6 +17,7 @@ from chd_atlas.identifiers import (
     HgncId,
     ModelPhenotypeId,
     ModificationId,
+    OrphaId,
     PhenotypeId,
     Pmcid,
     Pmid,
@@ -56,6 +57,7 @@ SAMPLE: Final = [
     (ContrastId, "hgnc_11604"),
     (CohortId, "ddd"),
     (CohortId, "ukbb"),
+    (OrphaId, "ORPHA:648"),
 ]
 
 

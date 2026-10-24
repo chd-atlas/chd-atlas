@@ -1150,18 +1150,21 @@ def test_an_orphanet_warrant_is_checked_on_both_validity_branches(
 ) -> None:
     """SCP006 is one call site, reached whether or not the validity mirrors read (§4.34).
 
-    Noonan syndrome nominated on Costello syndrome's Orphanet code: MONDO:0018997
-    does not reach ORPHA:3071, so the warrant fails on either branch.
+    KBG syndrome, which nobody has nominated, put forward on Noonan syndrome's
+    Orphanet code: MONDO:0007846 does not reach ORPHA:648, so the warrant fails
+    on either branch. (This used Noonan itself until Noonan was nominated for
+    real, when the appended entry became a duplicate id and the corpus stopped
+    loading: the fixture must pick a term outside the committed scope.)
     """
     root = _real_repo(tmp_path)
     scope = root / "curation" / "chd_scope.yaml"
     scope.write_text(
-        scope.read_text(encoding="utf-8") + "  - id: MONDO:0018997\n"
-        "    label: Noonan syndrome\n"
+        scope.read_text(encoding="utf-8") + "  - id: MONDO:0007846\n"
+        "    label: KBG syndrome\n"
         "    reason: A nomination on the wrong Orphanet code.\n"
         "    admitted_by: orphanet_phenotype_frequency\n"
         "    attributed_to: Orphanet\n"
-        "    orphanet: ORPHA:3071\n"
+        "    orphanet: ORPHA:648\n"
         "    admitted_on: 2026-10-25\n",
         encoding="utf-8",
     )
@@ -1172,4 +1175,4 @@ def test_an_orphanet_warrant_is_checked_on_both_validity_branches(
     report = validate_repository(root)
     refusals = [i for i in report.issues if i.code == "SCP006"]
     assert len(refusals) == 1
-    assert "does not reach ORPHA:3071" in refusals[0].message
+    assert "does not reach ORPHA:648" in refusals[0].message

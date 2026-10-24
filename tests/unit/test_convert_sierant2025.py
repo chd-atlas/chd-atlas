@@ -93,10 +93,12 @@ def test_every_gene_carries_both_arms_for_all_three_consequence_classes(
     study and a stratum -- so if `origin` were dropped from the mirror's sort key
     the pair would collide, and one of the two would be the row that survived.
 
-    Measured 2026-08-05: 30 registered genes x 3 consequences x 2 arms = 180.
+    Measured 2026-10-25: 41 registered panel genes x 3 consequences x 2 arms =
+    246. (30 genes and 180 rows until the registry widened from 154 genes to 185
+    for the Orphanet-scoped syndromes.)
     """
-    assert burden.height == 180
-    assert burden["gene"].n_unique() == 30
+    assert burden.height == 246
+    assert burden["gene"].n_unique() == 41
     assert set(burden["consequence_class"].unique()) == set(_BLOCKS)
 
     per_gene = burden.group_by("gene").len()["len"].unique().to_list()
@@ -104,7 +106,7 @@ def test_every_gene_carries_both_arms_for_all_three_consequence_classes(
 
     de_novo = burden.filter(pl.col("comparator") == "mutation_model")
     case_control = burden.filter(pl.col("comparator") == "control_cohort")
-    assert de_novo.height == case_control.height == 90
+    assert de_novo.height == case_control.height == 123
 
 
 def test_the_two_arms_count_different_things_and_say_so(burden: pl.DataFrame) -> None:
@@ -147,7 +149,7 @@ def test_the_composite_row_is_the_sum_of_its_two_components(burden: pl.DataFrame
         for row in burden.iter_rows(named=True)
     }
     genes = sorted({gene for gene, _, _ in counts})
-    assert len(genes) == 30
+    assert len(genes) == 41
 
     for gene in genes:
         for comparator in ("mutation_model", "control_cohort"):
@@ -216,7 +218,7 @@ def test_no_committed_row_from_this_study_is_unbounded_or_carries_an_interval(
 
     Both `Inf` genes are unregistered, so every committed row from this study has
     a finite effect. And the study publishes no confidence intervals for either
-    arm, which is why `ci_low` and `ci_high` are null on all 180 -- not because
+    arm, which is why `ci_low` and `ci_high` are null on all 246 -- not because
     they were dropped in transcription. BUR014 would report a half-interval, and
     BUR015 an interval qualifying nothing; neither fires, and this says why.
     """
@@ -234,7 +236,7 @@ def test_the_corrected_p_is_the_studys_benjamini_hochberg_and_never_its_local_fd
 
     Each arm carries a Benjamini-Hochberg FDR, which is a step-up adjusted p and
     is never smaller than the p it corrects -- BUR018 asserts exactly that, and
-    it holds on all 180 rows.
+    it holds on all 246 rows.
 
     The sheet also carries a JL-FDR combining the two arms. **That one is a
     local false discovery rate, not an adjusted p**, and measured over the 248
@@ -536,7 +538,7 @@ def test_a_workbook_whose_fisher_and_jl_fdr_bands_are_swapped_is_refused() -> No
 
 
 def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
-    """90 = the 30 registered panel genes x 3 consequence classes.
+    """123 = the 41 registered panel genes x 3 consequence classes (90 = 30 x 3 until 2026-10-25).
 
     Reads the committed mirror, so it catches a *stale* mirror rather than a
     converter defect (the direct test above does that). Every combined row must
@@ -548,7 +550,7 @@ def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
     arms, _ = read_table(REPO_ROOT / "mirrors" / "burden.tsv", BURDEN)
     assert arms is not None
     mine = arms.filter(pl.col("study") == STUDY)
-    assert combined.height == mine.height // 2 == 90
+    assert combined.height == mine.height // 2 == 123
     assert set(combined["method"].unique()) == {"joint_local_fdr"}
     assert combined.filter(pl.col("local_fdr") < pl.col("pvalue")).height > 0, (
         "the local FDR is below its own p for about half the panel; if no row "

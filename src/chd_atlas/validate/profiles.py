@@ -880,8 +880,8 @@ def _prf009_issues(
 
     Checked against `published_genes`, never `known_genes`: the two are
     different sets and this function must not conflate them. A merely
-    registered gene missing from one cell is unremarkable -- most of the
-    154-gene registry is not published at all -- while a *published* one is a
+    registered gene missing from one cell is unremarkable -- 66 of the
+    185-gene registry are not published at all -- while a *published* one is a
     gap on a page a reader can already reach.
 
     **Grouped by assayed cell, not by gene or by (gene, cell) pair.** The

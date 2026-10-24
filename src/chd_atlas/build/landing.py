@@ -43,9 +43,9 @@ times (CLAUDE.md section 4.29).
   `corpus.assertions` — the genes carrying evidence authored here, 1 in the
   committed corpus. It is derived once and shared with the sentence that names
   them, so the figure and the list cannot disagree. Both rows are shown because
-  91 of the 92 published genes carry no assertion at all: a single "genes"
+  118 of the 119 published genes carry no assertion at all: a single "genes"
   figure would read as coverage this site does not have.
-- `len(validity)` is neither of those — every gene either mirror curates, 154 in
+- `len(validity)` is neither of those — every gene either mirror curates, 185 in
   the committed corpus. It is kept, but under "Where this data comes from" and
   labelled so it cannot be read as what this site browses.
 

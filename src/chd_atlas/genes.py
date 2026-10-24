@@ -31,8 +31,9 @@ failure -- the build stays green and the gene is not there.
 match aliases at all, and its stated reason is exactly right: "an alias that is
 another gene's current symbol would silently attribute one gene's burden to
 another". Measured against the committed registry, that collision does not occur
-today -- 154 approved symbols, 309 alias symbols, **zero** overlap between the
-two sets and **zero** aliases claimed by more than one gene -- but the guard is
+today -- 185 approved symbols, 382 alias symbols, **zero** overlap between the
+two sets and **zero** aliases claimed by more than one gene (re-measured
+2026-10-25, after the registry widened from 154 genes) -- but the guard is
 structural rather than a bet on that staying true, because the registry is
 regenerated from upstream and the number that matters is the one after the next
 refresh.

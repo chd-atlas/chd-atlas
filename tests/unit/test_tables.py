@@ -1059,7 +1059,12 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     # **123,250 -> 176,566 on 2026-10-25**, when the three Orphanet scope
     # mirrors landed, each with two pattern-checked columns: (7,902 phenotype
     # + 8,745 OMIM + 10,011 xref rows) x 2 = 53,316.
-    assert total_compared == 176_566
+    #
+    # **176,566 -> 178,014 the same day**, when the registry widened from 154
+    # genes to 185 and the burden converters re-ran against it: 31 genes x 2
+    # (`hgnc_id`, `uniprot`) + 330 burden rows x 3 + the 297 of them with a
+    # control cohort + 33 combined rows x 3 = 1,448.
+    assert total_compared == 178_014
 
     for pattern in patterns:
         compiled = re.compile(pattern)
