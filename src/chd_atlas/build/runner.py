@@ -410,6 +410,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     registry, _ = load_sources(root)
     build_sources(registry, emitter)
     build_search(corpus, emitter, genes=genes, published=published)
+    # One integer, handed to the front page here and to the manifest below, for
+    # the reason `census` is threaded rather than recomputed.
+    combined_results = combined_census(combined, published)
     build_landing(
         corpus,
         symbols=symbols,
@@ -417,6 +420,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         published=published,
         census=census,
         profile_census=profile_stats,
+        combined_results=combined_results,
         emitter=emitter,
     )
     # The HTML over everything above. Wired here and nowhere else: until this
@@ -488,7 +492,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
             "burden_rows": census.rows,
             # Combined results reaching a published bundle (75), not the
             # mirror's 90 -- the same convention as `burden_rows`.
-            "burden_combined": combined_census(combined, published),
+            "burden_combined": combined_results,
             "cohort_families": census.families,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],
