@@ -382,7 +382,18 @@ from chd_atlas.corpus import Corpus
 # mirrored rows for 30 registered genes. Its `local_fdr` is a local false
 # discovery rate -- smaller than its own `pvalue` for about half that study's
 # panel -- and a consumer must never present it as a corrected p.
-SCHEMA_VERSION: Final = "2.14"
+#
+# 2.15 publishes `scope.json` and adds `scope_terms` to `counts`: the CHD scope
+# registry, every term with the authority it is attributed to and, for a term
+# admitted on Orphanet's phenotype frequencies (issue #8 part 1), the warrant
+# re-derived from the mirrors. Additive, so MINOR: no field of 2.14 is removed
+# or reshaped. It lands with a population change -- 92 -> 119 genes, the
+# Orphanet-scoped syndromes (Noonan, Costello, Adams-Oliver, Myhre,
+# Rubinstein-Taybi and their kin) plus NOTCH1 on its own ClinGen term -- which
+# carries the display obligation: a Noonan grade is a grade for the syndrome,
+# and a consumer showing it must say why the syndrome counts, which is what
+# `scope.json`'s `orphanet` object is for.
+SCHEMA_VERSION: Final = "2.15"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is
@@ -503,6 +514,9 @@ def write_manifest(
         "functional": len(corpus.functional),
         "phenotypes": len(corpus.phenotypes),
         "publications": len(corpus.publications),
+        # The whole registry `scope.json` publishes: every disease term in
+        # scope, on whichever authority's warrant. 105 since 2026-10-25.
+        "scope_terms": len(corpus.chd_scope),
     }
     # A build count silently shadowing a corpus count would republish one figure
     # under another's name, and `sort_keys` would leave the output looking

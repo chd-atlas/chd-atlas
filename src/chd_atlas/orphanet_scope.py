@@ -27,6 +27,7 @@ rather than making them.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -128,6 +129,24 @@ def structural_phenotypes(obo: Path) -> frozenset[str]:
 
     terms = (closure(STRUCTURAL_ROOT) - closure(*EXCLUDED_BRANCHES)) | closure(*ADDED_BRANCHES)
     return frozenset(terms | {alt for term in terms for alt in alternates[term]})
+
+
+def pinned_structural_phenotypes(root: Path, pinned: Mapping[str, str]) -> frozenset[str] | None:
+    """`structural_phenotypes` over the HPO release `sources.yaml` pins, or None if unreadable.
+
+    None rather than an empty set, for the reason `load_orphanet_tables` returns
+    None: an empty set would make every Orphanet-scoped term look unwarranted.
+    An unpinned or unreadable release is already reported (ONT003/ONT004), so
+    SCP006/SCP008 name the consequence and not the cause. Shared by the validator
+    and the build so both read the same release the same way.
+    """
+    relative = pinned.get("HP")
+    if relative is None or not (root / relative).is_file():
+        return None
+    try:
+        return structural_phenotypes(root / relative)
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 @dataclass(frozen=True)

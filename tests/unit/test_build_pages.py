@@ -43,6 +43,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset, Stage
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile, EndBasis
+from chd_atlas.orphanet_scope import Annotation, Warrant
 from chd_atlas.vocab import (
     AtlasCuration,
     Classification,
@@ -5348,3 +5349,92 @@ def test_a_study_s_own_combination_is_stated_in_its_block_and_labelled_for_what_
     # The row's method note reaches the page with the arms' footnotes.
     assert "own meta-analysis of its de novo and case-control arms." in block
     assert "Combined across" not in _study_block(section, "42230622")
+
+
+_PULMONIC = Annotation("HP:0001642", "Abnormal pulmonary valve morphology", "Frequent (79-30%)")
+
+
+def _noonan_validity() -> GeneValidity:
+    """One ClinGen-path disease and two Orphanet-scoped ones, one of them a subtype.
+
+    Three because each kills a different mutant (CLAUDE.md section 4.36): a note
+    rendered for every disease shows up on Holt-Oram, a note that ignored `via`
+    reads the same for both Noonan terms, and an unsorted loop swaps them.
+    """
+    base = _validity().records[0]
+    return GeneValidity(
+        records=(
+            base,
+            replace(
+                base,
+                source=ValiditySource.GENCC,
+                disease="MONDO:0018997",
+                disease_label="Noonan syndrome",
+                gcep=None,
+                sop=None,
+                submitter="G2P",
+            ),
+            replace(base, disease="MONDO:0012547", disease_label="Noonan syndrome 4"),
+        ),
+        state=ValidityState.EXPERT_CURATED,
+        has_source_discordance=False,
+    )
+
+
+def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_under_the_validity_table(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The note PTPN11's page needs, pinned against literals and sliced (§4.19, §4.38).
+
+    A Noonan grade is a grade for the syndrome. Without this note a reader meets
+    it in a CHD atlas with nothing saying why the syndrome counts, and takes it
+    for a grade for heart disease. The scope rule above the table names the
+    Orphanet path too, and is checked here on the built element, not on the
+    constant that produced it.
+    """
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: _noonan_validity()},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+        scope_warrants={
+            "MONDO:0018997": Warrant("ORPHA:648", "Noonan syndrome", "direct", None, (_PULMONIC,)),
+            "MONDO:0012547": Warrant(
+                "ORPHA:648", "Noonan syndrome", "subtype", "OMIM:610733", (_PULMONIC,)
+            ),
+        },
+        scope_labels={"MONDO:0018997": "Noonan syndrome", "MONDO:0012547": "Noonan syndrome 4"},
+    )
+    page = _page(tmp_path, "HGNC_4173.html")
+    section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2>",))
+
+    direct = (
+        "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
+        "malformation in at least 30% of its cases</strong>: Abnormal pulmonary valve "
+        "morphology at <em>Frequent (79-30%)</em> (Orphanet, ORPHA:648). The classifications "
+        "above are for the syndrome, not for heart disease."
+    )
+    subtype = (
+        "<strong>Noonan syndrome 4 is in scope because Orphanet records a structural heart "
+        "malformation in at least 30% of cases of Noonan syndrome</strong>, the syndrome it "
+        "is a subtype of (Orphanet maps OMIM:610733 under ORPHA:648): Abnormal pulmonary "
+        "valve morphology at <em>Frequent (79-30%)</em>."
+    )
+    assert direct in section and subtype in section
+    # Sorted by disease id: MONDO:0012547 before MONDO:0018997.
+    assert section.index(subtype) < section.index(direct)
+    # A disease an expert panel curated as CHD gets no Orphanet sentence.
+    assert "Holt-Oram syndrome is in scope because" not in section
+
+    rule = _slice_between(page, '<p class="scope-rule">', ("</p>",))
+    assert (
+        "for a disease that an external authority treats as congenital heart disease (or in "
+        "which <strong>Orphanet records a structural heart malformation in at least 30% of "
+        "cases</strong>)"
+    ) in rule
+    assert "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)" in rule

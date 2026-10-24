@@ -120,6 +120,12 @@ SOURCES: Final = "sources.json"
 # the numbers with none of the caveats that qualify them -- and `taa_cases` is
 # 777 probands who do not have congenital heart disease.
 COHORTS: Final = "cohorts.json"
+# The CHD scope registry, and for each term the authority it is attributed to.
+# Published because a bundle names a disease by bare MONDO id, and since the
+# Orphanet scope path (2026-10-25) the reason a syndrome counts as CHD can be a
+# frequency Orphanet records rather than a curation -- which a reader of the
+# JSON has no other way to learn.
+SCOPE: Final = "scope.json"
 
 # The site's front door, not identifier-based like `gene_bundle_path` — there is
 # exactly one, so nothing here builds it from a value. Named as a constant

@@ -527,8 +527,10 @@ GRADE_GLOSS: Final[dict[str, str]] = {
         "a panel looked and found no evidence of a relationship to this disease"
     ),
     "ungraded": (
-        "no ClinGen expert panel has graded this gene for a disease this atlas treats as "
-        "congenital heart disease. It is published because two or more Gene Curation "
+        "no ClinGen expert panel has graded this gene for a disease an external authority "
+        "treats as congenital heart disease, or in which Orphanet records a structural "
+        "heart malformation in at least 30% of cases. It is published because two or more "
+        "Gene Curation "
         "Coalition submitters independently assert it, and the gene page names them"
     ),
 }

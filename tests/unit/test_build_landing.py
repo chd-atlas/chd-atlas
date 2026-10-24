@@ -767,6 +767,7 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
         "profile_datasets": "Developmental expression datasets",
         "profile_genes": "Genes with developmental expression data",
         "publications": "Publications cited",
+        "scope_terms": "Disease terms in scope",
     }
     assert set(cards) == set(counts), (
         "the manifest census and the front page's cards have drifted apart; "

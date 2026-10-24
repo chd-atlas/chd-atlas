@@ -276,6 +276,9 @@ def _render(
             _stat("Genes the atlas has curated", _number(len(curated_genes))),
             _stat("Functional evidence records", _number(len(corpus.functional))),
             _stat("Publications cited", _number(len(corpus.publications))),
+            # Every term `scope.json` publishes, whichever authority's warrant
+            # admits it: a manifest key, so the one-census test requires a card.
+            _stat("Disease terms in scope", _number(len(corpus.chd_scope))),
             _stat("Phenotype terms (HPO)", _number(len(corpus.phenotypes))),
             _stat("Featured manuscripts", _number(len(corpus.featured))),
             _stat("Omics datasets", _number(len(corpus.datasets))),

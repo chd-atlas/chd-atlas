@@ -12,7 +12,7 @@ from chd_atlas.corpus import Corpus, load_curation, unexpected_curation_entries
 from chd_atlas.genes import GeneRegistry
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.models.dataset import Dataset
-from chd_atlas.orphanet_scope import load_orphanet_tables, structural_phenotypes
+from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import (
     PROFILE_QUANTILES,
     PROFILES,
@@ -125,23 +125,6 @@ def _used_sources(root: Path) -> dict[str, set[str]]:
         if values:
             used[str(path)] = values
     return used
-
-
-def _structural_phenotypes(root: Path, pinned: dict[str, str]) -> frozenset[str] | None:
-    """The Orphanet rule's structural HPO set, or None if the pinned HPO release cannot be read.
-
-    None rather than an empty set, for the reason `_known_genes` returns None: an
-    empty set would make every Orphanet-scoped term look unwarranted. An unpinned
-    or unreadable release is already reported (ONT003/ONT004), so SCP006/SCP008
-    name the consequence and not the cause.
-    """
-    relative = pinned.get("HP")
-    if relative is None or not (root / relative).is_file():
-        return None
-    try:
-        return structural_phenotypes(root / relative)
-    except (OSError, UnicodeDecodeError):
-        return None
 
 
 def _known_genes(root: Path) -> set[str] | None:
@@ -770,7 +753,7 @@ def validate_repository(root: Path) -> ValidationReport:
         # is a validity mirror (CLAUDE.md section 4.34: a call that appears in an
         # `if` and an `else` is two call sites).
         orphanet_tables = load_orphanet_tables(root)
-        structural = _structural_phenotypes(root, registry.ontology_files())
+        structural = pinned_structural_phenotypes(root, registry.ontology_files())
         issues.extend(
             validate_orphanet_warrants(
                 corpus.chd_scope, orphanet_tables, structural, scope_location
