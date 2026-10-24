@@ -53,6 +53,7 @@ EXHAUSTIVE: dict[str, str] = {
     "### The bundle's `burden_combined` array: one study's own combination of its arms": (
         "combined_row"
     ),
+    "## `scope.json`": "scope_term",
 }
 
 
@@ -137,6 +138,10 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
         # `(source, disease, moi, submitter)`, and "clingen" precedes "gencc"
         # lexically.
         return dict(load("genes/HGNC_11604.json")["validity"]["records"][0])
+    if kind == "scope_term":
+        # The documented example is an Orphanet-path subtype, so the published
+        # term compared against it is the same one: every key, warrant included.
+        return dict(next(t for t in load("scope.json")["terms"] if t["id"] == "MONDO:0012547"))
     if kind == "combined_row":
         # TBX5 again: it carries PMID:40127276's rows, so its first combined
         # object is that study's damaging-class combination.
@@ -684,3 +689,17 @@ def test_the_combined_census_in_the_doc_is_the_census_the_build_publishes(site: 
     assert f"across {genes} published genes" in section
     assert f"holds {len(mirror)} rows for {len({r['gene'] for r in mirror})} genes" in section
     assert "is not a corrected p" in section
+
+
+def test_the_scope_census_in_the_doc_is_the_registry_the_build_publishes(site: Path) -> None:
+    """`scope.json`'s counts, and the Orphanet warrant's shape, against a real build."""
+    doc = DOC.read_text()
+    start = doc.index("## `scope.json`")
+    section = re.sub(r"\s+", " ", doc[start : doc.index("\n## ", start + 1)])
+    terms = json.loads((site / "scope.json").read_text())["terms"]
+    orphanet = [term for term in terms if term["orphanet"] is not None]
+
+    assert f"**{len(terms)} terms**" in section
+    assert f"{len(terms) - len(orphanet)} are attributed to an authority that curates" in section
+    assert f"**{len(orphanet)}** are admitted on Orphanet's phenotype frequencies" in section
+    assert [term["id"] for term in terms] == sorted(term["id"] for term in terms)
