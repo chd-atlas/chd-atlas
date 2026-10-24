@@ -124,6 +124,9 @@ def test_registry_covers_every_mirror_table() -> None:
         "gencc_submissions",
         "burden",
         "burden_combined",
+        "orphanet_phenotypes",
+        "orphanet_omim",
+        "mondo_xrefs",
     }
 
 
@@ -931,6 +934,11 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$",
         r"^PMID:\d+$",
         r"^[a-z0-9]+(_[a-z0-9]+)*(;[a-z0-9]+(_[a-z0-9]+)*)*$",
+        # The Orphanet scope mirrors, 2026-10-25.
+        r"^ORPHA:\d+$",
+        r"^OMIM:\d+$",
+        r"^HP:\d{7}$",
+        r"^(ORPHA|OMIM):\d+$",
     }
 
     adversarial = [
@@ -986,6 +994,19 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         "HGNC:1٣٣",  # Arabic-Indic digits mixed into an ASCII-digit run
         "HGNC:１２３",  # full-width digits
         "HGNC:" + "9" * 1000,
+        # The Orphanet scope patterns. `Orphanet:648` is MONDO's spelling, which
+        # the converter must normalise; `XREF_TARGET_PATTERN` is the second
+        # pattern here with alternation, so its two arms are probed separately.
+        "ORPHA:648",
+        "ORPHA:648\n",
+        "ORPHA:",
+        "Orphanet:648",
+        "OMIM:163950",
+        "OMIM:163950\n",
+        "HP:0001627",
+        "HP:001627",
+        "HP:0001627\n",
+        "ORPHAOMIM:1",
     ]
     adversarial_series = pl.Series("v", adversarial, dtype=pl.String)
 
