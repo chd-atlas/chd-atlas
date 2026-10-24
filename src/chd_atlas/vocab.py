@@ -515,6 +515,19 @@ class PvalueAdjustment(StrEnum):
     BENJAMINI_HOCHBERG = "benjamini_hochberg"
 
 
+class CombinationMethod(StrEnum):
+    """How a study combined two of its own burden arms into one statistic.
+
+    Not a correction, and not a pooling across studies. PMID:40127276 merges
+    each gene's de novo Poisson p and case-control Fisher p by the Joint-Local
+    False Discovery Rate method (Jiang & Yu 2017, PMID:28011772), within one
+    cohort, and publishes a meta-analysis p and a local FDR. The atlas computes
+    no combination of its own (D12/D33); this records one a study published.
+    """
+
+    JOINT_LOCAL_FDR = "joint_local_fdr"
+
+
 class FeaturedTopic(StrEnum):
     GENOMICS = "genomics"
     VARIANTS = "variants"

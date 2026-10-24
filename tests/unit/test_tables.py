@@ -9,6 +9,8 @@ import pytest
 from chd_atlas.duplicates import duplicates
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.tables import (
+    BURDEN,
+    BURDEN_COMBINED,
     CHROMOSOMES,
     CLINGEN_VALIDITY,
     FLAT_TABLES,
@@ -121,7 +123,35 @@ def test_registry_covers_every_mirror_table() -> None:
         "clingen_validity",
         "gencc_submissions",
         "burden",
+        "burden_combined",
     }
+
+
+def test_a_combined_row_is_keyed_on_the_burden_partition_minus_what_its_arms_span() -> None:
+    """The combined table's key is a contract, not a convenience.
+
+    A combination spans its arms, so it cannot carry the columns the arms
+    differ in: `origin` (de novo vs transmitted), `maf_max` (none vs 1e-5) and
+    `variant_class`. Adding any of them back would make one combination two rows.
+    Dropping `lesion_group` would leave the paper's per-phenotype meta-analysis
+    needing a migration. And `pvalue_adjusted` must never appear: the JL-FDR is
+    a local FDR, smaller than its own p for about half the panel, which BUR018
+    exists to refuse under that name.
+    """
+    assert BURDEN_COMBINED.sort_key == (
+        "gene",
+        "study",
+        "cohort_stratum",
+        "lesion_group",
+        "consequence_class",
+    )
+    assert set(BURDEN.sort_key) - set(BURDEN_COMBINED.sort_key) == {
+        "variant_class",
+        "origin",
+        "maf_max",
+    }
+    assert "local_fdr" in BURDEN_COMBINED.column_names
+    assert "pvalue_adjusted" not in BURDEN_COMBINED.column_names
 
 
 def test_clingen_validity_is_keyed_on_the_triple_not_the_pair() -> None:

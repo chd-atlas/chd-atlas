@@ -34,6 +34,7 @@ from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.vocab import (
     BurdenComparator,
     CohortStratum,
+    CombinationMethod,
     ConsequenceClass,
     CountUnit,
     EffectBound,
@@ -636,6 +637,7 @@ _STATISTICAL_TESTS = frozenset(item.value for item in StatisticalTest)
 _COUNT_UNITS = frozenset(item.value for item in CountUnit)
 _PVALUE_ADJUSTMENTS = frozenset(item.value for item in PvalueAdjustment)
 _LESION_GROUPS = frozenset(item.value for item in LesionGroup)
+_COMBINATION_METHODS = frozenset(item.value for item in CombinationMethod)
 
 BURDEN = TableSchema(
     name="burden",
@@ -729,6 +731,41 @@ BURDEN = TableSchema(
     ),
 )
 
+# One study's own combination of two of its burden arms. Added 2026-10-24 for
+# PMID:40127276's JL-FDR meta-analysis, which `convert_sierant2025.py` declined to
+# put in `pvalue_adjusted` -- correctly, because it is not a corrected p.
+BURDEN_COMBINED = TableSchema(
+    name="burden_combined",
+    columns=(
+        Column("study", pl.String, pattern=PMID_PATTERN),
+        Column("gene", pl.String, pattern=HGNC_PATTERN),
+        # The burden partition minus what the arms differ in (`origin`,
+        # `maf_max`, `variant_class`, and the comparator itself) -- exactly what
+        # a combination spans. `lesion_group` stays so the paper's
+        # per-phenotype meta-analysis can land without a migration.
+        Column("cohort_stratum", pl.String, allowed=_COHORT_STRATA),
+        Column("lesion_group", pl.String, nullable=True, allowed=_LESION_GROUPS),
+        Column("consequence_class", pl.String, allowed=_CONSEQUENCE_CLASSES),
+        # The comparators of the arms combined, `;`-joined, in the order the page
+        # names them. Token *syntax* reuses `COHORT_LIST_PATTERN` rather than
+        # adding a pattern to the engine-agreement test; vocabulary and arity
+        # (at least two distinct comparators) are BUR021's.
+        Column("combines", pl.String, pattern=COHORT_LIST_PATTERN),
+        Column("method", pl.String, allowed=_COMBINATION_METHODS),
+        Column("pvalue", pl.Float64, minimum=0, maximum=1),
+        # A *local* false discovery rate, never a corrected p: measured over DS6
+        # it is smaller than its own p for 118, 135 and 129 of 248 genes by
+        # consequence class. Named for what it is so no renderer can file it
+        # under "corrected p".
+        Column("local_fdr", pl.Float64, minimum=0, maximum=1),
+        Column("method_note", pl.String, nullable=True),
+        Column("source", pl.String),
+    ),
+    # Gene first, then study, for the reason `BURDEN`'s key is: the file reads
+    # gene by gene, and `burden_mirror.merge_study` sorts both the same way.
+    sort_key=("gene", "study", "cohort_stratum", "lesion_group", "consequence_class"),
+)
+
 TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
     schema.name: schema
     for schema in (
@@ -743,6 +780,7 @@ TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
         CLINGEN_VALIDITY,
         GENCC_SUBMISSIONS,
         BURDEN,
+        BURDEN_COMBINED,
     )
 }
 
@@ -765,6 +803,9 @@ FLAT_TABLES: Final[dict[str, str]] = {
     # (study, stratum, maf) — a per-gene shard would make that the expensive
     # access pattern rather than the cheap one.
     "burden": "burden.tsv",
+    # Beside `burden`, not inside it: a combination is a statement about two
+    # rows already in that table, and folding it in would need a fake arm.
+    "burden_combined": "burden_combined.tsv",
 }
 
 
