@@ -118,6 +118,52 @@ sources:
     redistribution: permitted_with_attribution
     ontology_prefix: HP
     ontology_file: ontologies/hp-2026-06-23.obo
+  # The three sources the Orphanet scope rule reads (issue #8 part 1). The raw
+  # files live in gitignored local/data/ and are reproduced by
+  # scripts/convert_orphanet.py; the sha256 is what lets a curator prove a
+  # re-download is the same file.
+  - id: orphanet_product4
+    name: >-
+      Orphadata Science, product 4 ("Phenotypes associated with rare
+      disorders", en_product4.xml): HPO phenotype annotations with frequency
+      bands, cardiovascular branch (HP:0001626) only
+    # XML header: date="2026-06-23 07:57:18".
+    version: "sha256:4f44e8a61201399911aa1ba44a293c0ccaa5ce11272c47d40862255cb72f6b32"
+    retrieved_on: 2026-10-25
+    url: https://www.orphadata.com/data/xml/en_product4.xml
+    # The file declares `<ShortIdentifier>CC-BY-4.0</ShortIdentifier>` in its
+    # own `<Licence>` block, and https://www.orphadata.com/legal-notice/ says
+    # Orphadata Science files are CC BY 4.0. Required citation: "Orphadata
+    # Science: Free access data from Orphanet. (c) INSERM 1999. Available on
+    # http://sciences.orphadata.com/. Data version [date]". Its AI-use clause
+    # covers LLM/AI tools offered to third parties, which this static data
+    # site is not.
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
+  - id: orphanet_product1
+    name: >-
+      Orphadata Science, product 1 ("Rare diseases and alignment with
+      terminologies", en_product1.xml): Orphanet-to-OMIM references with
+      their mapping relation and validation status
+    # XML header: date="2026-06-23 07:53:50", the same release as product 4.
+    version: "sha256:df8d562a0c6011af36a74eb4000ce81ca7d723e8031010819fb71727c0962bbb"
+    retrieved_on: 2026-10-25
+    url: https://www.orphadata.com/data/xml/en_product1.xml
+    # Same licence block and terms as product 4.
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
+  - id: mondo_sssom
+    name: >-
+      Mondo Disease Ontology mappings (mondo.sssom.tsv), release v2026-10-06:
+      skos:exactMatch to Orphanet and OMIM, for terms the validity mirrors name
+    version: "sha256:ec15afdb32fab3d3cb679d357e25ef4fb38b5e2c468ff4ac5456da10e2f6c80b"
+    retrieved_on: 2026-10-25
+    # Pinned to the release tag, never `master`.
+    url: https://raw.githubusercontent.com/monarch-initiative/mondo/v2026-10-06/src/ontology/mappings/mondo.sssom.tsv
+    # The repository's LICENSE is CC BY 4.0 (GitHub's licence API reports
+    # SPDX CC-BY-4.0 for monarch-initiative/mondo).
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
   - id: expression_atlas_e_mtab_6814
     name: >-
       EMBL-EBI Expression Atlas, experiment E-MTAB-6814 ("Human RNA-seq

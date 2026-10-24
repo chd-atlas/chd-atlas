@@ -1055,7 +1055,11 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     #
     # **122,980 -> 123,250 on 2026-10-24**, when `burden_combined.tsv` landed:
     # 90 rows x 3 pattern-checked columns (`study`, `gene`, `combines`) = 270.
-    assert total_compared == 123_250
+    #
+    # **123,250 -> 176,566 on 2026-10-25**, when the three Orphanet scope
+    # mirrors landed, each with two pattern-checked columns: (7,902 phenotype
+    # + 8,745 OMIM + 10,011 xref rows) x 2 = 53,316.
+    assert total_compared == 176_566
 
     for pattern in patterns:
         compiled = re.compile(pattern)
