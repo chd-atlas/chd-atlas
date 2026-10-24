@@ -1,0 +1,278 @@
+# tests/unit/test_orphanet_scope.py
+"""The Orphanet frequency rule, on a synthetic ontology small enough to read.
+
+Each test below exists to kill one way the rule could quietly admit the wrong
+syndrome. Measured on the real data before the rule was written (spec
+2026-10-24): applied without the structural restriction, the same floor admits
+Fabry disease and Hurler syndrome through their cardiomyopathy and valve
+findings, so the restriction is the part most worth pinning.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from chd_atlas.orphanet_scope import (
+    Annotation,
+    OrphanetTables,
+    Warrant,
+    load_orphanet_tables,
+    qualifying,
+    qualifying_targets,
+    reach,
+    structural_phenotypes,
+    warrant,
+)
+from chd_atlas.tables import MONDO_XREFS, ORPHANET_OMIM, ORPHANET_PHENOTYPES
+
+# One term per branch the rule has to tell apart: the root, a septal child with
+# an alt id, the myocardium branch it excludes, and two vascular-branch terms it
+# adds back. The Typedef is there because a stanza that is not a Term must reset
+# the reader, or its lines would attach to the last term.
+_OBO = """format-version: 1.2
+
+[Term]
+id: HP:0000118
+name: Phenotypic abnormality
+
+[Term]
+id: HP:0001627
+name: Abnormal heart morphology
+is_a: HP:0000118 ! Phenotypic abnormality
+
+[Term]
+id: HP:0001671
+name: Abnormal cardiac septum morphology
+is_a: HP:0001627 ! Abnormal heart morphology
+
+[Term]
+id: HP:0001631
+name: Atrial septal defect
+alt_id: HP:0001630
+is_a: HP:0001671 ! Abnormal cardiac septum morphology
+
+[Term]
+id: HP:0001637
+name: Abnormal myocardium morphology
+is_a: HP:0001627 ! Abnormal heart morphology
+
+[Term]
+id: HP:0001638
+name: Cardiomyopathy
+is_a: HP:0001637 ! Abnormal myocardium morphology
+
+[Term]
+id: HP:0030962
+name: Abnormal morphology of the great vessels
+is_a: HP:0000118 ! Phenotypic abnormality
+
+[Term]
+id: HP:0001643
+name: Patent ductus arteriosus
+is_a: HP:0030962 ! Abnormal morphology of the great vessels
+
+[Term]
+id: HP:0001680
+name: Coarctation of aorta
+is_a: HP:0030962 ! Abnormal morphology of the great vessels
+
+[Typedef]
+id: part_of
+is_a: HP:0001627
+"""
+
+ASD = Annotation("HP:0001631", "Atrial septal defect", "Frequent (79-30%)")
+HCM = Annotation("HP:0001638", "Cardiomyopathy", "Very frequent (99-80%)")
+PDA = Annotation("HP:0001643", "Patent ductus arteriosus", "Frequent (79-30%)")
+
+
+@pytest.fixture
+def structural(tmp_path: Path) -> frozenset[str]:
+    obo = tmp_path / "hp.obo"
+    obo.write_text(_OBO, encoding="utf-8")
+    return structural_phenotypes(obo)
+
+
+def _tables(
+    annotations: dict[str, tuple[Annotation, ...]] | None = None,
+    omim_links: dict[tuple[str, str], tuple[str, str]] | None = None,
+    xrefs: dict[str, frozenset[str]] | None = None,
+) -> OrphanetTables:
+    return OrphanetTables(
+        annotations=annotations or {},
+        names={"ORPHA:648": "Noonan syndrome"},
+        omim_links=omim_links or {},
+        xrefs=xrefs or {},
+    )
+
+
+def test_the_structural_set_excludes_cardiomyopathy_and_adds_pda(
+    structural: frozenset[str],
+) -> None:
+    """The definition the owner approved, on one term per branch."""
+    assert {"HP:0001627", "HP:0001671", "HP:0001631", "HP:0001643", "HP:0001680"} <= structural
+    # An annotation may carry a retired id; it must still count.
+    assert "HP:0001630" in structural
+    assert not {"HP:0001637", "HP:0001638", "HP:0030962", "HP:0000118"} & structural
+    # The Typedef's `is_a` must not have attached `part_of` to the heart.
+    assert "part_of" not in structural
+
+
+@pytest.mark.parametrize(
+    ("frequency", "admitted"),
+    [
+        pytest.param("Obligate (100%)", True, id="obligate"),
+        pytest.param("Very frequent (99-80%)", True, id="very-frequent"),
+        pytest.param("Frequent (79-30%)", True, id="frequent"),
+        pytest.param("Occasional (29-5%)", False, id="occasional"),
+        pytest.param(None, False, id="no-band"),
+    ],
+)
+def test_only_frequent_or_stronger_qualifies(
+    structural: frozenset[str], frequency: str | None, admitted: bool
+) -> None:
+    """The floor is Frequent (30%), HPO's own word for "frequent"."""
+    tables = _tables({"ORPHA:648": (Annotation("HP:0001631", "ASD", frequency),)})
+    assert bool(qualifying("ORPHA:648", tables, structural)) is admitted
+
+
+def test_a_disorder_qualifying_only_by_cardiomyopathy_does_not_qualify(
+    structural: frozenset[str],
+) -> None:
+    """The Fabry/Hurler case: a cardiac finding that is not a malformation."""
+    assert qualifying("ORPHA:648", _tables({"ORPHA:648": (HCM,)}), structural) == ()
+
+
+def test_patent_ductus_arteriosus_qualifies_though_hpo_files_it_outside_the_heart(
+    structural: frozenset[str],
+) -> None:
+    assert qualifying("ORPHA:648", _tables({"ORPHA:648": (PDA,)}), structural) == (PDA,)
+
+
+def test_qualifying_annotations_are_ordered_strongest_first(structural: frozenset[str]) -> None:
+    """Rank first, then HPO id: the note on the page reads the strongest first."""
+    obligate = Annotation("HP:0001680", "Coarctation of aorta", "Obligate (100%)")
+    tables = _tables({"ORPHA:648": (PDA, ASD, HCM, obligate)})
+    assert qualifying("ORPHA:648", tables, structural) == (obligate, ASD, PDA)
+
+
+def test_a_term_reaches_its_own_orphanet_code_directly() -> None:
+    tables = _tables(xrefs={"MONDO:0018997": frozenset({"ORPHA:648", "OMIM:163950"})})
+    assert reach("MONDO:0018997", "ORPHA:648", tables) == ("direct", None)
+
+
+@pytest.mark.parametrize(
+    ("relation", "validation", "reached"),
+    [
+        pytest.param("BTNT", "Validated", True, id="broader-validated"),
+        pytest.param("E", "Validated", True, id="exact-validated"),
+        pytest.param("NTBT", "Validated", False, id="narrower"),
+        pytest.param("ND", "Validated", False, id="undecided"),
+        pytest.param("BTNT", "Not yet validated", False, id="unvalidated"),
+    ],
+)
+def test_a_subtype_reaches_its_parent_only_through_a_validated_exact_or_broader_mapping(
+    relation: str, validation: str, reached: bool
+) -> None:
+    """Noonan syndrome 4's path to ORPHA:648, under each relation product 1 uses."""
+    tables = _tables(
+        omim_links={("ORPHA:648", "OMIM:610733"): (relation, validation)},
+        xrefs={"MONDO:0012547": frozenset({"OMIM:610733"})},
+    )
+    route = reach("MONDO:0012547", "ORPHA:648", tables)
+    assert route == (("subtype", "OMIM:610733") if reached else None)
+
+
+def test_a_warrant_names_which_half_of_the_rule_failed(structural: frozenset[str]) -> None:
+    """SCP006 prints this reason, so a curator knows what to fix."""
+    reachable = _tables(
+        annotations={"ORPHA:648": (HCM,)},
+        xrefs={"MONDO:0018997": frozenset({"ORPHA:648"})},
+    )
+    unreachable = _tables(annotations={"ORPHA:648": (ASD,)})
+
+    assert "does not reach ORPHA:648" in str(
+        warrant("MONDO:0018997", "ORPHA:648", unreachable, structural)
+    )
+    assert "no structural heart phenotype" in str(
+        warrant("MONDO:0018997", "ORPHA:648", reachable, structural)
+    )
+    good = _tables(
+        annotations={"ORPHA:648": (ASD,)}, xrefs={"MONDO:0018997": frozenset({"ORPHA:648"})}
+    )
+    assert warrant("MONDO:0018997", "ORPHA:648", good, structural) == Warrant(
+        "ORPHA:648", "Noonan syndrome", "direct", None, (ASD,)
+    )
+
+
+def test_qualifying_targets_follows_both_routes(structural: frozenset[str]) -> None:
+    """SCP007's search: a direct code and a validated subtype parent, both found."""
+    tables = OrphanetTables(
+        annotations={"ORPHA:648": (ASD,), "ORPHA:500": (PDA,), "ORPHA:9": (HCM,)},
+        names={},
+        omim_links={("ORPHA:500", "OMIM:1"): ("BTNT", "Validated")},
+        xrefs={"MONDO:0000001": frozenset({"ORPHA:648", "ORPHA:9", "OMIM:1"})},
+    )
+    assert qualifying_targets("MONDO:0000001", tables, structural) == ["ORPHA:500", "ORPHA:648"]
+
+
+def _write(root: Path, name: str, columns: tuple[str, ...], rows: list[tuple[str, ...]]) -> None:
+    mirrors = root / "mirrors"
+    mirrors.mkdir(parents=True, exist_ok=True)
+    lines = ["\t".join(columns), *("\t".join(row) for row in rows)]
+    (mirrors / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_the_three_mirrors_load_into_the_shape_the_rule_reads(tmp_path: Path) -> None:
+    """And a missing one loads as None, never as empty tables (§1: data wrong vs never loaded)."""
+    _write(
+        tmp_path,
+        "orphanet_phenotypes.tsv",
+        ORPHANET_PHENOTYPES.column_names,
+        [
+            (
+                "ORPHA:648",
+                "Noonan syndrome",
+                "HP:0001631",
+                "Atrial septal defect",
+                "Frequent (79-30%)",
+                "s",
+            )
+        ],
+    )
+    _write(
+        tmp_path,
+        "orphanet_omim.tsv",
+        ORPHANET_OMIM.column_names,
+        [("ORPHA:648", "OMIM:610733", "BTNT", "Validated", "s")],
+    )
+    assert load_orphanet_tables(tmp_path) is None  # mondo_xrefs.tsv still absent
+
+    _write(
+        tmp_path,
+        "mondo_xrefs.tsv",
+        MONDO_XREFS.column_names,
+        [("MONDO:0012547", "OMIM:610733", "s")],
+    )
+    tables = load_orphanet_tables(tmp_path)
+    assert tables is not None
+    assert tables.annotations == {"ORPHA:648": (ASD,)}
+    assert tables.names == {"ORPHA:648": "Noonan syndrome"}
+    assert tables.omim_links == {("ORPHA:648", "OMIM:610733"): ("BTNT", "Validated")}
+    assert tables.xrefs == {"MONDO:0012547": frozenset({"OMIM:610733"})}
+
+
+def test_the_structural_set_over_the_pinned_hpo_release_has_the_measured_size() -> None:
+    """264 terms over `hp-2026-06-23.obo`, alt ids included (measured 2026-10-25).
+
+    An HPO upgrade that moves this changes which syndromes the rule admits
+    without any line of this repository changing, so it must fail here and be
+    re-measured on purpose rather than drift in.
+    """
+    obo = Path(__file__).resolve().parents[2] / "ontologies" / "hp-2026-06-23.obo"
+    structural = structural_phenotypes(obo)
+    assert len(structural) == 264
+    assert "HP:0001638" not in structural  # cardiomyopathy
+    assert {"HP:0001631", "HP:0001643", "HP:0001680"} <= structural
