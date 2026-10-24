@@ -4,6 +4,16 @@
 # already treats it as congenital heart disease. This atlas selects among terms
 # other people scope; it does not scope any term itself.
 #
+# SECOND PATH (2026-10-25, issue #8 part 1): a syndrome where structural CHD is
+# frequent but not part of the diagnosis -- Noonan, Costello, Adams-Oliver -- is
+# in scope when a curator nominates it AND Orphanet records a structural heart
+# phenotype for it at Frequent (79-30%) or stronger. `admitted_by:
+# orphanet_phenotype_frequency`, with `orphanet:` naming the ORPHA code; SCP006
+# checks the claim against the Orphanet and MONDO mirrors, and SCP007 lists the
+# terms that would qualify but nobody nominated. The rule is in
+# src/chd_atlas/orphanet_scope.py; the entries are grouped at the end of this
+# file.
+#
 # Until 2026-08-06 every entry here named the project owner as the admitting
 # authority, which made this atlas -- and one non-clinician -- the authority on
 # what counts as CHD. It is not one, and no individual should appear in this
@@ -18,9 +28,10 @@
 # is a transcription of the cited authority's position, never an argument made
 # here.
 #
-# Measured 2026-08-06 across these 68 terms: 13 are used by ClinGen's Congenital
-# Heart Disease GCEP, 10 by another ClinGen expert panel, 45 by a GenCC
-# submitter. None is unattributable.
+# Measured 2026-10-25 across these 105 terms: 13 are used by ClinGen's
+# Congenital Heart Disease GCEP, 11 by another ClinGen expert panel, 45 by a
+# GenCC submitter, and 36 are admitted on Orphanet's frequencies. None is
+# unattributable. (68 terms until 2026-10-25: 13, 10 and 45.)
 #
 # NINE TERMS ARE SCOPED ONLY BY A COMMERCIAL CLINICAL LABORATORY, and are kept
 # rather than dropped. Clinical labs curate for test-panel inclusion, a more
@@ -546,3 +557,387 @@ diseases:
     admitted_by: clingen_chd_panel
     attributed_to: Congenital Heart Disease Gene Curation Expert Panel
     admitted_on: 2026-08-03
+  - id: MONDO:1060150
+    label: NOTCH1-related AOS spectrum disorder
+    reason: >-
+      The Hereditary Cardiovascular Disease GCEP's lumped entity for NOTCH1. Its
+      MONDO definition names "congenital heart disease, aortic valve disease
+      including bicuspid aortic valve" among the entities lumped, records that
+      "Adams-Oliver syndrome 5 and aortic valve disease 1 have been lumped into one
+      disease entity", and MONDO files it under MONDO:0100614 syndromic congenital
+      heart disease. Without it NOTCH1 published no page: its only in-scope record
+      was Orphanet's "Supportive" for familial bicuspid aortic valve.
+    admitted_by: clingen_expert_panel
+    attributed_to: Hereditary Cardiovascular Disease Gene Curation Expert Panel
+    admitted_on: 2026-10-25
+  # Admitted on Orphanet's phenotype frequencies (issue #8 part 1, 2026-10-25):
+  # a syndrome where structural CHD is frequent but not part of the diagnosis.
+  # Each was nominated by a curator and is checked by SCP006 against
+  # mirrors/orphanet_*.tsv and mirrors/mondo_xrefs.tsv: the term must reach the
+  # ORPHA code named, and Orphanet must record a structural heart phenotype for
+  # it at Frequent (79-30%) or stronger. A numbered subtype names its parent's
+  # code and reaches it through Orphanet's own validated OMIM mapping.
+  - id: MONDO:0007034
+    label: Adams-Oliver syndrome
+    reason: >-
+      Orphanet records, for Adams-Oliver syndrome (ORPHA:974): Tetralogy of Fallot at
+      Frequent (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0007265
+    label: cardiofaciocutaneous syndrome 1
+    reason: >-
+      A subtype of Cardiofaciocutaneous syndrome: Orphanet maps OMIM:115150 under
+      ORPHA:1340 by a validated mapping, and records for ORPHA:1340: atrial septal
+      defect at Very frequent (99-80%); abnormal heart valve morphology at Very frequent
+      (99-80%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:1340
+    admitted_on: 2026-10-25
+  - id: MONDO:0007688
+    label: Myhre syndrome
+    reason: >-
+      Orphanet records, for Myhre syndrome (ORPHA:2588): abnormal cardiac septum
+      morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:2588
+    admitted_on: 2026-10-25
+  - id: MONDO:0007893
+    label: Noonan syndrome with multiple lentigines
+    reason: >-
+      Orphanet records, for Noonan syndrome with multiple lentigines (ORPHA:500):
+      abnormal pulmonary valve morphology at Very frequent (99-80%); abnormal mitral
+      valve morphology at Frequent (79-30%); mitral valve prolapse at Frequent (79-30%);
+      atrioventricular canal defect at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:500
+    admitted_on: 2026-10-25
+  - id: MONDO:0008104
+    label: Noonan syndrome 1
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:163950 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0008393
+    label: Rubinstein-Taybi syndrome due to CREBBP mutations
+    reason: >-
+      Orphanet records, for Rubinstein-Taybi syndrome due to CREBBP mutations
+      (ORPHA:353277): abnormal heart morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:353277
+    admitted_on: 2026-10-25
+  - id: MONDO:0009026
+    label: Costello syndrome
+    reason: >-
+      Orphanet records, for Costello syndrome (ORPHA:3071): ventricular septal defect at
+      Very frequent (99-80%); mitral valve prolapse at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:3071
+    admitted_on: 2026-10-25
+  - id: MONDO:0011531
+    label: Noonan syndrome 2
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:605275 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0012371
+    label: Noonan syndrome 3
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:609942 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0012547
+    label: Noonan syndrome 4
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:610733 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0012690
+    label: Noonan syndrome 5
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:611553 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0012691
+    label: LEOPARD syndrome 2
+    reason: >-
+      A subtype of Noonan syndrome with multiple lentigines: Orphanet maps OMIM:611554
+      under ORPHA:500 by a validated mapping, and records for ORPHA:500: abnormal
+      pulmonary valve morphology at Very frequent (99-80%); abnormal mitral valve
+      morphology at Frequent (79-30%); mitral valve prolapse at Frequent (79-30%);
+      atrioventricular canal defect at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:500
+    admitted_on: 2026-10-25
+  - id: MONDO:0013186
+    label: Noonan syndrome 6
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:613224 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0013364
+    label: Rubinstein-Taybi syndrome due to EP300 haploinsufficiency
+    reason: >-
+      Orphanet records, for Rubinstein-Taybi syndrome due to EP300 haploinsufficiency
+      (ORPHA:353284): abnormal heart morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:353284
+    admitted_on: 2026-10-25
+  - id: MONDO:0013379
+    label: Noonan syndrome 7
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:613706 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0013380
+    label: LEOPARD syndrome 3
+    reason: >-
+      A subtype of Noonan syndrome with multiple lentigines: Orphanet maps OMIM:613707
+      under ORPHA:500 by a validated mapping, and records for ORPHA:500: abnormal
+      pulmonary valve morphology at Very frequent (99-80%); abnormal mitral valve
+      morphology at Frequent (79-30%); mitral valve prolapse at Frequent (79-30%);
+      atrioventricular canal defect at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:500
+    admitted_on: 2026-10-25
+  - id: MONDO:0013635
+    label: Adams-Oliver syndrome 2
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:614219 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0013895
+    label: Adams-Oliver syndrome 3
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:614814 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0014112
+    label: cardiofaciocutaneous syndrome 2
+    reason: >-
+      A subtype of Cardiofaciocutaneous syndrome: Orphanet maps OMIM:615278 under
+      ORPHA:1340 by a validated mapping, and records for ORPHA:1340: atrial septal
+      defect at Very frequent (99-80%); abnormal heart valve morphology at Very frequent
+      (99-80%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:1340
+    admitted_on: 2026-10-25
+  - id: MONDO:0014113
+    label: cardiofaciocutaneous syndrome 3
+    reason: >-
+      A subtype of Cardiofaciocutaneous syndrome: Orphanet maps OMIM:615279 under
+      ORPHA:1340 by a validated mapping, and records for ORPHA:1340: atrial septal
+      defect at Very frequent (99-80%); abnormal heart valve morphology at Very frequent
+      (99-80%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:1340
+    admitted_on: 2026-10-25
+  - id: MONDO:0014114
+    label: cardiofaciocutaneous syndrome 4
+    reason: >-
+      A subtype of Cardiofaciocutaneous syndrome: Orphanet maps OMIM:615280 under
+      ORPHA:1340 by a validated mapping, and records for ORPHA:1340: atrial septal
+      defect at Very frequent (99-80%); abnormal heart valve morphology at Very frequent
+      (99-80%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:1340
+    admitted_on: 2026-10-25
+  - id: MONDO:0014124
+    label: Adams-Oliver syndrome 4
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:615297 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0014143
+    label: Noonan syndrome 8
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:615355 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0014459
+    label: Adams-Oliver syndrome 5
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:616028 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0014691
+    label: Noonan syndrome 9
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:616559 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0014693
+    label: Noonan syndrome 10
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:616564 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0014703
+    label: Adams-Oliver syndrome 6
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:616589 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0015280
+    label: cardiofaciocutaneous syndrome
+    reason: >-
+      Orphanet records, for Cardiofaciocutaneous syndrome (ORPHA:1340): atrial septal
+      defect at Very frequent (99-80%); abnormal heart valve morphology at Very frequent
+      (99-80%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:1340
+    admitted_on: 2026-10-25
+  - id: MONDO:0018997
+    label: Noonan syndrome
+    reason: >-
+      Orphanet records, for Noonan syndrome (ORPHA:648): abnormal pulmonary valve
+      morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0019188
+    label: Rubinstein-Taybi syndrome
+    reason: >-
+      Orphanet records, for Rubinstein-Taybi syndrome (ORPHA:783): abnormal heart
+      morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:783
+    admitted_on: 2026-10-25
+  - id: MONDO:0024506
+    label: Adams-Oliver syndrome 1
+    reason: >-
+      A subtype of Adams-Oliver syndrome: Orphanet maps OMIM:100300 under ORPHA:974 by a
+      validated mapping, and records for ORPHA:974: Tetralogy of Fallot at Frequent
+      (79-30%); abnormal pulmonary valve morphology at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:974
+    admitted_on: 2026-10-25
+  - id: MONDO:0030679
+    label: Noonan syndrome 14
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:619745 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0032786
+    label: Noonan syndrome 11
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:618499 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0032839
+    label: noonan syndrome 12
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:618624 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0033669
+    label: Noonan syndrome 13
+    reason: >-
+      A subtype of Noonan syndrome: Orphanet maps OMIM:619087 under ORPHA:648 by a
+      validated mapping, and records for ORPHA:648: abnormal pulmonary valve morphology
+      at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:648
+    admitted_on: 2026-10-25
+  - id: MONDO:0100082
+    label: LEOPARD syndrome 1
+    reason: >-
+      A subtype of Noonan syndrome with multiple lentigines: Orphanet maps OMIM:151100
+      under ORPHA:500 by a validated mapping, and records for ORPHA:500: abnormal
+      pulmonary valve morphology at Very frequent (99-80%); abnormal mitral valve
+      morphology at Frequent (79-30%); mitral valve prolapse at Frequent (79-30%);
+      atrioventricular canal defect at Frequent (79-30%).
+    admitted_by: orphanet_phenotype_frequency
+    attributed_to: Orphanet
+    orphanet: ORPHA:500
+    admitted_on: 2026-10-25

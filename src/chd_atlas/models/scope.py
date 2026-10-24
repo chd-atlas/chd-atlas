@@ -30,6 +30,14 @@ Measured 2026-08-06 across the 68 committed terms: 13 are used by ClinGen's
 Congenital Heart Disease GCEP, 10 by another ClinGen expert panel, 45 by GenCC
 submitters, and **0 by no authority at all**. Every term already had an external
 warrant; only the field recording it was wrong.
+
+**A second path since 2026-10-25 (issue #8 part 1):** `ORPHANET_PHENOTYPE_FREQUENCY`,
+for syndromes where structural CHD is frequent but not part of the diagnosis. Its
+warrant is Orphanet's own frequency annotation, checked by SCP006 against the
+mirrors (`orphanet_scope.py`). Measured 2026-10-25 across the 105 committed terms:
+13 ClinGen CHD panel, 11 other ClinGen panel (NOTCH1-related AOS spectrum disorder
+joined, under the Hereditary Cardiovascular Disease panel), 45 GenCC submitter, and
+36 Orphanet frequency.
 """
 
 from __future__ import annotations
