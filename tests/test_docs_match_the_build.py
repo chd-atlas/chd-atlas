@@ -50,6 +50,9 @@ EXHAUSTIVE: dict[str, str] = {
     "### The bundle's `validity` object: mirrored, attributed, never authored here": (
         "validity_record"
     ),
+    "### The bundle's `burden_combined` array: one study's own combination of its arms": (
+        "combined_row"
+    ),
 }
 
 
@@ -134,6 +137,10 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
         # `(source, disease, moi, submitter)`, and "clingen" precedes "gencc"
         # lexically.
         return dict(load("genes/HGNC_11604.json")["validity"]["records"][0])
+    if kind == "combined_row":
+        # TBX5 again: it carries PMID:40127276's rows, so its first combined
+        # object is that study's damaging-class combination.
+        return dict(load("genes/HGNC_11604.json")["burden_combined"][0])
     raise AssertionError(f"unknown kind {kind}")
 
 
@@ -653,3 +660,27 @@ def test_the_doc_states_the_stage_order_datasets_json_actually_publishes(site: P
             f"{record['id']} publishes its stages out of `order`, which is what "
             f"the datasets.json section of the API doc tells a consumer it does not"
         )
+
+
+def test_the_combined_census_in_the_doc_is_the_census_the_build_publishes(site: Path) -> None:
+    """Every count in the `burden_combined` section, against a real build (§4.24).
+
+    The published figure (75) and the mirrored one (90) differ on the committed
+    corpus, so this distinguishes the two (§4.30): a section that quoted the
+    mirror as what reaches the API would fail here.
+    """
+    import csv
+
+    doc = DOC.read_text()
+    start = doc.index("### The bundle's `burden_combined` array")
+    section = re.sub(r"\s+", " ", doc[start : doc.index("\n### ", start + 1)])
+    bundles = [json.loads(p.read_text()) for p in sorted((site / "genes").glob("HGNC_*.json"))]
+    published = [row for bundle in bundles for row in bundle["burden_combined"]]
+    genes = sum(1 for bundle in bundles if bundle["burden_combined"])
+    with (REPO / "mirrors" / "burden_combined.tsv").open() as handle:
+        mirror = list(csv.DictReader(handle, delimiter="\t"))
+
+    assert f"**{len(published)} combined results reach the API**" in section
+    assert f"across {genes} published genes" in section
+    assert f"holds {len(mirror)} rows for {len({r['gene'] for r in mirror})} genes" in section
+    assert "is not a corrected p" in section

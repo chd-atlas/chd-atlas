@@ -45,7 +45,7 @@ What the build produced, and a checksum for every file in it.
 ```json
 {
   "counts": {
-    "assertions": 1, "burden_rows": 915, "cohort_families": 3,
+    "assertions": 1, "burden_combined": 75, "burden_rows": 915, "cohort_families": 3,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 92, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 92,
     "publications": 5
@@ -54,7 +54,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.13",
+  "schema_version": "2.14",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -192,6 +192,10 @@ wrong by the next one.
   depend on the length of. **One term now names two records** — `MADH7`,
   withdrawn by both SMAD6 and SMAD7 — which `terms` already permitted through a
   shared alias and which a client must present rather than collapse.
+  `2.14` added [`burden_combined`](#the-bundles-burden_combined-array-one-studys-own-combination-of-its-arms)
+  to every gene bundle and to `counts`. It is additive and always present, `[]`
+  where a gene has none. Its display obligation: `local_fdr` is never a
+  corrected p.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -479,7 +483,8 @@ One gene's whole detail page, in one fetch.
   "functional": [],
   "variants": [],
   "omics": {},
-  "burden": [ { "study": "PMID:42230622", "cohort_stratum": "all", … } ]
+  "burden": [ { "study": "PMID:42230622", "cohort_stratum": "all", … } ],
+  "burden_combined": [ { "study": "PMID:40127276", "consequence_class": "damaging", … } ],
   "independent_datasets": {
     "tested": 2, "enriched": 2, "corrected": 1,
     "families": [
@@ -856,6 +861,53 @@ paper's abstract reports — for `PMID:42230622` they are 3,876 cases (1,471
 syndromic + 2,405 non-syndromic) against 45,082 controls, while the abstract
 gives 4,747 and 52,881. The paper does not reconcile the two. Use the row's own
 denominators: they are the ones its statistic was computed from.
+
+### The bundle's `burden_combined` array: one study's own combination of its arms
+
+On every gene bundle, `[]` where the gene has none. Each object is a study's
+**own** combination of two of its burden arms, for one stratum and consequence
+class. It is never a pooling across studies, which this atlas does not do (see
+the `burden` array above). Today it holds PMID:40127276's JL-FDR meta-analysis
+of its de novo arm (Poisson, 3,887 trios) and its case-control arm (Fisher,
+alleles against gnomAD), by the joint local false discovery rate method of
+Jiang & Yu 2017 (PMID:28011772).
+
+**75 combined results reach the API**, across 25 published genes.
+`mirrors/burden_combined.tsv` holds 90 rows for 30 genes: one per arm pair for
+every panel gene in `mirrors/genes.tsv`, wider than the publication gate for the
+reason `burden.tsv` is. Every row's arms are `burden` rows (BUR020 refuses one
+that is not), matched on `study`, `gene`, `cohort_stratum`, `lesion_group` and
+`consequence_class`; `combines` names their comparators, in the order the page
+names them.
+
+```json
+{
+  "study": "PMID:40127276",
+  "cohort_stratum": "all",
+  "lesion_group": null,
+  "consequence_class": "damaging",
+  "combines": ["mutation_model", "control_cohort"],
+  "method": "joint_local_fdr",
+  "pvalue": 9.72491826673901e-12,
+  "local_fdr": 3.09825857398814e-10,
+  "method_note": "The study's own meta-analysis of its de novo and case-control arms, …",
+  "source": "sierant2025_ds6"
+}
+```
+
+- **`local_fdr` is not a corrected p.** It is a local false discovery rate.
+  Measured over the study's 248 panel genes, it is smaller than its own
+  `pvalue` for 118 damaging, 135 loss-of-function and 129 damaging-missense
+  genes, which a step-up correction can never be. Never display it under a
+  "corrected p" or "q" heading, and never compare it with a burden row's
+  `pvalue_adjusted`.
+- **`pvalue` is the study's, transcribed.** It does not reproduce as Fisher's
+  method on the two arm p-values (within 10% for only 116, 133 and 144 of the
+  248 genes), and it is not always stronger than the stronger arm: NODAL's
+  damaging value is 7.57e-10 against a case-control 9.86e-14. The study's
+  genome-wide threshold is p < 2.6 × 10⁻⁶.
+- `counts.burden_combined` in [`manifest.json`](#manifestjson) is this array's
+  total over the published genes.
 
 ### `independent_datasets`: a count of datasets, never a verdict
 
