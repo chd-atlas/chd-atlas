@@ -706,12 +706,24 @@ def test_scope_checks_run_against_the_real_repository() -> None:
     that the mirror-reading helper (`validate/runner.py::_mirrored_validity`)
     returned a non-empty result -- do not delete the guard, or this test
     degrades back into the worthless version described above.
+
+    SCP007 is asserted the same way and for the same reason. Its digest logic is
+    unit-tested, but the 2026-10-25 mutation matrix deleted its one call site in
+    `validate_repository` and the whole suite stayed green: nothing watched it
+    fire from the real validator. On the committed mirrors it lists 239 terms
+    that would qualify on Orphanet's frequencies if nominated; Fabry disease is
+    one (valve findings), and Noonan syndrome, which is nominated, is not.
     """
     report = validate_repository(REPO_ROOT)
 
     codes = {issue.code for issue in report.issues}
     assert "SCP003" in codes, "scope checks did not run"
     assert report.error_count == 0, report.render()
+
+    digests = [issue for issue in report.issues if issue.code == "SCP007"]
+    assert len(digests) == 1, "the Orphanet candidate digest did not run"
+    assert "MONDO:0010526 (Fabry disease)" in digests[0].message
+    assert "MONDO:0018997 (Noonan syndrome)" not in digests[0].message
 
 
 def test_a_validity_mirror_missing_a_selected_column_is_reported_not_raised(
