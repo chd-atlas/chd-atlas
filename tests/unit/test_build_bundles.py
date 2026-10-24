@@ -406,8 +406,12 @@ def test_a_bundle_carries_the_whole_gene_page_and_nothing_more(tmp_path: Path) -
         "variants",
         "omics",
         "burden",
+        "burden_combined",
         "expression_profile",
     }
+    # Always present, empty when the gene has none -- an absent key would make
+    # "no study combined its arms" indistinguishable from "the build dropped it".
+    assert _read(tmp_path, "genes/HGNC_11604.json")["burden_combined"] == []
 
 
 def test_a_gene_with_no_mirrored_validity_publishes_the_uncurated_shape(
