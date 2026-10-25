@@ -102,6 +102,11 @@ sources:
     # from 154 genes to 185: the complete set's `last-modified` header read
     # Fri, 16 Oct 2026 13:36:15 GMT (sha256 12363916be36…2f91). None of the
     # 154 rows already mirrored changed.
+    #
+    # One cell is the atlas's choice rather than HGNC's: RBM10's `uniprot`, which
+    # HGNC lists as P0DW28|P98175. `scripts/convert_hgnc.py` pins P98175, RBM10's
+    # own protein (P0DW28 is the MINAS-60 microprotein its transcripts also
+    # encode), 2026-10-25. Every other cell is HGNC's.
     version: "2026-10-16"
     retrieved_on: 2026-10-25
     url: https://www.genenames.org/
