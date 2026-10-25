@@ -61,6 +61,7 @@ mapping in sorted order for the reason every other loop in this build does.
 from __future__ import annotations
 
 import html
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
 
@@ -96,7 +97,7 @@ from chd_atlas.build.render import (
     evidence_legend,
     grade_legend,
 )
-from chd_atlas.build.validity import GeneValidity, agreeing_submitters, uncurated
+from chd_atlas.build.validity import GeneValidity, ValidityRecord, agreeing_submitters, uncurated
 from chd_atlas.identifiers import HgncId
 from chd_atlas.models.assertion import LesionAssertion
 from chd_atlas.models.cohort import Cohort
@@ -161,10 +162,16 @@ _SCOPE_RULE: Final = (
 # `validity_state` is the discriminator rather than `headline_confidence is
 # None`, because the two are equal on the committed corpus (16 and 16) and equal
 # figures are one figure to every test.
+#
+# Reworded 2026-10-25 because the validity section became two groups (D51):
+# "the classification above is an expert panel's" then sat under the
+# "Other curators (GenCC)" table on 59 pages. A sentence's truth conditions
+# travel with its position.
 _NOT_CURATED: Final = (
     "<p>The atlas has <strong>not yet curated</strong> a lesion assertion for this gene. "
-    "The classification above is an expert panel's, mirrored with its provenance "
-    "intact; no classification on this page is the atlas's own assessment.</p>"
+    "Each classification above is a ClinGen expert panel's or a named curator's, mirrored "
+    "with its provenance intact; no classification on this page is the atlas's own "
+    "assessment.</p>"
 )
 
 _NOT_CURATED_UNGRADED: Final = (
@@ -181,14 +188,55 @@ _NOT_CURATED_UNGRADED: Final = (
 _EM_DASH: Final = "—"
 
 _VALIDITY_HEADERS: Final = (
-    "source",
-    "submitter or panel",
+    "curated by",
     "disease",
-    "MOI",
+    "inheritance",
     "classification",
-    "SOP",
     "date",
     "report",
+)
+
+# ClinGen's mode-of-inheritance codes in GenCC's words, so both groups of the
+# validity section read one vocabulary (D51). Measured 2026-10-25 against the
+# committed mirrors: ClinGen uses exactly these six codes (AR 1,833 rows, AD
+# 1,471, XL 207, SD 59, MT 54, UD 29), and GenCC spells the first five exactly
+# so. `UD` is ClinGen's "undetermined", which GenCC records as `Unknown`. The
+# bundle's `moi` stays verbatim; this is display only.
+_INHERITANCE_LABEL: Final[dict[str, str]] = {
+    "AD": "Autosomal dominant",
+    "AR": "Autosomal recessive",
+    "XL": "X-linked",
+    "SD": "Semidominant",
+    "MT": "Mitochondrial",
+    "UD": "Unknown",
+}
+
+# The calendar date every timestamp either mirror publishes begins with.
+# Measured 2026-10-25, by replacing digits with 9 and counting. ClinGen's
+# `classification_date`: `2024-11-07T17:00:00.000Z` (3,588 rows) and a zone-less
+# `2017-11-21T00:00:00` (65 rows). GenCC's `submitted_on`: space-separated
+# `2018-05-31 20:04:32` (20,543 rows), `2025-01-17T00:00:00.000000Z` (9,857) and
+# the millisecond `...00.000Z` (10).
+_CALENDAR_DATE: Final = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+_NO_PANEL_RECORD: Final = (
+    "<p>No ClinGen expert panel record for this gene and an in-scope disease is mirrored here.</p>"
+)
+
+_NO_OTHER_CURATOR: Final = (
+    "<p>No Gene Curation Coalition submitter other than ClinGen is mirrored here for this "
+    "gene and an in-scope disease.</p>"
+)
+
+# Rendered when `_repeats_the_panel` folded at least one copy away, or when any
+# listed record is ClinGen's own submission -- so a ClinGen row under "Other
+# curators" is always explained, and the notice never describes an omission that
+# did not happen.
+_CLINGEN_COPY_NOTICE: Final = (
+    "<p>ClinGen also submits its own classifications to the Gene Curation Coalition; "
+    "such a copy is listed here only where it differs from the panel record above, "
+    "carries no date, or has no panel record to match. "
+    "This gene's JSON keeps every record.</p>"
 )
 
 _EVIDENCE_HEADERS: Final = ("class", "strength", "summary", "publication")
@@ -637,7 +685,75 @@ def _not_curated(fact: GeneFacts) -> str:
     )
 
 
-def _report_link(url: str | None) -> Cell:
+def _inheritance(moi: str) -> str:
+    """A record's mode of inheritance as the page shows it.
+
+    A code nothing has taught this table renders as itself -- never blank and
+    never coerced to a neighbouring phrase -- for the reason `_count` renders an
+    unknown count unit verbatim: a missing word reads as "not stated", which is
+    a different claim from "stated in a code this page does not know".
+    """
+    return _INHERITANCE_LABEL.get(moi, moi)
+
+
+def _date(timestamp: str | None) -> str:
+    """The `YYYY-MM-DD` a mirror timestamp starts with; anything else verbatim.
+
+    Truncated, not parsed: every shape either mirror publishes begins with the
+    calendar date (`_CALENDAR_DATE`), and the time of day is upstream
+    bookkeeping no reader acts on. A value that does not start with a date is
+    shown as the authority wrote it rather than dropped.
+    """
+    if not timestamp:
+        return _EM_DASH
+    match = _CALENDAR_DATE.match(timestamp)
+    return match.group(0) if match else timestamp
+
+
+def _record_date(record: ValidityRecord) -> str | None:
+    """The record's own date: ClinGen's `classification_date`, GenCC's `submitted_on`."""
+    if record.source is ValiditySource.CLINGEN:
+        return record.classification_date
+    return record.submitted_on
+
+
+def _repeats_the_panel(record: ValidityRecord, panel: Sequence[ValidityRecord]) -> bool:
+    """True iff `record` is ClinGen's own GenCC copy of a panel record already shown. D51.
+
+    ClinGen submits its classifications to GenCC under its own name, so the
+    mirror holds each ClinGen verdict twice. Measured 2026-10-25: all 121 such
+    copies among the 119 published genes match their direct record on disease,
+    mapped grade, inheritance and calendar date -- the 9 whose
+    `classification_term` differs say `Disputed Evidence` where the panel says
+    `Disputed`, the same rung -- so on that corpus every copy is a duplicate.
+
+    **Hidden only on an exact match, never on the submitter's name alone.** A
+    copy that disagrees on any of the four is a different statement, and hiding
+    it would make the page agree with itself by deleting the disagreement. A
+    copy with no date matches nothing: two missing dates are not evidence that
+    two records agree.
+
+    Only ClinGen's own copies are candidates. Another submitter agreeing with a
+    panel is corroboration and is always listed, the principle
+    `test_a_clingen_record_marks_expert_curated_and_gencc_records_still_publish`
+    records for the bundle -- which keeps every record, these copies included.
+    Folding them is the page's choice alone.
+    """
+    if record.source is not ValiditySource.GENCC or record.submitter != "ClinGen":
+        return False
+    copied = _record_date(record)
+    if not copied:
+        return False
+    return any(
+        original.disease == record.disease
+        and original.classification is record.classification
+        and _inheritance(original.moi) == _inheritance(record.moi)
+        and _date(_record_date(original)) == _date(copied)
+        for original in panel
+    )
+
+
+def _report_link(url: str | None, sop: str | None = None) -> Cell:
     """A link only for an `http`/`https` report URL; an em dash for anything else.
 
     Neither mirror schema constrains this column, and the failure is not
@@ -657,10 +773,16 @@ def _report_link(url: str | None) -> Cell:
     A guard on a bypassed gate, in the same idiom as `encode_json`'s
     `allow_nan=False` and `variants.py`'s shard checks: nothing upstream
     promises this, so the page refuses rather than publishes.
+
+    `sop` labels a ClinGen report with the framework version it was curated
+    under (`SOP9 report`), which is where the page states the SOP since D51
+    folded its column away. Without a usable URL the SOP still renders, as
+    text: a ClinGen classification shown without its SOP is an unqualified
+    claim (`docs/data-api.md`).
     """
     if url and url.startswith(("http://", "https://")):
-        return Link(text="open", href=url)
-    return _EM_DASH
+        return Link(text=f"{sop} report" if sop else "open", href=url)
+    return sop or _EM_DASH
 
 
 def _rail(
@@ -743,34 +865,65 @@ def _rail(
     )
 
 
-def _validity_section(gene_validity: GeneValidity) -> str:
-    """The mirrored table, verbatim terms and all.
+def _validity_row(record: ValidityRecord) -> Row:
+    """One mirrored classification as a row, in the section's one vocabulary.
 
     `classification_term` is what the authority published, not the rung it maps
     onto: GenCC's `Supportive` maps to no rung at all, and a table showing the
     mapped value would render that submitter's row as blank or, worse, as a
     grade nobody gave.
     """
-    rows = [
-        Row(
-            cells=(
-                record.source.value,
-                record.submitter or record.gcep or _EM_DASH,
-                f"{record.disease_label} ({record.disease})",
-                record.moi,
-                record.classification_term,
-                record.sop or _EM_DASH,
-                record.classification_date or _EM_DASH,
-                _report_link(record.report_url),
-            )
+    curator = record.gcep if record.source is ValiditySource.CLINGEN else record.submitter
+    return Row(
+        cells=(
+            curator or _EM_DASH,
+            f"{record.disease_label} ({record.disease})",
+            _inheritance(record.moi),
+            record.classification_term,
+            _date(_record_date(record)),
+            _report_link(record.report_url, record.sop),
         )
-        for record in gene_validity.records
-    ]
+    )
+
+
+def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
+    """The mirrored classifications: the expert panel's first, then everyone else's. D51.
+
+    `notes` (the Orphanet scope notes) is placed after the intro and before the
+    first group, because a scope warrant concerns the disease and the disease
+    may be graded in either group, or both.
+
+    Two groups under one heading rather than a `source` column, because the
+    column made a reader decode `clingen` and `gencc` to learn the one thing
+    that matters about a row -- whether a chartered panel or a submitting
+    laboratory wrote it. Both groups share one header and one vocabulary
+    (`_inheritance`, `_date`), so they read across.
+
+    An empty group is a sentence, not a header over no rows: 21 published genes
+    have no panel record at all (measured 2026-10-25), and an empty "Expert
+    panel" table reads as a rendering fault rather than as that fact.
+
+    `_repeats_the_panel` decides which of ClinGen's own GenCC copies are
+    listed. Measured on a real build 2026-10-25: 591 records, 121 copies folded,
+    470 rows rendered.
+    """
+    panel = [r for r in gene_validity.records if r.source is ValiditySource.CLINGEN]
+    submitted = [r for r in gene_validity.records if r.source is ValiditySource.GENCC]
+    listed = [r for r in submitted if not _repeats_the_panel(r, panel)]
+    panel_rows = [_validity_row(record) for record in panel]
+    listed_rows = [_validity_row(record) for record in listed]
+    folded = len(listed) < len(submitted)
+    clingen_listed = any(record.submitter == "ClinGen" for record in listed)
     return (
         "<h2>Mirrored gene&ndash;disease validity</h2>"
         "<p>Every classification below is an upstream panel's or submitter's, "
         "republished with its provenance intact.</p>"
-        f"{data_table(_VALIDITY_HEADERS, rows)}"
+        + notes
+        + "<h3>Expert panel (ClinGen)</h3>"
+        + (data_table(_VALIDITY_HEADERS, panel_rows) if panel_rows else _NO_PANEL_RECORD)
+        + "<h3>Other curators (GenCC)</h3>"
+        + (_CLINGEN_COPY_NOTICE if folded or clingen_listed else "")
+        + (data_table(_VALIDITY_HEADERS, listed_rows) if listed_rows else _NO_OTHER_CURATOR)
     )
 
 
@@ -787,7 +940,8 @@ def _orphanet_notes(
     would take the grade for a grade for heart disease.
 
     One paragraph per distinct Orphanet-scoped disease among the gene's records,
-    sorted by disease id, outside every fold: it is particular to this gene. The
+    sorted by disease id, outside every fold: it is particular to this gene. They
+    are rendered at the top of the validity section, above both groups. The
     phenotype labels and bands are Orphanet's, verbatim; a subtype also says which
     syndrome its warrant is inherited from, and through which OMIM mapping.
     """
@@ -814,7 +968,7 @@ def _orphanet_notes(
                 f"(Orphanet, {html.escape(found.orpha)})."
             )
         notes.append(
-            f'<p class="notice-inline">{claim} The classifications above are for the '
+            f'<p class="notice-inline">{claim} The classifications below are for the '
             "syndrome, not for heart disease.</p>"
         )
     return "".join(notes)
@@ -1057,9 +1211,10 @@ def _burden_section(
       promise a check it cannot offer.
 
     Returns `""` for a gene with no burden rows rather than an empty section:
-    unlike the validity table, whose header names the columns and whose emptiness
-    is itself an answer, an empty burden table would say "this gene was studied
-    and nothing was found", which is a claim no study made.
+    unlike the validity section, whose empty group is a sentence stating that no
+    record from that authority is mirrored (D51) -- a fact about the mirror, and
+    an answer in itself -- an empty burden table would say "this gene was
+    studied and nothing was found", which is a claim no study made.
     """
     if not rows:
         return ""
@@ -3942,9 +4097,9 @@ def build_gene_pages(
     `build_landing` take; a gene absent from it reads as its own HGNC id, the
     same registry fallback those two apply.
 
-    A gene absent from `validity` gets `uncurated()` -- an empty table under its
-    own heading, not a missing section, for the reason `render.data_table`
-    renders a header over no rows at all.
+    A gene absent from `validity` gets `uncurated()` -- the section under its own
+    heading, each authority group stating it holds no record, never a missing
+    section.
 
     `profiles` and `datasets` both default to `None` -- and to `{}` inside --
     rather than to `{}` in the signature, the same reason `concordance` on
@@ -3995,22 +4150,26 @@ def build_gene_pages(
             + "<div>"
             + _SCOPE_RULE
             + grade_legend()
-            + _validity_section(gene_validity)
-            # Directly under the classifications it qualifies: a Noonan grade
-            # is a grade for the syndrome, and the note says why that syndrome
-            # counts as CHD here at all.
-            + _orphanet_notes(gene_validity, warrants, labels)
+            # The Orphanet notes sit above both groups, not under either: a
+            # scope warrant concerns the disease, which may be graded in the
+            # panel group, the GenCC group, or both (measured: for 14 of 27
+            # pages' notes the disease has no GenCC row), and a note placed
+            # under one group read as qualifying only that group's rows.
+            + _validity_section(
+                gene_validity, notes=_orphanet_notes(gene_validity, warrants, labels)
+            )
             + (
                 _evidence_section(records, publications)
                 if fact.atlas_curation is AtlasCuration.CURATED
                 else _not_curated(fact)
             )
             # After the atlas's own section, not between it and the mirrored
-            # validity table. `_not_curated` says "the classification above is
-            # an expert panel's", and a burden table sitting above that sentence
-            # would put nine rows of statistics -- which are not classifications
-            # -- inside what it refers to. It also keeps the atlas's own curation
-            # adjacent to the notice about whether there is any.
+            # validity table. `_not_curated` says "each classification above is
+            # a ClinGen expert panel's or a named curator's", and a burden table
+            # sitting above that sentence would put nine rows of statistics --
+            # which are not classifications -- inside what it refers to. It also
+            # keeps the atlas's own curation adjacent to the notice about whether
+            # there is any.
             + _burden_section(
                 burden.get(gene, ()),
                 publications,

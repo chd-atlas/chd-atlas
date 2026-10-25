@@ -451,22 +451,29 @@ def test_every_validity_record_carries_the_same_key_set_regardless_of_source(
 ) -> None:
     """A ClinGen record and a GenCC record publish identical keys.
 
-    `sop`, `classification_date` and `gcep` are ClinGen-only and `submitter` is
-    GenCC-only on `ValidityRecord` (see its docstring); the field a record's own
-    source does not carry must still appear, as `null`, rather than being
-    missing from that record's object. Publishing a mix of shapes is a trap for
-    a consumer that reads `record["sop"]` off every entry of the array — it
-    would have to check `source` first, which the published contract does not
-    require.
+    `sop`, `classification_date` and `gcep` are ClinGen-only and `submitter`,
+    `submitted_on` and `sgc_id` are GenCC-only on `ValidityRecord` (see its
+    docstring); the field a record's own source does not carry must still
+    appear, as `null`, rather than being missing from that record's object.
+    Publishing a mix of shapes is a trap for a consumer that reads
+    `record["sop"]` off every entry of the array — it would have to check
+    `source` first, which the published contract does not require.
     """
     validity = {
         TBX5: _gene_validity(
             records=(
-                _validity_record(source=ValiditySource.CLINGEN, sop="SOP11", gcep="G"),
+                _validity_record(
+                    source=ValiditySource.CLINGEN,
+                    sop="SOP11",
+                    gcep="G",
+                    classification_date="2025-03-25T16:00:00.000Z",
+                ),
                 _validity_record(
                     source=ValiditySource.GENCC,
                     classification=Classification.MODERATE,
                     submitter="Ambry Genetics",
+                    submitted_on="2018-05-31 20:04:32",
+                    sgc_id="SGC-102815",
                 ),
             )
         )
@@ -489,9 +496,36 @@ def test_every_validity_record_carries_the_same_key_set_regardless_of_source(
     records = _read(tmp_path, "genes/HGNC_11604.json")["validity"]["records"]
     clingen = next(r for r in records if r["source"] == "clingen")
     gencc = next(r for r in records if r["source"] == "gencc")
-    assert set(clingen) == set(gencc)
+    # A literal, not `set(clingen) == set(gencc)` alone: two records that both
+    # dropped `submitted_on` would still agree with each other (section 4.38).
+    assert (
+        set(clingen)
+        == set(gencc)
+        == {
+            "source",
+            "classification_term",
+            "classification",
+            "disease",
+            "disease_label",
+            "moi",
+            "sop",
+            "classification_date",
+            "gcep",
+            "report_url",
+            "submitter",
+            "submitted_on",
+            "sgc_id",
+        }
+    )
+    assert gencc["submitted_on"] == "2018-05-31 20:04:32"
+    assert gencc["sgc_id"] == "SGC-102815"
+    assert clingen["submitted_on"] is None
+    assert clingen["sgc_id"] is None
     assert clingen["sop"] == "SOP11"
     assert clingen["submitter"] is None
+    assert clingen["classification_date"] == "2025-03-25T16:00:00.000Z"
+    assert gencc["classification_date"] is None
+    assert gencc["gcep"] is None
     assert gencc["submitter"] == "Ambry Genetics"
     assert gencc["sop"] is None
 
@@ -502,10 +536,10 @@ def test_the_bundle_does_not_resort_the_records_validity_py_already_ordered(
     """`records` is published in whatever order `GeneValidity.records` holds.
 
     Handed GenCC-then-ClinGen here — the reverse of the `(source, disease, moi,
-    submitter)` order `build.validity.gene_validity` itself sorts by — so a
-    `bundles.py` that quietly re-sorted, or rebuilt the tuple through a `dict`
-    or a `set` on the way to JSON, would publish ClinGen first and this would
-    fail. Not re-sorting is the only way it passes.
+    submitter, sgc_id)` order `build.validity.gene_validity` itself sorts by —
+    so a `bundles.py` that quietly re-sorted, or rebuilt the tuple through a
+    `dict` or a `set` on the way to JSON, would publish ClinGen first and this
+    would fail. Not re-sorting is the only way it passes.
     """
     validity = {
         TBX5: _gene_validity(

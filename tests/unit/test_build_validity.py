@@ -666,3 +666,40 @@ def test_the_committed_mirrors_publish_one_hundred_nineteen_genes_across_four_ru
         Classification.MODERATE: 10,
         Classification.STRONG: 1,
     }
+
+
+def test_a_gencc_record_carries_its_submission_date_and_id_and_a_clingen_one_neither() -> None:
+    """D51: the date a GenCC row renders, and the id that keys it, reach the record.
+
+    Both were read from the mirror and dropped here until schema 2.16, so every
+    GenCC row of every page rendered a blank date -- 470 of 591 on 2026-10-25.
+    `submitted_on` is carried verbatim, in the mirror's own shape; normalising
+    it for display is `pages._date`'s job.
+    """
+    clingen = _clingen_frame(_clingen_row())
+    gencc = _gencc_row(sgc_id="SGC-102815", submitted_on="2018-05-31 20:04:32")
+
+    records = gene_validity(clingen, _gencc_frame(gencc), in_scope={_GATA6_CHD})[_GATA6].records
+
+    panel = next(r for r in records if r.source is ValiditySource.CLINGEN)
+    submission = next(r for r in records if r.source is ValiditySource.GENCC)
+    assert submission.submitted_on == "2018-05-31 20:04:32"
+    assert submission.sgc_id == "SGC-102815"
+    assert panel.submitted_on is None
+    assert panel.sgc_id is None
+
+
+def test_two_submissions_tied_on_every_other_sort_field_order_by_sgc_id() -> None:
+    """PKD1L1 (HGNC:18053) is the published case: two Ambry Genetics submissions
+    for one disease and inheritance, which `(source, disease, moi, submitter)`
+    cannot order. Fed in both orders, so the result cannot be encounter order."""
+    rows = [
+        _gencc_row(sgc_id="SGC-104080", classification="Definitive"),
+        _gencc_row(sgc_id="SGC-101696", classification="Moderate"),
+    ]
+    for feed in (rows, rows[::-1]):
+        validity = gene_validity(_clingen_frame(), _gencc_frame(*feed), in_scope={_GATA6_CHD})
+        assert [record.sgc_id for record in validity[_GATA6].records] == [
+            "SGC-101696",
+            "SGC-104080",
+        ]

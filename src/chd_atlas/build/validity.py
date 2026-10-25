@@ -1,8 +1,7 @@
 # src/chd_atlas/build/validity.py
 """Gene-disease validity, mirrored and attributed -- never authored here.
 
-Design decision D12 (`docs/superpowers/specs/2026-08-03-validity-backbone-design.md`):
-the atlas publishes no validity classification of its own. One curator cannot
+Design decision D12: the atlas publishes no validity classification of its own. One curator cannot
 out-curate a chartered expert panel, and the resource that tried is the
 cautionary case: CHDgene publishes a documented 3-tier ranking under which all
 189 genes carry 5/5 stars.
@@ -61,30 +60,23 @@ class ValidityRecord:
     render the authority's own word and still filter on a common scale, without
     the atlas inventing a confidence nobody stated.
 
-    The last four fields are authority-specific: `sop`, `classification_date`
-    and `gcep` come from ClinGen only, `submitter` from GenCC only. Each is
-    `None` on a record from the other source rather than the two sources
-    getting separate record types, because every consumer of `records` wants
-    one homogeneous list to sort, filter and render, not a union type to match
-    on first.
+    The last six fields are authority-specific: `sop`, `classification_date`
+    and `gcep` come from ClinGen only; `submitter`, `submitted_on` and `sgc_id`
+    from GenCC only. Each is `None` on a record from the other source rather
+    than the two sources getting separate record types, because every consumer
+    of `records` wants one homogeneous list to sort, filter and render, not a
+    union type to match on first.
 
-    **`submitted_on` and `sgc_id` are read from the GenCC mirror and
-    deliberately not fields here, so they reach no published byte.** This is a
-    scope decision, recorded because its symptom is indistinguishable from the
-    silent evidence loss `CLAUDE.md` calls this project's characteristic
-    failure: `tables.py::GENCC_SUBMISSIONS` declares and validates both columns,
-    so a reader who finds them in `mirrors/gencc_submissions.tsv` and not in a
-    bundle has no way to tell a decision from a dropped join. Measured
-    2026-08-06 against a real build: of the **344** validity records the **92**
-    published bundles carry, **266** are GenCC, and all 266 have a non-null
-    `submitted_on` and a non-null `sgc_id` in the mirror. (This paragraph read
-    142 / 23 / 119 until 2026-08-06 -- the pre-widening census, still internally
-    consistent and no longer true of any build.) The consequence is
-    that a GenCC record publishes no date at all -- `classification_date` is
-    ClinGen's and is `None` on every one of the 266 -- and no stable identifier,
-    leaving `(source, disease, moi, submitter)` as the only key distinguishing
-    it, the same tuple `_sort_key` orders on. Publishing them would be purely
-    additive and so a `schema_version` minor bump; it is queued, not refused.
+    **`submitted_on` and `sgc_id` reached no published byte until schema
+    2.16.** They were a recorded scope decision rather than a dropped join, and
+    the cost was measured before it was paid off: on 2026-10-25, 470 of the 591
+    validity records the 119 published bundles carry were GenCC, every one
+    with a non-null `submitted_on` and `sgc_id` in the mirror and a blank date
+    on its page. `submitted_on` is carried verbatim -- the mirror holds three
+    timestamp shapes (`2018-05-31 20:04:32`, `2025-01-17T00:00:00.000000Z` and
+    a millisecond variant) -- because normalising a date for display is the
+    page's job (`pages._date`), and a field that rewrote the upstream value
+    would stop being a mirror of it.
     """
 
     source: ValiditySource
@@ -98,6 +90,8 @@ class ValidityRecord:
     classification_date: str | None = None
     gcep: str | None = None
     submitter: str | None = None
+    submitted_on: str | None = None
+    sgc_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -131,16 +125,28 @@ def uncurated() -> GeneValidity:
     )
 
 
-def _sort_key(record: ValidityRecord) -> tuple[str, str, str, str]:
-    """`(source, disease, moi, submitter or "")`.
+def _sort_key(record: ValidityRecord) -> tuple[str, str, str, str, str]:
+    """`(source, disease, moi, submitter or "", sgc_id or "")`.
 
     So two builds of one commit agree on array order regardless of which
     mirror row was read first. `submitter` is `None` on every ClinGen record;
     `or ""` sorts those first, which never has to arbitrate a real tie because
     a null-vs-populated `submitter` split never happens within one source --
-    only GenCC rows carry it, and every GenCC row has one.
+    only GenCC rows carry it, and every GenCC row has one. The fifth element
+    breaks the one published tie, PKD1L1's two Ambry Genetics submissions for
+    MONDO:0014967, whose order otherwise followed mirror row order; measured
+    2026-10-25, adding it reorders zero published records -- `gene_validity`'s
+    output for all 185 registry genes sorted under both keys reorders none, and
+    a byte diff of two real builds differed only in `manifest.json`'s
+    `source_commit`.
     """
-    return (record.source.value, record.disease, record.moi, record.submitter or "")
+    return (
+        record.source.value,
+        record.disease,
+        record.moi,
+        record.submitter or "",
+        record.sgc_id or "",
+    )
 
 
 def _clingen_records(frame: pl.DataFrame, in_scope: set[str]) -> dict[str, list[ValidityRecord]]:
@@ -194,6 +200,8 @@ def _gencc_records(frame: pl.DataFrame, in_scope: set[str]) -> dict[str, list[Va
                 moi=row["moi"],
                 report_url=row["report_url"],
                 submitter=row["submitter"],
+                submitted_on=row["submitted_on"],
+                sgc_id=row["sgc_id"],
             )
         )
     return by_gene
