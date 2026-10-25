@@ -20,7 +20,9 @@ from chd_atlas.build.emit import Emitter
 from chd_atlas.build.pages import (
     _EM_DASH,
     _SCOPE_RULE,
+    _date,
     _forest_text,
+    _inheritance,
     _phase_sentence,
     build_gene_index_page,
     build_gene_pages,
@@ -200,14 +202,25 @@ def _page(root: Path, name: str) -> str:
 
 
 def _validity_table(page: str) -> str:
-    """The mirrored-validity `<table>` alone, up to its closing tag.
+    """The mirrored-validity section alone: both authority groups.
+
+    Ends at the first of the next `<h2>` and the uncurated notice (`<p>The atlas
+    has`) after the start. The Orphanet notes are inside the section, above the
+    first group, so they are not an end marker.
 
     Scoped rather than checked page-wide because the rail's "this gene as JSON"
     link and the shell's `<nav>` are both `<a href=`, so "no anchor anywhere"
     could never pass on any page. What the report column must not contain is one.
+    Since D51 the section holds two tables, so it ends at the next heading of its
+    own rank rather than at the first `</table>`.
     """
     start = page.index("<h2>Mirrored gene&ndash;disease validity</h2>")
-    return page[start : page.index("</table>", start)]
+    ends = [
+        found
+        for marker in ("<h2>", "<p>The atlas has")
+        if (found := page.find(marker, start + 1)) != -1
+    ]
+    return page[start : min(ends) if ends else len(page)]
 
 
 def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
@@ -348,8 +361,10 @@ def test_a_non_http_report_url_never_becomes_a_link(
     `href="javascript:alert(1)"` needs no unescaped character to run.
 
     The third case pins that leading whitespace does not smuggle a scheme past
-    `str.startswith`; browsers strip it, `startswith` does not, so the em dash is
-    the right answer there too.
+    `str.startswith`; browsers strip it, `startswith` does not, so the URL never
+    becomes a link there either. In every case the fixture's SOP renders as plain
+    text in the report cell (`<td>SOP11</td>`): the SOP is still stated, and only
+    the unusable URL is dropped.
 
     Measured 2026-08-04 with the guard removed (`Link(text="open", href=url) if
     url else _EM_DASH`): 3 failed, 619 passed -- one failure per case here, and
@@ -369,6 +384,7 @@ def test_a_non_http_report_url_never_becomes_a_link(
 
     page = _page(tmp_path, "HGNC_4173.html")
     assert "<a href=" not in _validity_table(page)
+    assert "<td>SOP11</td>" in _validity_table(page)
     assert report_url.strip() not in page
 
 
@@ -5384,14 +5400,16 @@ def _noonan_validity() -> GeneValidity:
     )
 
 
-def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_under_the_validity_table(
+def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
     """The note PTPN11's page needs, pinned against literals and sliced (§4.19, §4.38).
 
     A Noonan grade is a grade for the syndrome. Without this note a reader meets
     it in a CHD atlas with nothing saying why the syndrome counts, and takes it
-    for a grade for heart disease. The scope rule above the table names the
+    for a grade for heart disease. The notes sit above both groups of
+    classifications, because a warrant concerns the disease, which either group
+    may grade. The scope rule at the top of the page names the
     Orphanet path too, and is checked here on the built element, not on the
     constant that produced it.
     """
@@ -5420,7 +5438,7 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_under_the_validit
         "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of its cases</strong>: Abnormal pulmonary valve "
         "morphology at <em>Frequent (79-30%)</em> (Orphanet, ORPHA:648). The classifications "
-        "above are for the syndrome, not for heart disease."
+        "below are for the syndrome, not for heart disease."
     )
     subtype = (
         "<strong>Noonan syndrome 4 is in scope because Orphanet records a structural heart "
@@ -5431,6 +5449,9 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_under_the_validit
     assert direct in section and subtype in section
     # Sorted by disease id: MONDO:0012547 before MONDO:0018997.
     assert section.index(subtype) < section.index(direct)
+    # Above both groups, not under either.
+    first_group = section.index("<h3>Expert panel (ClinGen)</h3>")
+    assert section.index(subtype) < first_group and section.index(direct) < first_group
     # A disease an expert panel curated as CHD gets no Orphanet sentence.
     assert "Holt-Oram syndrome is in scope because" not in section
 
@@ -5464,3 +5485,296 @@ def test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays(
         "a <em>conflicting evidence</em> flag."
     ) in key
     assert "No gene here was disputed or refuted" not in page
+
+
+@pytest.mark.parametrize(
+    ("moi", "shown"),
+    [
+        ("AD", "Autosomal dominant"),
+        ("AR", "Autosomal recessive"),
+        ("XL", "X-linked"),
+        ("SD", "Semidominant"),
+        ("MT", "Mitochondrial"),
+        ("UD", "Unknown"),
+        ("Autosomal dominant", "Autosomal dominant"),
+        ("ZZ", "ZZ"),
+    ],
+)
+def test_inheritance_reads_in_one_vocabulary_and_an_unknown_code_as_itself(
+    moi: str, shown: str
+) -> None:
+    """D51: ClinGen's `AD` and GenCC's `Autosomal dominant` are one word on the page.
+
+    Every ClinGen code in the committed mirror is a case here (measured
+    2026-10-25: exactly these six). The last case is the one a mapping table
+    gets wrong silently: a code nothing taught it must render as itself, never
+    blank, because blank reads as "not stated".
+    """
+    assert _inheritance(moi) == shown
+
+
+@pytest.mark.parametrize(
+    ("timestamp", "shown"),
+    [
+        ("2024-11-07T17:00:00.000Z", "2024-11-07"),
+        ("2018-05-31 20:04:32", "2018-05-31"),
+        ("2025-01-17T00:00:00.000000Z", "2025-01-17"),
+        ("2019-01-01T00:00:00", "2019-01-01"),
+        (None, "—"),
+        ("", "—"),
+        ("before 2010", "before 2010"),
+    ],
+)
+def test_a_date_shows_its_calendar_day_and_anything_else_verbatim(
+    timestamp: str | None, shown: str
+) -> None:
+    """The timestamp shapes the two mirrors publish, and what is not one.
+
+    The first four are shapes measured in the committed mirrors on 2026-10-25:
+    ClinGen's `...T...000Z`, GenCC's space-separated form, GenCC's microsecond
+    `Z` form, and ClinGen's zone-less `T` form (65 rows). GenCC's millisecond
+    `Z` variant (10 rows) is not a separate case: it shares the first one's
+    shape. The rest are a missing value and one that is not a date.
+    """
+    assert _date(timestamp) == shown
+
+
+def _panel_and_copy(panel_date: str | None, **copy_overrides: object) -> GeneValidity:
+    """A ClinGen record and ClinGen's own GenCC copy of it, the copy adjustable.
+
+    The copy's timestamp is a different *shape* from the panel's on purpose, as
+    in the mirrors: equality has to be on the calendar day, not the string.
+    """
+    panel = replace(_validity().records[0], classification_date=panel_date)
+    copy = ValidityRecord(
+        source=ValiditySource.GENCC,
+        classification=panel.classification,
+        classification_term=panel.classification_term,
+        disease=panel.disease,
+        disease_label=panel.disease_label,
+        moi="Autosomal dominant",
+        report_url=None,
+        submitter="ClinGen",
+        submitted_on="2024-11-07 17:00:00",
+        sgc_id="SGC-000002",
+    )
+    return GeneValidity(
+        records=(panel, replace(copy, **copy_overrides)),
+        state=ValidityState.EXPERT_CURATED,
+        has_source_discordance=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("panel_date", "copy_overrides", "listed"),
+    [
+        ("2024-11-07T17:00:00.000Z", {}, False),
+        (
+            "2024-11-07T17:00:00.000Z",
+            {"classification": Classification.STRONG, "classification_term": "Strong"},
+            True,
+        ),
+        ("2024-11-07T17:00:00.000Z", {"submitted_on": "2019-02-01 00:00:00"}, True),
+        ("2024-11-07T17:00:00.000Z", {"moi": "Autosomal recessive"}, True),
+        ("2024-11-07T17:00:00.000Z", {"disease": "MONDO:0007733"}, True),
+        ("2024-11-07T17:00:00.000Z", {"submitter": "Ambry Genetics"}, True),
+        (None, {"submitted_on": None}, True),
+    ],
+    ids=[
+        "exact copy",
+        "grade differs",
+        "date differs",
+        "inheritance differs",
+        "disease differs",
+        "another submitter",
+        "both undated",
+    ],
+)
+def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
+    tmp_path: Path,
+    facts_uncurated: dict[str, GeneFacts],
+    panel_date: str | None,
+    copy_overrides: dict[str, object],
+    listed: bool,
+) -> None:
+    """D51. ClinGen submits every classification to GenCC under its own name.
+
+    Measured 2026-10-25: all 121 such copies among the 119 published genes match
+    their direct record exactly, so every one was a duplicate row. Each case
+    here changes one thing the match is on and must list the copy again -- a
+    copy that disagrees is a different statement, and hiding it would make the
+    page agree with itself by deleting the disagreement. "another submitter" is
+    corroboration, never a copy. "both undated" is what stops two missing dates
+    counting as agreement. The notice about ClinGen's copies must appear whenever
+    the copy is ClinGen-submitted -- folded away or listed -- so a visible ClinGen
+    row is never unexplained, and be absent only for "another submitter", which is
+    no copy at all.
+    """
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: _panel_and_copy(panel_date, **copy_overrides)},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    others = _slice_between(
+        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2>",)
+    )
+    assert others.count("<tr><td>") == (1 if listed else 0)
+    assert ("listed here only where it differs" in others) is (
+        copy_overrides.get("submitter", "ClinGen") == "ClinGen"
+    )
+
+
+def test_a_copy_spelling_the_panels_rung_differently_is_still_folded(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D51 compares the rung, not the word -- and the corpus is why.
+
+    ClinGen's panel records `Disputed` where its GenCC copy says `Disputed
+    Evidence`: 9 real copies, all on the six published genes that carry
+    `has_conflicting_evidence` (BRAF, KRAS, MAP2K1, PTPN11, RAF1, SOS1).
+    Comparing `classification_term` would list every one of them as a second,
+    apparently different ClinGen verdict -- measured on a mutant build
+    2026-10-25 -- while every other fold case passed, because each reuses the
+    panel's own word.
+    """
+    pair = _panel_and_copy(
+        "2024-11-07T17:00:00.000Z",
+        classification=Classification.DISPUTED,
+        classification_term="Disputed Evidence",
+    )
+    panel = replace(
+        pair.records[0], classification=Classification.DISPUTED, classification_term="Disputed"
+    )
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: replace(pair, records=(panel, pair.records[1]))},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    others = _slice_between(
+        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2>",)
+    )
+    assert others.count("<tr><td>") == 0
+
+
+def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D51: panel first, every row dated, one word for one inheritance, SOP kept.
+
+    The fixture's two records disagree on every surface the old table exposed
+    raw -- ClinGen's `AD` against GenCC's phrase, an ISO timestamp against a
+    space-separated one -- so each raw surface the old table exposed is pinned
+    by at least one assertion.
+    """
+    panel = replace(_validity().records[0], classification_date="2024-11-07T17:00:00.000Z")
+    submission = ValidityRecord(
+        source=ValiditySource.GENCC,
+        classification=Classification.STRONG,
+        classification_term="Strong",
+        disease=panel.disease,
+        disease_label=panel.disease_label,
+        moi="Autosomal dominant",
+        report_url=None,
+        submitter="Ambry Genetics",
+        submitted_on="2018-05-31 20:04:32",
+        sgc_id="SGC-000003",
+    )
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={
+            GATA4: GeneValidity(
+                records=(panel, submission),
+                state=ValidityState.EXPERT_CURATED,
+                has_source_discordance=False,
+            )
+        },
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    section = _validity_table(_page(tmp_path, "HGNC_4173.html"))
+    headers = re.findall(r'<th scope="col">([^<]*)</th>', section)
+    assert (
+        headers == ["curated by", "disease", "inheritance", "classification", "date", "report"] * 2
+    )
+    assert (
+        section.index("<h3>Expert panel (ClinGen)</h3>")
+        < section.index("Syndromic Disorders Gene Curation Expert Panel")
+        < section.index("<h3>Other curators (GenCC)</h3>")
+        < section.index("Ambry Genetics")
+    )
+    assert "<td>2024-11-07</td>" in section and "T17:00" not in section
+    assert "<td>2018-05-31</td>" in section and "20:04:32" not in section
+    assert section.count("<td>Autosomal dominant</td>") == 2
+    assert "<td>AD</td>" not in section
+    assert ">SOP11 report</a>" in section
+    assert "<td>clingen</td>" not in section and "<td>gencc</td>" not in section
+
+
+@pytest.mark.parametrize(
+    ("source", "absent_group_sentence"),
+    [
+        (ValiditySource.GENCC, "No ClinGen expert panel record for this gene"),
+        (ValiditySource.CLINGEN, "No Gene Curation Coalition submitter other than ClinGen"),
+    ],
+)
+def test_an_empty_authority_group_is_a_sentence_not_an_empty_table(
+    tmp_path: Path,
+    facts_uncurated: dict[str, GeneFacts],
+    source: ValiditySource,
+    absent_group_sentence: str,
+) -> None:
+    """21 published genes have no panel record (measured 2026-10-25), and an empty
+    "Expert panel" table reads as a rendering fault rather than as that fact."""
+    record = replace(
+        _validity().records[0],
+        source=source,
+        submitter="G2P" if source is ValiditySource.GENCC else None,
+        submitted_on="2021-01-01 00:00:00" if source is ValiditySource.GENCC else None,
+    )
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={
+            GATA4: GeneValidity(
+                records=(record,),
+                state=ValidityState.EXPERT_CURATED,
+                has_source_discordance=False,
+            )
+        },
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    section = _validity_table(_page(tmp_path, "HGNC_4173.html"))
+    assert section.count("<table") == 1
+    assert absent_group_sentence in section
+    # Both headings survive an empty group, panel first.
+    panel_heading = "<h3>Expert panel (ClinGen)</h3>"
+    other_heading = "<h3>Other curators (GenCC)</h3>"
+    assert section.count(panel_heading) == 1
+    assert section.count(other_heading) == 1
+    assert section.index(panel_heading) < section.index(other_heading)

@@ -1225,24 +1225,30 @@ summary column carries the headline classification as a chip — with a
 `conflicting evidence` and a `sources disagree` chip beside it when those flags
 are set — then `validity_state`, `atlas_curation`, the lesion groups, the
 assertion, functional-record and publication counts, and a link to the gene's
-own JSON. Beside it, the mirrored validity table: one row per record, giving
-the source, the panel or submitter, the disease, the mode of inheritance, the
-authority's own `classification_term` **verbatim** rather than the rung this
-atlas maps it onto, the SOP, the date, and a link to the upstream report where
-one is published.
+own JSON. Beside it, the mirrored validity table in two groups — **Expert panel
+(ClinGen)** first, then **Other curators (GenCC)** — each row giving who curated
+it, the disease, the mode of inheritance in one vocabulary (ClinGen's `AD` reads
+as GenCC's "Autosomal dominant"), the authority's own `classification_term`
+**verbatim** rather than the rung this atlas maps it onto, the date as
+`YYYY-MM-DD`, and a link to the upstream report where one is published, labelled
+with its SOP for a ClinGen record. ClinGen also submits its classifications to
+GenCC; the page lists such a copy only where its mapped grade, date, inheritance or
+disease differs from the panel's own record, or where it carries no date or has
+no panel record to match. The bundle keeps every record.
 
 Then either the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites —
 or, for the 118 genes published today with no curation here, a paragraph saying
 exactly that:
 
-> The atlas has **not yet curated** a lesion assertion for this gene. The
-> classification above is an expert panel's, mirrored with its provenance
-> intact; no classification on this page is the atlas's own assessment.
+> The atlas has **not yet curated** a lesion assertion for this gene. Each
+> classification above is a ClinGen expert panel's or a named curator's, mirrored
+> with its provenance intact; no classification on this page is the atlas's own
+> assessment.
 
-That wording is for a gene a ClinGen panel graded — 98 of the 119. The 21
-admitted on submitter agreement have no panel classification to describe, and
-say so instead:
+That wording renders on 97 of those 118 pages, the genes a ClinGen panel
+graded. The 21 admitted on submitter agreement have no panel classification to
+describe, and say so instead:
 
 > The atlas has **not yet curated** a lesion assertion for this gene, and **no
 > ClinGen expert panel has graded it** for a disease an external authority
@@ -1718,7 +1724,8 @@ structural CHD is frequent but not part of the diagnosis.
 - **A grade for one of these syndromes is a grade for the syndrome, not for
   heart disease.** A client showing PTPN11's `Definitive` for Noonan syndrome
   should say why Noonan syndrome counts here, which is what this object is
-  for. The site's gene pages do so under the validity table.
+  for. The site's gene pages do so at the top of the validity section, above both
+  groups of classifications.
 
 ## `sources.json`
 

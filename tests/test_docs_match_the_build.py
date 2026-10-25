@@ -315,9 +315,10 @@ def test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows
     # the ungraded one is the half that was wrong: every one of the 16
     # submitter-admitted pages carried "the classification above is an expert
     # panel's" until 2026-08-06, describing a commercial laboratory's submission
-    # as a chartered panel's classification. A gene is chosen by reading
-    # `validity_state` off the build rather than by naming an HGNC id, so this
-    # keeps testing the right gene as the population moves.
+    # as a chartered panel's classification. Both the old wording (guarding its
+    # return) and the reworded panel-graded notice are asserted absent below. A
+    # gene is chosen by reading `validity_state` off the build rather than by
+    # naming an HGNC id, so this keeps testing the right gene as the population moves.
     ungraded = next(
         bundle
         for bundle in sorted((site / "genes").glob("*.json"))
@@ -327,6 +328,8 @@ def test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows
     ungraded_page = _text_of(ungraded.with_suffix(".html").read_text())
     assert "no ClinGen expert panel has graded it" in ungraded_page
     assert "the classification above is an expert panel's" not in ungraded_page.lower()
+    # A submitter-admitted page must not carry the panel-graded notice either.
+    assert "is a clingen expert panel's or a named curator's" not in ungraded_page.lower()
 
 
 def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Path) -> None:
