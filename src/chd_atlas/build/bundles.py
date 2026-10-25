@@ -37,6 +37,7 @@ from typing import Any, cast
 from chd_atlas.build.burden import BurdenRow, CombinedRow, burden_payload, combined_payload
 from chd_atlas.build.derive import GeneFacts, gene_facts
 from chd_atlas.build.emit import Emitter, Json
+from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, identity_payload
 from chd_atlas.build.omics import ModalitySummary
 from chd_atlas.build.paths import gene_bundle_path
 from chd_atlas.build.profiles import EMPTY_EXPRESSION_PROFILE, ExpressionProfile
@@ -263,6 +264,7 @@ def build_genes(
     concordance: Mapping[str, Json],
     profiles: Mapping[str, ExpressionProfile],
     combined: Mapping[str, Sequence[CombinedRow]] | None = None,
+    identities: Mapping[str, GeneIdentity] | None = None,
 ) -> dict[str, GeneFacts]:
     """Emit `genes/index.json` and one bundle per published gene, and return the facts.
 
@@ -308,6 +310,17 @@ def build_genes(
     `combined` is `burden.load_combined`'s return. It defaults to `None` so a
     caller that predates it publishes an empty `burden_combined` array rather
     than failing.
+
+    `identities` is `runner._gene_identities`' return: `mirrors/genes.tsv`'s
+    identity columns (D52). A gene absent from it publishes an `identity`
+    object of six nulls, the shape every bundle carries -- the same "keep the
+    record, mark what is missing" fallback `symbols` applies. Defaulted, so a
+    caller that forgets it is not refused here: it publishes six nulls on every
+    bundle, which the API doc defines as "the registry holds no value", and
+    every unit test that passes `identities` itself stays green.
+    `test_every_published_bundle_carries_the_identity_its_registry_row_holds`
+    is what catches it, by comparing every bundle of a real build with
+    `mirrors/genes.tsv`.
 
     `profiles` is `gene_expression_profiles`' return (`build/profiles.py`):
     the derived percentile placement, tau and phase assignment for every gene
@@ -418,6 +431,9 @@ def build_genes(
             bundle,
             {
                 **headline,
+                # Who the gene is, from the registry row the symbol came from:
+                # name, locus and the ids its page links out by (D52).
+                "identity": identity_payload((identities or {}).get(gene, EMPTY_IDENTITY)),
                 # The full mirrored picture, alongside the flat fields
                 # `headline` already carries -- see `_validity`'s docstring for
                 # why both are published rather than one replacing the other.

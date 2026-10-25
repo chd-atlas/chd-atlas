@@ -10,6 +10,7 @@ from chd_atlas.build.bundles import build_genes
 from chd_atlas.build.burden import BurdenRow
 from chd_atlas.build.concordance import cohort_families, gene_concordance
 from chd_atlas.build.emit import Emitter, Json
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.omics import ModalitySummary
 from chd_atlas.build.validity import GeneValidity, ValidityRecord
 from chd_atlas.corpus import Corpus
@@ -388,6 +389,7 @@ def test_a_bundle_carries_the_whole_gene_page_and_nothing_more(tmp_path: Path) -
     assert set(_read(tmp_path, "genes/HGNC_11604.json")) == {
         "gene",
         "symbol",
+        "identity",
         "admitted_by",
         "asserted_by",
         "headline_confidence",
@@ -1638,3 +1640,36 @@ def test_a_published_gene_with_no_concordance_derived_fails_loudly(tmp_path: Pat
             concordance={},
             profiles={},
         )
+
+
+def test_a_bundle_carries_the_identity_its_registry_row_holds(tmp_path: Path) -> None:
+    """D52. TBX5's real registry row, and GATA4 with none: six nulls, never a missing key."""
+    emitter = Emitter(root=tmp_path)
+
+    build_genes(
+        _corpus(),
+        emitter,
+        symbols=SYMBOLS,
+        identities={
+            TBX5: GeneIdentity(
+                name="T-box transcription factor 5",
+                locus="12q24.21",
+                ensembl_gene="ENSG00000089225",
+                ncbi_gene=6910,
+                uniprot="Q99593",
+                mane_select="NM_181486.4",
+            )
+        },
+        omics={},
+        variants={},
+        validity={},
+        published={TBX5, GATA4},
+        burden={},
+        concordance=_no_burden(),
+        profiles={},
+    )
+
+    tbx5 = _read(tmp_path, "genes/HGNC_11604.json")["identity"]
+    assert tbx5["ensembl_gene"] == "ENSG00000089225"
+    assert tbx5["ncbi_gene"] == 6910 and type(tbx5["ncbi_gene"]) is int
+    assert _read(tmp_path, "genes/HGNC_4173.json")["identity"] == dict.fromkeys(tbx5)

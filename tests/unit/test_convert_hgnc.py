@@ -9,6 +9,7 @@ with a null accession is evidence loss rather than a cosmetic gap.
 from pathlib import Path
 
 import polars as pl
+import pytest
 from scripts.convert_hgnc import convert
 
 _HEADER = (
@@ -94,24 +95,80 @@ def test_the_refseq_half_of_mane_select_is_kept_and_the_ensembl_half_dropped(tmp
     assert row["aliases"] is None
 
 
-def test_the_first_uniprot_accession_is_kept_when_hgnc_lists_several(tmp_path):
-    """RBM10 is the live instance: HGNC lists `P0DW28|P98175`.
+def _rbm10(uniprot_ids: str) -> str:
+    """RBM10's complete-set row, with its `uniprot_ids` cell supplied by the test."""
+    return (
+        "HGNC:9896\tRBM10\tRNA binding motif protein 10\t\tENSG00000182872\t8241\t"
+        f'Xp11.3\t"{uniprot_ids}"\t"ENST00000377604.9|NM_005676.5"\tApproved'
+    )
 
-    The mirror's `uniprot` column carries `UNIPROT_PATTERN`, which rejects a
-    pipe, so the pair cannot be published as one cell. Publishing null instead
-    would drop RBM10 out of every accession-keyed join silently — the failure
-    this project is built to avoid — so the first accession is taken and the
-    choice is pinned here, where changing it is visible.
+
+def test_rbm10_mirrors_its_own_protein_rather_than_the_microprotein_hgnc_lists_first(
+    tmp_path,
+):
+    """RBM10 is the one live multi-valued cell: HGNC's `uniprot_ids` reads
+    `P0DW28|P98175` -- alphabetical, not ranked -- and no other of the 185
+    registry genes lists more than one (measured 2026-10-25 over the 2026-10-16
+    complete set). UniProt REST, the same day: P98175 is RBM10_HUMAN, "RNA-binding
+    protein 10", 930 aa; P0DW28 is MNS60_HUMAN, 130 aa, the MINAS-60 microprotein
+    UniProt describes as "the product of an alternative open reading frame
+    (alt-ORF) of transcripts coding for the RBM10 (AC P98175) protein". Both are
+    reviewed Swiss-Prot entries and both carry gene name RBM10, so neither field
+    could have told a script which one is the gene's own protein.
+
+    Taking the first accession would have published the microprotein as RBM10's
+    identity in schema 2.17's bundle, and nothing would have failed: a
+    well-formed wrong accession matches `UNIPROT_PATTERN` and breaks no join that
+    has data to join. TBX5 rides along so a converter that pinned *every* gene
+    to P98175 fails too.
     """
     source = _source(
         tmp_path,
-        "HGNC:9896\tRBM10\tRNA binding motif protein 10\t\tENSG00000182872\t8241\t"
-        'Xp11.3\t"P0DW28|P98175"\t"ENST00000377604.9|NM_005676.5"\tApproved',
+        _rbm10("P0DW28|P98175"),
+        "HGNC:11604\tTBX5\tT-box transcription factor 5\t\tENSG00000089225\t6910\t"
+        '12q24.21\tQ99593\t"ENST00000405440.7|NM_181486.4"\tApproved',
     )
     out = tmp_path / "genes.tsv"
-    convert(source, out, keep={"HGNC:9896"})
+    convert(source, out, keep={"HGNC:9896", "HGNC:11604"})
 
-    assert pl.read_csv(out, separator="\t", infer_schema_length=0)["uniprot"][0] == "P0DW28"
+    frame = pl.read_csv(out, separator="\t", infer_schema_length=0)
+    assert dict(frame.select("hgnc_id", "uniprot").rows()) == {
+        "HGNC:11604": "Q99593",
+        "HGNC:9896": "P98175",
+    }
+
+
+@pytest.mark.parametrize(
+    ("row", "match"),
+    [
+        pytest.param(
+            "HGNC:2488\tNKX2-5\tNK2 homeobox 5\t\tENSG00000183072\t1482\t"
+            '5q35.1\t"P52952|Q00000"\t"ENST00000329198.5|NM_004387.4"\tApproved',
+            r"HGNC:2488 \(NKX2-5\) lists 2 UniProt accessions \(P52952\|Q00000\)",
+            id="a-new-multi-valued-cell",
+        ),
+        pytest.param(
+            _rbm10("P0DW28"),
+            r"HGNC:9896 \(RBM10\): the pinned UniProt accession P98175 is not among "
+            r"those HGNC lists \(P0DW28\)",
+            id="a-stale-override",
+        ),
+    ],
+)
+def test_a_uniprot_cell_no_human_has_resolved_is_refused_rather_than_guessed(tmp_path, row, match):
+    """The two ways the next RBM10 could publish a wrong protein unseen.
+
+    A second gene gaining a multi-valued cell must reach a curator, never be
+    resolved by position -- position is how RBM10 went wrong. And a pinned
+    accession HGNC no longer lists for that gene is stale evidence: publishing
+    it would assert a mapping the authority has withdrawn. Both refuse before
+    anything is written, so a failed refresh leaves no half-mirror behind.
+    """
+    source = _source(tmp_path, row)
+    out = tmp_path / "genes.tsv"
+    with pytest.raises(ValueError, match=match):
+        convert(source, out, keep={"HGNC:2488", "HGNC:9896"})
+    assert not out.exists()
 
 
 def test_genes_outside_the_keep_set_are_not_mirrored(tmp_path):
