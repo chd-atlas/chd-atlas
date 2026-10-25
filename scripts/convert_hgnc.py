@@ -11,8 +11,9 @@ so a refresh is a reviewable diff rather than a silent change under a build.
 
 With no third argument the keep set is every gene named by a row of
 `mirrors/clingen_gene_validity.tsv` or `mirrors/gencc_submissions.tsv` whose
-disease is listed in `curation/chd_scope.yaml` -- 154 genes as committed. The
-registry is deliberately wider than what the site publishes (23 genes under
+disease is listed in `curation/chd_scope.yaml` -- 185 genes as committed (154
+until the Orphanet scope path widened the keep set on 2026-10-25). The
+registry is deliberately wider than what the site publishes (119 genes under
 D21), because it is a lookup table rather than published content: widening the
 gate later must not require re-mirroring.
 
@@ -35,13 +36,13 @@ Two columns need a rule, and both were measured against the live file rather
 than assumed:
 
 `mane_select` is published by HGNC as "ENST00000405440.7|NM_181486.4" for all
-154 in-scope genes. The mirror carries the RefSeq half, which is what the
+185 in-scope genes (re-measured 2026-10-25). The mirror carries the RefSeq half, which is what the
 committed TBX5 row already holds and what a variant's `mane_transcript` is
 written against.
 
-`uniprot_ids` carries more than one accession for exactly one of the 154 --
-RBM10, "P0DW28|P98175" -- and RBM10 is one of the 23 genes D21 publishes, so
-this is live. `UNIPROT_PATTERN` rejects a pipe, so the pair cannot be one cell.
+`uniprot_ids` carries more than one accession for exactly one of the 185 --
+RBM10, "P0DW28|P98175" (re-measured 2026-10-25) -- and RBM10 is a gene D21
+publishes, so this is live. `UNIPROT_PATTERN` rejects a pipe, so the pair cannot be one cell.
 The first is taken. Publishing null instead would drop the gene out of every
 accession-keyed join with nothing raised, which is worse: a wrong accession
 fails to match and can be found, a null looks like a gene with no protein.

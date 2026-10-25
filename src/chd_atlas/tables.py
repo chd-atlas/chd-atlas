@@ -24,11 +24,15 @@ from chd_atlas.fs import list_dir
 from chd_atlas.identifiers import (
     COHORT_LIST_PATTERN,
     HGNC_PATTERN,
+    HPO_PATTERN,
     MODIFICATION_PATTERN,
     MONDO_PATTERN,
+    OMIM_PATTERN,
+    ORPHA_PATTERN,
     PMID_PATTERN,
     SEQUENCE_ONTOLOGY_PATTERN,
     UNIPROT_PATTERN,
+    XREF_TARGET_PATTERN,
 )
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.vocab import (
@@ -766,6 +770,66 @@ BURDEN_COMBINED = TableSchema(
     sort_key=("gene", "study", "cohort_stratum", "lesion_group", "consequence_class"),
 )
 
+# The three mirrors the Orphanet scope rule reads (`orphanet_scope.py`), added
+# 2026-10-25 for issue #8. Each is wider than the rule needs, so changing the
+# rule never needs a re-mirror: product 4 is kept for the whole cardiovascular
+# branch, not only the structural subset the rule counts.
+#
+# Orphanet's frequency band names, verbatim from product 4. Measured 2026-10-25:
+# these six and no others over its 116,664 annotations.
+ORPHANET_FREQUENCIES: Final = frozenset(
+    {
+        "Obligate (100%)",
+        "Very frequent (99-80%)",
+        "Frequent (79-30%)",
+        "Occasional (29-5%)",
+        "Very rare (<4-1%)",
+        "Excluded (0%)",
+    }
+)
+# Product 1's mapping-relation codes, the token before each gloss. Measured: E
+# 3,781, BTNT 4,138, NTBT 797, ND 29 over 8,745 Orphanet-to-OMIM references.
+ORPHANET_RELATIONS: Final = frozenset({"E", "BTNT", "NTBT", "ND"})
+ORPHANET_VALIDATION: Final = frozenset({"Validated", "Not yet validated"})
+
+ORPHANET_PHENOTYPES = TableSchema(
+    name="orphanet_phenotypes",
+    columns=(
+        Column("orpha", pl.String, pattern=ORPHA_PATTERN),
+        Column("disorder_name", pl.String),
+        Column("hpo", pl.String, pattern=HPO_PATTERN),
+        Column("hpo_label", pl.String),
+        # Null when Orphanet gave no band; such an annotation never clears the
+        # rule's floor.
+        Column("frequency", pl.String, nullable=True, allowed=ORPHANET_FREQUENCIES),
+        Column("source", pl.String),
+    ),
+    # `frequency` is in the key because product 4 annotates 38 (orpha, hpo)
+    # pairs twice; both are transcribed and neither is chosen.
+    sort_key=("orpha", "hpo", "frequency"),
+)
+ORPHANET_OMIM = TableSchema(
+    name="orphanet_omim",
+    columns=(
+        Column("orpha", pl.String, pattern=ORPHA_PATTERN),
+        Column("omim", pl.String, pattern=OMIM_PATTERN),
+        Column("relation", pl.String, allowed=ORPHANET_RELATIONS),
+        Column("validation", pl.String, allowed=ORPHANET_VALIDATION),
+        Column("source", pl.String),
+    ),
+    sort_key=("orpha", "omim"),
+)
+MONDO_XREFS = TableSchema(
+    name="mondo_xrefs",
+    columns=(
+        Column("mondo", pl.String, pattern=MONDO_PATTERN),
+        # `skos:exactMatch` only; the converter drops every other predicate.
+        Column("target", pl.String, pattern=XREF_TARGET_PATTERN),
+        Column("source", pl.String),
+    ),
+    sort_key=("mondo", "target"),
+)
+
 TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
     schema.name: schema
     for schema in (
@@ -781,6 +845,9 @@ TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
         GENCC_SUBMISSIONS,
         BURDEN,
         BURDEN_COMBINED,
+        ORPHANET_PHENOTYPES,
+        ORPHANET_OMIM,
+        MONDO_XREFS,
     )
 }
 
@@ -806,6 +873,9 @@ FLAT_TABLES: Final[dict[str, str]] = {
     # Beside `burden`, not inside it: a combination is a statement about two
     # rows already in that table, and folding it in would need a fake arm.
     "burden_combined": "burden_combined.tsv",
+    "orphanet_phenotypes": "orphanet_phenotypes.tsv",
+    "orphanet_omim": "orphanet_omim.tsv",
+    "mondo_xrefs": "mondo_xrefs.tsv",
 }
 
 

@@ -43,9 +43,9 @@ times (CLAUDE.md section 4.29).
   `corpus.assertions` — the genes carrying evidence authored here, 1 in the
   committed corpus. It is derived once and shared with the sentence that names
   them, so the figure and the list cannot disagree. Both rows are shown because
-  91 of the 92 published genes carry no assertion at all: a single "genes"
+  118 of the 119 published genes carry no assertion at all: a single "genes"
   figure would read as coverage this site does not have.
-- `len(validity)` is neither of those — every gene either mirror curates, 154 in
+- `len(validity)` is neither of those — every gene either mirror curates, 185 in
   the committed corpus. It is kept, but under "Where this data comes from" and
   labelled so it cannot be read as what this site browses.
 
@@ -276,6 +276,9 @@ def _render(
             _stat("Genes the atlas has curated", _number(len(curated_genes))),
             _stat("Functional evidence records", _number(len(corpus.functional))),
             _stat("Publications cited", _number(len(corpus.publications))),
+            # Every term `scope.json` publishes, whichever authority's warrant
+            # admits it: a manifest key, so the one-census test requires a card.
+            _stat("Disease terms in scope", _number(len(corpus.chd_scope))),
             _stat("Phenotype terms (HPO)", _number(len(corpus.phenotypes))),
             _stat("Featured manuscripts", _number(len(corpus.featured))),
             _stat("Omics datasets", _number(len(corpus.datasets))),

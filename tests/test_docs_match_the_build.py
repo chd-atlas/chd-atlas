@@ -53,6 +53,7 @@ EXHAUSTIVE: dict[str, str] = {
     "### The bundle's `burden_combined` array: one study's own combination of its arms": (
         "combined_row"
     ),
+    "## `scope.json`": "scope_term",
 }
 
 
@@ -137,6 +138,10 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
         # `(source, disease, moi, submitter)`, and "clingen" precedes "gencc"
         # lexically.
         return dict(load("genes/HGNC_11604.json")["validity"]["records"][0])
+    if kind == "scope_term":
+        # The documented example is an Orphanet-path subtype, so the published
+        # term compared against it is the same one: every key, warrant included.
+        return dict(next(t for t in load("scope.json")["terms"] if t["id"] == "MONDO:0012547"))
     if kind == "combined_row":
         # TBX5 again: it carries PMID:40127276's rows, so its first combined
         # object is that study's damaging-class combination.
@@ -602,12 +607,18 @@ def test_the_api_doc_states_the_expression_census_the_build_produces(site: Path)
     Matched on the singular stem "dataset", not "datasets": the doc must read
     "across 1 dataset", and a pin that demanded "1 datasets" would force
     ungrammatical English into a public artifact to keep a test green.
+
+    **Pinned to the sentence since 2026-10-25, not to the figure.** It asserted
+    `f"{n} genes" in doc`, page-wide (4.19), so once the Orphanet widening took
+    `profile_genes` to 119 it passed on "98 of the 119 genes" in the validity
+    section while this sentence still said 92.
     """
     manifest = json.loads((site / "manifest.json").read_text())
-    doc = DOC.read_text()
+    doc = " ".join(DOC.read_text().split())
+    genes, datasets = manifest["counts"]["profile_genes"], manifest["counts"]["profile_datasets"]
+    sentence = f"{genes} genes carry a developmental expression profile, across {datasets} dataset"
 
-    assert f"{manifest['counts']['profile_genes']} genes" in doc
-    assert f"{manifest['counts']['profile_datasets']} dataset" in doc
+    assert sentence in doc
 
 
 def test_the_doc_states_the_stage_order_datasets_json_actually_publishes(site: Path) -> None:
@@ -684,3 +695,36 @@ def test_the_combined_census_in_the_doc_is_the_census_the_build_publishes(site: 
     assert f"across {genes} published genes" in section
     assert f"holds {len(mirror)} rows for {len({r['gene'] for r in mirror})} genes" in section
     assert "is not a corrected p" in section
+
+
+def test_the_scope_census_in_the_doc_is_the_registry_the_build_publishes(site: Path) -> None:
+    """`scope.json`'s counts, and the Orphanet warrant's shape, against a real build."""
+    doc = DOC.read_text()
+    start = doc.index("## `scope.json`")
+    section = re.sub(r"\s+", " ", doc[start : doc.index("\n## ", start + 1)])
+    terms = json.loads((site / "scope.json").read_text())["terms"]
+    orphanet = [term for term in terms if term["orphanet"] is not None]
+
+    assert f"**{len(terms)} terms**" in section
+    assert f"{len(terms) - len(orphanet)} are attributed to an authority that curates" in section
+    assert f"**{len(orphanet)}** are admitted on Orphanet's phenotype frequencies" in section
+    assert [term["id"] for term in terms] == sorted(term["id"] for term in terms)
+
+
+def test_the_doc_states_the_population_the_build_publishes(site: Path) -> None:
+    """Four present-tense sentences that state how much the atlas publishes.
+
+    Section 4.24, found 2026-10-25: the Orphanet widening took the build from 92
+    genes and 94 pages to 119 and 121, the census refresh that went with it
+    re-derived every pinned figure, and these four still said 92, 93 and 94
+    because nothing pinned them. Pages and genes differ, so neither assertion
+    can pass on the other's number (4.30).
+    """
+    doc = " ".join(DOC.read_text().split())
+    genes = json.loads((site / "manifest.json").read_text())["counts"]["genes"]
+    pages = len(list(site.rglob("*.html")))
+
+    assert f"the entry point to the other {pages - 1}." in doc
+    assert f"behind this document publishes {pages} of them" in doc
+    assert f"never the {genes} this atlas publishes" in doc
+    assert f"this atlas publishes {genes} of them" in doc

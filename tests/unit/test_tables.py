@@ -124,6 +124,9 @@ def test_registry_covers_every_mirror_table() -> None:
         "gencc_submissions",
         "burden",
         "burden_combined",
+        "orphanet_phenotypes",
+        "orphanet_omim",
+        "mondo_xrefs",
     }
 
 
@@ -931,6 +934,11 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$",
         r"^PMID:\d+$",
         r"^[a-z0-9]+(_[a-z0-9]+)*(;[a-z0-9]+(_[a-z0-9]+)*)*$",
+        # The Orphanet scope mirrors, 2026-10-25.
+        r"^ORPHA:\d+$",
+        r"^OMIM:\d+$",
+        r"^HP:\d{7}$",
+        r"^(ORPHA|OMIM):\d+$",
     }
 
     adversarial = [
@@ -986,6 +994,19 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         "HGNC:1٣٣",  # Arabic-Indic digits mixed into an ASCII-digit run
         "HGNC:１２３",  # full-width digits
         "HGNC:" + "9" * 1000,
+        # The Orphanet scope patterns. `Orphanet:648` is MONDO's spelling, which
+        # the converter must normalise; `XREF_TARGET_PATTERN` is the second
+        # pattern here with alternation, so its two arms are probed separately.
+        "ORPHA:648",
+        "ORPHA:648\n",
+        "ORPHA:",
+        "Orphanet:648",
+        "OMIM:163950",
+        "OMIM:163950\n",
+        "HP:0001627",
+        "HP:001627",
+        "HP:0001627\n",
+        "ORPHAOMIM:1",
     ]
     adversarial_series = pl.Series("v", adversarial, dtype=pl.String)
 
@@ -1034,7 +1055,22 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     #
     # **122,980 -> 123,250 on 2026-10-24**, when `burden_combined.tsv` landed:
     # 90 rows x 3 pattern-checked columns (`study`, `gene`, `combines`) = 270.
-    assert total_compared == 123_250
+    #
+    # **123,250 -> 176,566 on 2026-10-25**, when the three Orphanet scope
+    # mirrors landed, each with two pattern-checked columns: (7,902 phenotype
+    # + 8,745 OMIM + 10,011 xref rows) x 2 = 53,316.
+    #
+    # **176,566 -> 178,014 the same day**, when the registry widened from 154
+    # genes to 185 and the burden converters re-ran against it: 31 genes x 2
+    # (`hgnc_id`, `uniprot`) + 330 burden rows x 3 + the 297 of them with a
+    # control cohort + 33 combined rows x 3 = 1,448.
+    #
+    # **178,014 -> 181,703 the same day**, when `mirrors/profiles` was
+    # regenerated for the 185-gene registry: 31 genes x 119 assay groups = 3,689
+    # rows, each with its `gene` column pattern-checked. The quantile mirror is
+    # computed over the whole transcriptome, not the registry, and came out
+    # byte-identical.
+    assert total_compared == 181_703
 
     for pattern in patterns:
         compiled = re.compile(pattern)

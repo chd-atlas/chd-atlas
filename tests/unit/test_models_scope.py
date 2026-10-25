@@ -86,7 +86,7 @@ def test_the_committed_scope_list_loads_and_names_no_individual() -> None:
     raw = path.read_text(encoding="utf-8")
     parsed = ChdScopeFile.model_validate(YAML(typ="safe").load(raw))
 
-    assert len(parsed.diseases) == 68
+    assert len(parsed.diseases) == 105  # 68 until the Orphanet path landed, 2026-10-25
     # Every authority is external, by construction of the enum.
     assert {entry.admitted_by for entry in parsed.diseases} <= set(ScopeAuthority)
     # And the file names no individual anywhere, comments included.
@@ -96,3 +96,41 @@ def test_the_committed_scope_list_loads_and_names_no_individual() -> None:
     for entry in parsed.diseases:
         if entry.admitted_by is ScopeAuthority.GENCC_SUBMITTER:
             assert entry.attributed_to != "GenCC", entry.id
+
+
+# Noonan syndrome on Orphanet's frequency warrant (#8 part 1, 2026-10-25).
+ORPHANET_ENTRY = {
+    "id": "MONDO:0018997",
+    "label": "Noonan syndrome",
+    "reason": "Orphanet records abnormal pulmonary valve morphology at Frequent (79-30%).",
+    "admitted_by": "orphanet_phenotype_frequency",
+    "attributed_to": "Orphanet",
+    "orphanet": "ORPHA:648",
+    "admitted_on": "2026-10-25",
+}
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({**ORPHANET_ENTRY, "orphanet": None}, id="frequency-warrant-without-a-code"),
+        pytest.param({**ENTRY, "orphanet": "ORPHA:392"}, id="code-on-a-panel-warrant"),
+        pytest.param({**ORPHANET_ENTRY, "attributed_to": "Orphanet experts"}, id="not-orphanet"),
+        pytest.param({**ORPHANET_ENTRY, "orphanet": "Orphanet:648"}, id="mondo-spelling"),
+    ],
+)
+def test_an_orphanet_code_belongs_to_the_orphanet_warrant_and_only_to_it(
+    entry: dict[str, object],
+) -> None:
+    """The code names the disorder whose annotation is the warrant, so the two travel together.
+
+    A frequency warrant with no code has nothing for SCP006 to check; a code on a
+    panel's warrant would let a term look Orphanet-backed without being checked
+    as one. `attributed_to` is pinned to "Orphanet" because the authority class
+    already names the body, and a free-text variant would read as a different one.
+    """
+    assert ChdScopeFile.model_validate({"diseases": [ORPHANET_ENTRY]}).diseases[0].orphanet == (
+        "ORPHA:648"
+    )
+    with pytest.raises(ValidationError):
+        ChdScopeFile.model_validate({"diseases": [entry]})

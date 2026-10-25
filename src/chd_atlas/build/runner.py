@@ -49,11 +49,13 @@ from chd_atlas.build.profiles import (
     percentile_annotations,
     profile_census,
 )
+from chd_atlas.build.scope import build_scope, scope_warrants
 from chd_atlas.build.search import GeneLabels, build_search
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.build.variants import build_variants
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.assertion import LesionAssertion
+from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import TABLE_SCHEMAS, read_table
 from chd_atlas.validate.runner import validate_repository
 from chd_atlas.validate.sources import load_sources
@@ -409,6 +411,15 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # It cannot fail here — SRC001 is an error, so the gate refused already.
     registry, _ = load_sources(root)
     build_sources(registry, emitter)
+    # The Orphanet warrants, derived once from the mirrors by the function SCP006
+    # refused on, and handed to both `scope.json` and the gene pages, so the
+    # registry and the note under a gene's validity table state one warrant.
+    warrants = scope_warrants(
+        corpus.chd_scope,
+        load_orphanet_tables(root),
+        pinned_structural_phenotypes(root, registry.ontology_files()),
+    )
+    build_scope(corpus.chd_scope, warrants, emitter)
     build_search(corpus, emitter, genes=genes, published=published)
     # One integer, handed to the front page here and to the manifest below, for
     # the reason `census` is threaded rather than recomputed.
@@ -456,6 +467,8 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # The same mapping the bundles were built from, so a page cannot state a
         # combination its own bundle does not carry.
         combined=combined,
+        scope_warrants=warrants,
+        scope_labels={str(e.id): e.label for e in corpus.chd_scope},
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`

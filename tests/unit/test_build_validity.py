@@ -627,30 +627,33 @@ def test_admission_provenance_names_the_one_warrant_that_admitted_the_gene(
     assert institutions.count("ClinGen") == 1, "ClinGen counted once, not once per source"
 
 
-def test_the_committed_mirrors_publish_ninety_two_genes_across_four_rungs(
+def test_the_committed_mirrors_publish_one_hundred_nineteen_genes_across_four_rungs(
     repository_validity: dict[str, GeneValidity],
 ) -> None:
     """A regression pin on the live corpus, not a restatement of the rule above.
 
-    **Pinned as a composition, not as a total.** 92 alone is one number that a
+    **Pinned as a composition, not as a total.** 119 alone is one number that a
     scope edit and a mirror refresh can move in opposite directions and leave
     unchanged, and it says nothing about which warrant admitted what. The split
     is what `docs/data-api.md`, `index.html`'s counts and every chip on the site
-    are written against: measured 2026-08-06, 76 genes carry a ClinGen record at
-    or above the floor and 16 are admitted on GenCC agreement alone.
+    are written against: measured 2026-10-25, 98 genes carry a ClinGen record at
+    or above the floor and 21 are admitted on GenCC agreement alone. (92 = 76 +
+    16 until the Orphanet scope path admitted Noonan, Costello, Adams-Oliver and
+    the other syndromes where CHD is frequent but not definitional, and NOTCH1's
+    own ClinGen term; issue #8.)
 
     The population was 23 until 2026-08-06 and every gene in it was ClinGen
     `Definitive`; those 23 are still here, which is what makes this a widening
     rather than a replacement.
     """
     published = published_genes(repository_validity)
-    assert len(published) == 92
+    assert len(published) == 119
 
     by_warrant = Counter(
         admission_provenance(repository_validity[gene])["admitted_by"]["authority"]  # type: ignore[index]
         for gene in published
     )
-    assert by_warrant == {"clingen": 76, "gencc_agreement": 16}
+    assert by_warrant == {"clingen": 98, "gencc_agreement": 21}
 
     by_grade = Counter(
         record.classification
@@ -658,8 +661,8 @@ def test_the_committed_mirrors_publish_ninety_two_genes_across_four_rungs(
         if (record := _admitting_clingen(repository_validity[gene])) is not None
     )
     assert by_grade == {
-        Classification.DEFINITIVE: 23,
-        Classification.LIMITED: 43,
-        Classification.MODERATE: 9,
+        Classification.DEFINITIVE: 42,
+        Classification.LIMITED: 45,
+        Classification.MODERATE: 10,
         Classification.STRONG: 1,
     }

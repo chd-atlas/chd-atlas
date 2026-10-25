@@ -71,6 +71,48 @@ def _validity_mirrors_missing(root: Path) -> None:
     (root / "mirrors" / "sources.yaml").write_text(VALID_SOURCES_YAML)
 
 
+def _orphanet_mirrors_missing(root: Path) -> None:
+    """One Orphanet-scoped term, and none of the three mirrors its warrant is read from.
+
+    Everything else loads cleanly -- the term's label agrees with the one GenCC
+    row naming it, and the gene registry resolves that row's symbol -- so SCP006
+    is the *only* error. Measured when written: the report is exactly SCP006
+    (error) and SCP008 (warning). Without the error, SCP008 would arrive alone in
+    a report `ok` calls clean, and every gene the term admits would publish on a
+    warrant nobody checked.
+    """
+    (root / "curation").mkdir()
+    (root / "curation" / ".id_registry.yaml").write_text("{}\n")
+    (root / "curation" / "chd_scope.yaml").write_text(
+        "diseases:\n"
+        "  - id: MONDO:0018997\n"
+        "    label: Noonan syndrome\n"
+        "    reason: Orphanet records abnormal pulmonary valve morphology at Frequent.\n"
+        "    admitted_by: orphanet_phenotype_frequency\n"
+        "    attributed_to: Orphanet\n"
+        "    orphanet: ORPHA:648\n"
+        "    admitted_on: 2026-10-25\n"
+    )
+    (root / "mirrors").mkdir()
+    (root / "mirrors" / "sources.yaml").write_text(VALID_SOURCES_YAML)
+    (root / "mirrors" / "genes.tsv").write_text(
+        "hgnc_id\tsymbol\tname\taliases\tprev_symbols\tensembl_gene\tncbi_gene\tlocus\t"
+        "uniprot\tmane_select\n"
+        "HGNC:9644\tPTPN11\tprotein tyrosine phosphatase non-receptor type 11\t\t\t"
+        "ENSG00000179295\t5781\t12q24.13\tQ06124\tNM_002834.5\n"
+    )
+    (root / "mirrors" / "clingen_gene_validity.tsv").write_text(
+        "gene\tgene_symbol\tdisease\tdisease_label\tmoi\tsop\tclassification\t"
+        "classification_date\tgcep\treport_url\n"
+    )
+    (root / "mirrors" / "gencc_submissions.tsv").write_text(
+        "sgc_id\tgene\tgene_symbol\tdisease\tdisease_label\tmoi\tclassification\t"
+        "submitter\tsubmitted_on\treport_url\n"
+        "SGC-1\tHGNC:9644\tPTPN11\tMONDO:0018997\tNoonan syndrome\tAD\tDefinitive\tG2P\t"
+        "2023-01-01\thttps://x\n"
+    )
+
+
 def _gene_registry_missing(root: Path) -> None:
     """Validity mirrors present, gene registry absent. Isolates GEN000's cause.
 
@@ -512,6 +554,13 @@ def test_a_gap_warning_is_reported_without_blocking_the_build() -> None:
             {"PRF013"},
             id="phase-vocabulary-empty",
         ),
+        # SCP008's own cause: an Orphanet-scoped term with no Orphanet mirrors.
+        pytest.param(
+            _orphanet_mirrors_missing,
+            {"SCP008"},
+            {"SCP006"},
+            id="orphanet-mirrors-missing",
+        ),
     ],
 )
 def test_every_skip_warning_arrives_with_the_error_that_caused_it(
@@ -657,12 +706,24 @@ def test_scope_checks_run_against_the_real_repository() -> None:
     that the mirror-reading helper (`validate/runner.py::_mirrored_validity`)
     returned a non-empty result -- do not delete the guard, or this test
     degrades back into the worthless version described above.
+
+    SCP007 is asserted the same way and for the same reason. Its digest logic is
+    unit-tested, but the 2026-10-25 mutation matrix deleted its one call site in
+    `validate_repository` and the whole suite stayed green: nothing watched it
+    fire from the real validator. On the committed mirrors it lists 239 terms
+    that would qualify on Orphanet's frequencies if nominated; Fabry disease is
+    one (valve findings), and Noonan syndrome, which is nominated, is not.
     """
     report = validate_repository(REPO_ROOT)
 
     codes = {issue.code for issue in report.issues}
     assert "SCP003" in codes, "scope checks did not run"
     assert report.error_count == 0, report.render()
+
+    digests = [issue for issue in report.issues if issue.code == "SCP007"]
+    assert len(digests) == 1, "the Orphanet candidate digest did not run"
+    assert "MONDO:0010526 (Fabry disease)" in digests[0].message
+    assert "MONDO:0018997 (Noonan syndrome)" not in digests[0].message
 
 
 def test_a_validity_mirror_missing_a_selected_column_is_reported_not_raised(
@@ -1093,3 +1154,37 @@ def test_a_combined_row_is_checked_by_the_real_validator(
     report = validate_repository(root)
     codes = sorted(issue.code for issue in report.issues if issue.severity is Severity.ERROR)
     assert codes == expected
+
+
+@pytest.mark.parametrize("validity_mirrors", ["readable", "missing"])
+def test_an_orphanet_warrant_is_checked_on_both_validity_branches(
+    tmp_path: Path, validity_mirrors: str
+) -> None:
+    """SCP006 is one call site, reached whether or not the validity mirrors read (§4.34).
+
+    KBG syndrome, which nobody has nominated, put forward on Noonan syndrome's
+    Orphanet code: MONDO:0007846 does not reach ORPHA:648, so the warrant fails
+    on either branch. (This used Noonan itself until Noonan was nominated for
+    real, when the appended entry became a duplicate id and the corpus stopped
+    loading: the fixture must pick a term outside the committed scope.)
+    """
+    root = _real_repo(tmp_path)
+    scope = root / "curation" / "chd_scope.yaml"
+    scope.write_text(
+        scope.read_text(encoding="utf-8") + "  - id: MONDO:0007846\n"
+        "    label: KBG syndrome\n"
+        "    reason: A nomination on the wrong Orphanet code.\n"
+        "    admitted_by: orphanet_phenotype_frequency\n"
+        "    attributed_to: Orphanet\n"
+        "    orphanet: ORPHA:648\n"
+        "    admitted_on: 2026-10-25\n",
+        encoding="utf-8",
+    )
+    if validity_mirrors == "missing":
+        (root / "mirrors" / "clingen_gene_validity.tsv").unlink()
+        (root / "mirrors" / "gencc_submissions.tsv").unlink()
+
+    report = validate_repository(root)
+    refusals = [i for i in report.issues if i.code == "SCP006"]
+    assert len(refusals) == 1
+    assert "does not reach ORPHA:648" in refusals[0].message

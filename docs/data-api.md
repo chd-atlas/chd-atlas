@@ -33,8 +33,8 @@ Plain `.json` files are gzipped in transit by Pages and need no such handling.
 
 **A contested gene must never be displayed as settled.** See the note at the end
 of this document; it is the one consumer obligation this API imposes, and
-`atlas_curation` extends it to the genes this atlas has not yet curated — 91 of
-the 92 published today.
+`atlas_curation` extends it to the genes this atlas has not yet curated — 118 of
+the 119 published today.
 
 ---
 
@@ -45,16 +45,16 @@ What the build produced, and a checksum for every file in it.
 ```json
 {
   "counts": {
-    "assertions": 1, "burden_combined": 75, "burden_rows": 915, "cohort_families": 3,
+    "assertions": 1, "burden_combined": 108, "burden_rows": 1210, "cohort_families": 3,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
-    "genes": 92, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 92,
-    "publications": 5
+    "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
+    "publications": 5, "scope_terms": 105
   },
   "files": {
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.14",
+  "schema_version": "2.15",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -77,7 +77,7 @@ wrong by the next one.
   a count of files and — since `2.7` — no longer only a count of curated records.
   Six of its keys count a curated collection: `assertions`, `datasets` (omics),
   `featured`, `functional`, `phenotypes`, `publications`. A gene the atlas has
-  not curated contributes to none of them and still gets a bundle — 91 of the 92
+  not curated contributes to none of them and still gets a bundle — 118 of the 119
   genes published today are in exactly that position, published on an external
   authority's classification rather than on curation done here. Read
   `atlas_curation` on the browse row to tell the two apart.
@@ -196,6 +196,15 @@ wrong by the next one.
   to every gene bundle and to `counts`. It is additive and always present, `[]`
   where a gene has none. Its display obligation: `local_fdr` is never a
   corrected p.
+  `2.15` added [`scope.json`](#scopejson) and `scope_terms` to `counts`, additively,
+  and **widened the population from 92 genes to 119**: syndromes where structural
+  CHD is frequent but not part of the diagnosis entered scope on Orphanet's
+  phenotype frequencies (Noonan, Costello, Adams-Oliver, Myhre, Rubinstein-Taybi
+  and their subtypes), and NOTCH1 on its own ClinGen term. Its display obligation
+  is that a Noonan grade is a grade for the syndrome: say why the syndrome counts,
+  which is what `scope.json`'s `orphanet` object is for. It also brought the first
+  published genes that set `has_conflicting_evidence` — see
+  [contested genes](#contested-genes-the-one-consumer-obligation).
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -207,7 +216,7 @@ wrong by the next one.
 ## The site root: `index.html`
 
 The page a person opens directly rather than fetches as JSON, and the entry
-point to the other 93. It states what the atlas is, the same development-status
+point to the other 120. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
@@ -223,7 +232,7 @@ as the browse page's strip legend and the gene page's matrix legend. The three
 cannot come to describe the same four states in different words.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
-build behind this document publishes 94 of them — this one, `genes/index.html`
+build behind this document publishes 121 of them — this one, `genes/index.html`
 and one per published gene — and each has an entry in `files` giving the sha256
 of the bytes served at it. A page is published output, so it is verifiable
 output.
@@ -235,20 +244,25 @@ carries what ranks or filters a row and the path to fetch the rest — and none 
 the evidence itself.
 
 **Which genes are listed.** One row per gene an external authority already
-treats as a congenital heart disease gene — 92 genes today, on either of two
+treats as a congenital heart disease gene — 119 genes today, on either of two
 warrants:
 
 - a **ClinGen** record classifying it `Limited` or better for a disease that an
-  external authority treats as congenital heart disease (76 genes), or
+  external authority treats as congenital heart disease, or in which Orphanet
+  records a structural heart malformation in at least 30% of cases (98 genes), or
 - **two or more Gene Curation Coalition submitters** independently asserting it
-  at `Limited` or better, where no ClinGen panel disputes it (16 genes).
+  at `Limited` or better, where no ClinGen panel disputes it (21 genes).
 
 **No disease is in scope on this atlas's own judgement, and neither is any
 gene.** `curation/chd_scope.yaml` records, for every term, which authority uses
 it, and a validator (`SCP005`) checks that attribution against the mirrors
-rather than taking it on trust. Every bundle carries `admitted_by`, naming the
+rather than taking it on trust. Since `2.15` a term can also be in scope on
+Orphanet's own phenotype-frequency annotation: a curator nominates a syndrome,
+and `SCP006` admits it only if Orphanet records a structural heart phenotype for
+it at `Frequent (79-30%)` or stronger. Every term and its warrant is published in
+[`scope.json`](#scopejson). Every bundle carries `admitted_by`, naming the
 one warrant that admitted that gene. That makes the whole chain a mirrored
-decision rather than a curated one: 91 of the 92 genes carry no assertion
+decision rather than a curated one: 118 of the 119 genes carry no assertion
 authored here, and `atlas_curation` is the field that says which.
 
 **The two warrants are not symmetric, deliberately.** ClinGen admits alone
@@ -262,7 +276,7 @@ to admit a gene alone must be trusted to refuse one.
 
 **Read `atlas_curation` before presenting a row as curated content.** Every
 `headline_confidence` is an upstream expert panel's call and never this atlas's,
-and on 91 of the 92 rows there is no assessment by this atlas behind it at all.
+and on 118 of the 119 rows there is no assessment by this atlas behind it at all.
 
 **This population widened on 2026-08-06, from 23 genes to 92.** A consumer
 written against the earlier data will have seen only `"definitive"` in
@@ -329,8 +343,8 @@ assumptions are now false — see the next section.
   nothing"), and asserting it for a gene nobody has assessed would state a
   conclusion no authority reached.
 - `atlas_curation` is `"curated"` when the atlas holds at least one curated
-  assertion for the gene and `"not_yet_curated"` when it holds none — 91 of the
-  92 rows published today. It is about *this* resource's own work and says
+  assertion for the gene and `"not_yet_curated"` when it holds none — 118 of the
+  119 rows published today. It is about *this* resource's own work and says
   nothing about the gene's validity: an uncurated row still carries whatever
   `headline_confidence` an expert panel assigned, which is exactly why the gene
   is listed. Read this rather than testing
@@ -358,10 +372,10 @@ assumptions are now false — see the next section.
   alone — check `validity_state` for that.
 - **`headline_confidence: null` and `"submitter_curated"` are now in the
   payload, and a consumer written before 2026-08-06 will not have seen them.**
-  Measured against a real build (2026-08-06): `headline_confidence` is
-  `"definitive"` on 23 rows, `"limited"` on 43, `"moderate"` on 9, `"strong"` on
-  1 and `null` on 16; `validity_state` is `"expert_curated"` on 76 and
-  `"submitter_curated"` on 16. Every `null` headline is on a
+  Measured against a real build (2026-10-25): `headline_confidence` is
+  `"definitive"` on 42 rows, `"limited"` on 45, `"moderate"` on 10, `"strong"` on
+  1 and `null` on 21; `validity_state` is `"expert_curated"` on 98 and
+  `"submitter_curated"` on 21. (23/43/9/1/16 and 76/16 on 2026-08-06.) Every `null` headline is on a
   `"submitter_curated"` row — no panel graded the gene, and `admitted_by` names
   the submitters instead. Until 2026-08-05 all 23 published rows carried
   `"definitive"` and `"expert_curated"` and those were the only values either
@@ -371,7 +385,7 @@ assumptions are now false — see the next section.
 
 - **`limited` is not a weak yes.** It is a ClinGen expert panel saying the
   gene-disease case is *not yet made* — few probands, or evidence that is
-  suggestive but not compelling. 43 of the 92 rows carry it, so a consumer that
+  suggestive but not compelling. 45 of the 119 rows carry it, so a consumer that
   renders the string with no gloss, or that colours it on a good-to-bad ramp
   without saying what the rungs mean, presents the plurality of this atlas as
   better supported than the grading authority does. The site's own pages carry
@@ -411,7 +425,7 @@ assumptions are now false — see the next section.
 - **An empty `confidence_by_lesion_group` does not mean "not assessed."** It
   means this atlas has recorded no lesion group for the gene, which is a fact
   about this resource's curation queue and says nothing about the gene's
-  validity. Measured against a real build (2026-08-06), 75 of the 92 published
+  validity. Measured against a real build (2026-10-25), 97 of the 119 published
   rows carry a non-null `headline_confidence` together with
   `"confidence_by_lesion_group": {}` — an expert panel graded each of them, and
   no curator here has written an assertion for them yet. TBX5 is the only row
@@ -438,20 +452,20 @@ assumptions are now false — see the next section.
 
 ## `genes/index.html`
 
-The browse page: the same 92 rows `genes/index.json` publishes, rendered as a
+The browse page: the same 119 rows `genes/index.json` publishes, rendered as a
 table a person can read and filter. Each row carries the HGNC id — linked to
 that gene's page — the symbol, `headline_confidence`, `validity_state`,
 `atlas_curation` and the gene's lesion groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
 atlas curation, burden evidence), whose options are the values actually present
 in the build rather than every value the vocabulary allows. The confidence menu
-now includes genes with no headline at all: 16 of the 92 are admitted on
+now includes genes with no headline at all: 21 of the 119 are admitted on
 submitter agreement and carry `null`, and the browse page renders those with a
 `not classified` chip rather than an empty cell.
 
 **Every row is rendered by the build, and the inline script only hides rows.**
 There is no empty `<tbody>` filled in by a fetch, so `curl`, a crawler and a
-reader with JavaScript disabled all get the complete table of 92 genes,
+reader with JavaScript disabled all get the complete table of 119 genes,
 unfiltered — which is what the page shows before anyone touches a control in
 any case. Nothing is loaded from anywhere: the stylesheet and the script are
 inline, and the page makes no external request.
@@ -507,7 +521,7 @@ One gene's whole detail page, in one fetch.
   where the mirrored classification lives.
 - `functional` holds **every** functional record about the gene, not only those
   an assertion cites.
-- `atlas_curation` reads the same here as on the browse row. On the 91 genes
+- `atlas_curation` reads the same here as on the browse row. On the 118 genes
   published today without curation here it is `"not_yet_curated"`, and
   `assertions`, `publications` and `functional` are then empty arrays: the page
   is the panel's classification plus whatever this atlas has recorded, which
@@ -580,11 +594,11 @@ behind those fields live:
     publish a date of its own, and an identifier for the submission itself, and
     this atlas mirrors both and publishes neither.
     `mirrors/gencc_submissions.tsv` carries `submitted_on` and `sgc_id`; no
-    published byte carries either. Measured against a real build (2026-08-04):
-    of the 344 validity records across the 92 gene bundles, 266 are GenCC, and
-    all 266 have a non-null `submitted_on` and a non-null `sgc_id` in the
-    mirror (re-measured 2026-08-06). So a consumer rendering a date column has
-    nothing to show for 266 of 344 records, and cannot key a GenCC record by
+    published byte carries either. Measured against a real build (2026-10-25):
+    of the 591 validity records across the 119 gene bundles, 470 are GenCC, and
+    every GenCC row in the mirror has a non-null `submitted_on` and a non-null
+    `sgc_id`. So a consumer rendering a date column has nothing to show for 470
+    of 591 records, and cannot key a GenCC record by
     anything more stable than the `(source, disease, moi, submitter)` tuple that
     distinguishes it.
   - **`report_url` does not always lead back to the submission.** Of those 266
@@ -610,8 +624,8 @@ behind those fields live:
   `has_source_discordance: false` — the explicit empty shape, not an absent
   `validity` key, so a consumer can tell "no authority has assessed this
   gene" from "the field is missing" without guessing. **Two of the three are
-  reachable in the payload since 2026-08-06**: measured on a real build, 76
-  bundles say `"expert_curated"` and 16 say `"submitter_curated"`. Before the
+  reachable in the payload since 2026-08-06**: measured on a real build
+  (2026-10-25), 98 bundles say `"expert_curated"` and 21 say `"submitter_curated"`. Before the
   gate widened only the first occurred, because a gene was published on an
   in-scope ClinGen `Definitive` call and that made it `"expert_curated"` by
   construction. `"uncurated"` remains unreachable — a published gene has at
@@ -643,7 +657,7 @@ ClinGen's word:
   "submitters": ["Ambry Genetics", "Labcorp Genetics (formerly Invitae)"] }
 ```
 
-`authority` is `"clingen"` on 76 of the 92 genes and `"gencc_agreement"` on 16.
+`authority` is `"clingen"` on 98 of the 119 genes and `"gencc_agreement"` on 21.
 **Every key is present on every gene** — `submitters` is `[]` rather than absent
 where ClinGen admitted the gene, and `classification`/`disease`/`disease_label`/
 `panel` are `null` rather than absent where GenCC did — because an object whose
@@ -683,22 +697,22 @@ be exactly that.
 
 Neither key appears in `genes/index.json` — the browse rows carry
 `validity_state` instead, which separates the same two populations
-(`"expert_curated"` 76, `"submitter_curated"` 16). Fetch the bundle for the
+(`"expert_curated"` 98, `"submitter_curated"` 21). Fetch the bundle for the
 warrant itself.
 
 ### The bundle's `burden` array: per study, never pooled
 
 Published rare-variant burden statistics for the gene, one object per
 (study, cohort stratum, variant class, consequence class, frequency threshold).
-**915 rows reach the API**, across 91 of the 92 published genes, from
+**1210 rows reach the API**, across 118 of the 119 published genes, from
 3 studies (PMID:34324492, PMID:40127276, PMID:42230622), contributing
-61, 150, 704 rows respectively. `mirrors/burden.tsv` holds 1,475 rows for 150 genes; the other 560,
-covering 59 genes, are for genes the site does not publish and reach no
+77, 216, 917 rows respectively. `mirrors/burden.tsv` holds 1,805 rows for 181 genes; the other 595,
+covering 63 genes, are for genes the site does not publish and reach no
 bundle and no page. They are held
 so that widening the publication gate later needs no re-mirroring — which is
 exactly what happened on 2026-08-06, when the gate widened from 23 genes to 92
 and 625 already-mirrored rows became fetchable with no change to the mirror.
-The same reason `mirrors/genes.tsv` registers 154 genes and 92 publish.
+The same reason `mirrors/genes.tsv` registers 185 genes and 119 publish.
 
 **One published gene carries no burden rows at all** and its `burden` array is
 `[]`. That is not a fetch failure: the publication gate is an authority's
@@ -771,19 +785,19 @@ and differs only in what "expected" meant:
 | `mutation_model` | `expected_count` | `expected_count` | `enrichment_ratio` |
 | `none` | nothing (a case series) | neither | none, and no `pvalue` |
 
-**Both `control_cohort` (840 rows) and `mutation_model` (75 rows) appear today;
+**Both `control_cohort` (1102 rows) and `mutation_model` (108 rows) appear today;
 `none` does not.** PMID:40127276 contributes the `mutation_model` rows — de novo
 mutations in 3,887 trios against a mutability-based expectation — and they carry
 null control fields, a non-null `expected_count`, and an `enrichment_ratio`
 rather than an odds ratio. A consumer that reads only `n_control_carriers` will
-see `null` on 75 of the 915 rows, several of which are the strongest results the
+see `null` on 108 of the 1,210 rows, several of which are the strongest results the
 atlas publishes. The build refuses to publish a row whose statistic contradicts
 its comparator.
 
 **`consequence_class` is not a partition: `damaging` is the union of `lof` and
 `missense_damaging`.** PMID:40127276 reports its primary analysis over
 loss-of-function and damaging missense together, and publishes that composite
-alongside its two components — 50 of the 915 rows. Its `n_case_carriers` is
+alongside its two components — 72 of the 1210 rows. Its `n_case_carriers` is
 exactly the sum of the two component rows for the same gene, stratum and
 comparator, verified on every one. **Summing `n_case_carriers` across
 `consequence_class` therefore double-counts those variants.** Group by
@@ -802,7 +816,7 @@ Five obligations, each of which is a wrong claim if you get it wrong:
    result in the data, not a missing one.** Fisher's exact test returns an
    infinite odds ratio where no control carries; `Infinity` is accepted by
    `JSON.parse` nowhere, so the number cannot be published and `ci_low` carries
-   the finding instead — "at least 28.1". 23 published rows today. Rendering it as
+   the finding instead — "at least 28.1". 29 published rows today. Rendering it as
    blank or as "not tested" discards the clearest signals in the study.
 3. **An absent (stratum, consequence) cell is not a null result — but why it is
    absent is the study's rule, not the atlas's.** Read it per study rather than
@@ -818,15 +832,16 @@ Five obligations, each of which is a wrong claim if you get it wrong:
 4. **Do not filter out `consequence_class: "synonymous"`.** It is a study's own
    negative control — synonymous variants should show no enrichment — and where
    one is significant, that gene's comparison is poorly calibrated, which a
-   reader can only see if you show it. **It is not available everywhere:** 261
-   of the 915 published rows are synonymous and all of them come from
+   reader can only see if you show it. **It is not available everywhere:** 339
+   of the 1210 published rows are synonymous and all of them come from
    `PMID:42230622`. The other two studies publish no synonymous row at all, so
    their results have no negative control on this page and must be read without
    one. (This obligation once called synonymous "the most numerous class, 435
    rows against 345 loss-of-function", measured against a one-study corpus; then
    "92 loss-of-function and 69 synonymous", measured against the 23-gene
-   population. Both went stale the same way. Today loss-of-function is 306 and
-   synonymous 261, beside 298 damaging missense and 50 damaging composite —
+   population. Then "306 and 261" over the 92-gene population. All three went
+   stale the same way. Today loss-of-function is 401 and synonymous 339, beside
+   398 damaging missense and 72 damaging composite —
    re-derive these rather than citing them.)
 5. **Read `pvalue_adjusted` where it is present.** A raw and a corrected
    p-value can point opposite ways: CHD7 in `PMID:34324492` is `0.0068` raw and
@@ -872,8 +887,8 @@ of its de novo arm (Poisson, 3,887 trios) and its case-control arm (Fisher,
 alleles against gnomAD), by the joint local false discovery rate method of
 Jiang & Yu 2017 (PMID:28011772).
 
-**75 combined results reach the API**, across 25 published genes.
-`mirrors/burden_combined.tsv` holds 90 rows for 30 genes: one per arm pair for
+**108 combined results reach the API**, across 36 published genes.
+`mirrors/burden_combined.tsv` holds 123 rows for 41 genes: one per arm pair for
 every panel gene in `mirrors/genes.tsv`, wider than the publication gate for the
 reason `burden.tsv` is. Every row's arms are `burden` rows (BUR020 refuses one
 that is not), matched on `study`, `gene`, `cohort_stratum`, `lesion_group` and
@@ -993,7 +1008,7 @@ cannot be confused with "the build dropped it".
 **That is still the real shape for a gene no profile dataset's rows mention.**
 `mirrors/profiles/E-MTAB-6814.tsv` is committed, and `manifest.json`'s
 `counts.profile_genes`/`counts.profile_datasets` say how far that reaches:
-92 genes carry a developmental expression profile, across 1 dataset. Most
+119 genes carry a developmental expression profile, across 1 dataset. Most
 published genes carry the populated shape today, not the empty one above.
 The nested shape below is illustrative — restructured for
 readability (a real gene's `stages` runs to a dozen or more entries, one per
@@ -1165,7 +1180,7 @@ never goes through that mechanism at all: it has no gene column, so
   *lowest* percentile in that run, so an unexpressed gene never reads above
   the median it shares with every other unexpressed one. `n_genes` is the
   size of the *source* transcriptome that cell's grid was built from — tens
-  of thousands of genes, never the 92 this atlas publishes — because "top 4%"
+  of thousands of genes, never the 119 this atlas publishes — because "top 4%"
   names no population without its denominator.
 
 **Percentiles are not comparable across organs, and — more importantly — not
@@ -1184,7 +1199,7 @@ development where none occurred, or miss it where it did.
 
 **Why the quantile grid is published at all, and exactly how far that goes.**
 A percentile's input is the whole source transcriptome — tens of thousands of
-genes — and this atlas publishes 92 of them; design decision D32 forbids
+genes — and this atlas publishes 119 of them; design decision D32 forbids
 re-hosting the matrix a percentile was read against. Without a published grid,
 `median_percentile` would be a number nobody outside this atlas could check.
 [`omics/profile_quantiles/<accession>.json`](#omicsprofile_quantilesaccessionjson)
@@ -1211,21 +1226,22 @@ one is published.
 
 Then either the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites —
-or, for the 91 genes published today with no curation here, a paragraph saying
+or, for the 118 genes published today with no curation here, a paragraph saying
 exactly that:
 
 > The atlas has **not yet curated** a lesion assertion for this gene. The
 > classification above is an expert panel's, mirrored with its provenance
 > intact; no classification on this page is the atlas's own assessment.
 
-That wording is for a gene a ClinGen panel graded — 76 of the 92. The 16
+That wording is for a gene a ClinGen panel graded — 98 of the 119. The 21
 admitted on submitter agreement have no panel classification to describe, and
 say so instead:
 
 > The atlas has **not yet curated** a lesion assertion for this gene, and **no
 > ClinGen expert panel has graded it** for a disease an external authority
-> treats as congenital heart disease. It is published because the Gene Curation
-> Coalition submitters named above independently assert it; their
+> treats as congenital heart disease (or in which Orphanet records a structural
+> heart malformation in at least 30% of cases). It is published because the Gene
+> Curation Coalition submitters named above independently assert it; their
 > classifications are mirrored with their provenance intact, and no
 > classification on this page is the atlas's own assessment.
 
@@ -1342,12 +1358,12 @@ everywhere. Where the two exist side by side they agree; `genes` is the one
 `count` is built from.
 
 `mirrors/genes.tsv` is the mirror table this site publishes least of, and the
-one most likely to be assumed present. It holds 154 rows — exactly the genes
+one most likely to be assumed present. It holds 185 rows — exactly the genes
 ClinGen or GenCC curates within the scope `curation/chd_scope.yaml` declares, of
-which 92 clear the publication gate — across ten columns, and **five of those ten
+which 119 clear the publication gate — across ten columns, and **five of those ten
 reach no published byte at all**: `ensembl_gene`, `ncbi_gene`, `locus`,
-`uniprot` and `mane_select`, each populated on all 154 rows (measured
-2026-08-04). `hgnc_id`, `symbol`, `name`, `aliases` and — since `2.13` —
+`uniprot` and `mane_select`, each populated on all 185 rows (re-measured
+2026-10-25). `hgnc_id`, `symbol`, `name`, `aliases` and — since `2.13` —
 `prev_symbols` are published, the last three as `terms` in
 `search/index.json.gz`.
 
@@ -1643,6 +1659,60 @@ burden evidence groups into (3 today) and is what
 [`independent_datasets`](#independent_datasets-a-count-of-datasets-never-a-verdict)
 is derived from.
 
+## `scope.json`
+
+The registry of disease terms this atlas treats as congenital heart disease,
+and for each one the external authority it is attributed to. A bundle names
+every validity record's disease by bare MONDO id; this is the table those ids
+resolve against, in the same way [`cohorts.json`](#cohortsjson) resolves a
+burden row's cohort ids.
+
+**105 terms**, sorted by `id`. 69 are attributed to an authority that curates
+them (a ClinGen expert panel, or a named GenCC submitter); **36** are admitted
+on Orphanet's phenotype frequencies (`admitted_by:
+"orphanet_phenotype_frequency"`), the path added in `2.15` for syndromes where
+structural CHD is frequent but not part of the diagnosis.
+
+```json
+{
+  "id": "MONDO:0012547",
+  "label": "Noonan syndrome 4",
+  "admitted_by": "orphanet_phenotype_frequency",
+  "attributed_to": "Orphanet",
+  "orphanet": {
+    "code": "ORPHA:648",
+    "name": "Noonan syndrome",
+    "via": "subtype",
+    "omim": "OMIM:610733",
+    "phenotypes": [
+      {
+        "hpo": "HP:0001641",
+        "label": "Abnormal pulmonary valve morphology",
+        "frequency": "Frequent (79-30%)"
+      }
+    ]
+  }
+}
+```
+
+- `orphanet` is `null` on every term an authority curated, never absent.
+- For an Orphanet-path term it is the warrant. It names the Orphanet disorder,
+  how the term reaches it (`via: "direct"`, a MONDO exact match, or
+  `"subtype"`, with `omim` naming the OMIM entry Orphanet maps under its code
+  by a *validated* exact-or-broader mapping), and every structural heart
+  phenotype Orphanet records for it at `Frequent (79-30%)` or stronger.
+  Frequencies are Orphanet's band names verbatim.
+- **The warrant is re-derived from the mirrors on every build**, by the same
+  rule the validator `SCP006` refuses a nomination on, so it cannot drift from
+  what Orphanet records. "Structural" is HPO's `Abnormal heart morphology`
+  branch minus its cardiomyopathy, cardiomegaly, tumour, pericardium,
+  endocardium and imaging-finding branches, plus coarctation and patent ductus
+  arteriosus, over the pinned HPO release.
+- **A grade for one of these syndromes is a grade for the syndrome, not for
+  heart disease.** A client showing PTPN11's `Definitive` for Noonan syndrome
+  should say why Noonan syndrome counts here, which is what this object is
+  for. The site's gene pages do so under the validity table.
+
 ## `sources.json`
 
 What the atlas mirrors, and on whose terms.
@@ -1711,7 +1781,7 @@ fraction of a frame.
   For a gene the terms are its approved symbol, its HGNC id, its name, its
   current aliases and — since `2.13` — the symbols HGNC has **withdrawn** from
   it, in that order. A withdrawn symbol is what a paper published ten years ago
-  called the gene, and 35 of the 92 indexed genes have one: `HOS` finds TBX5,
+  called the gene, and 48 of the 119 indexed genes have one: `HOS` finds TBX5,
   `VEGF` finds VEGFA, `HTX1` finds ZIC3.
 
   **A term can name more than one record, and that is not a defect to
@@ -1727,13 +1797,13 @@ fraction of a frame.
   and would dominate the size of the file every visitor downloads; a dataset has
   no title or description of its own, so its accession is the only string naming
   it, and that already resolves through `datasets.json`.
-- Genes come from the **published** set — the same 92 genes `genes/index.json`
+- Genes come from the **published** set — the same 119 genes `genes/index.json`
   lists and `genes/<slug>.json` serves, each one admitted by an external
   authority under the rule above. Deliberately not the assertion set: keyed on
-  that, the index would hold one record while the site published 92 bundles, so
+  that, the index would hold one record while the site published 119 bundles, so
   a visitor typing GATA4 would get nothing while `genes/HGNC_4173.json` was
-  being served. Deliberately not the 154-gene mirror registry either, which
-  would offer 62 results whose `path` names a bundle no builder wrote. A gene outside the
+  being served. Deliberately not the 185-gene mirror registry either, which
+  would offer 66 results whose `path` names a bundle no builder wrote. A gene outside the
   published set is not searchable because it has no page to open.
 - **A search record carries no curation or confidence signal.** `kind`, `id`,
   `label`, `path` and `terms` are the whole record — there is no
@@ -1744,8 +1814,8 @@ fraction of a frame.
   **cannot be met from this file alone**. A typeahead built on it must join each
   hit back to `genes/index.json`, or fetch the bundle at `path`, before it
   labels a result as anything beyond a name that matched. This is not a
-  hypothetical gap: of the 92 genes indexed today, 91 are `"not_yet_curated"`
-  (measured 2026-08-06), and 16 carry no expert-panel grade at all, so a UI that
+  hypothetical gap: of the 119 genes indexed today, 118 are `"not_yet_curated"`
+  (measured 2026-10-25), and 21 carry no expert-panel grade at all, so a UI that
   presents a search hit as atlas-curated content would be wrong about nearly
   every one of them.
 
@@ -1786,32 +1856,37 @@ the browse row and the bundle, and is always written alongside
 *different* mirrored sources. A single source split against itself would set
 `has_conflicting_evidence` without setting this one — that is why the two
 fields are not redundant — but that split does not currently occur among the
-154 genes these mirrors curate within CHD scope.
+185 genes these mirrors curate within CHD scope (measured 2026-10-25: the eight
+genes that set one flag set both).
 
-**No row in `genes/index.json` sets either flag today, and that is not a reason
-to skip implementing them.** Measured against a real build (2026-08-06): of the
-154 mirrored genes, exactly one — LEFTY2, HGNC:3122, where ClinGen's own
-`Disputed` call sits alongside GenCC's supportive one — sets
-`has_conflicting_evidence`, and it is the same gene that sets
-`has_source_discordance`. It is not among the 92 published, and **the reason it
-is not changed on 2026-08-06.** Under the old gate it simply lacked a ClinGen
-`Definitive` call. Under the widened one it has two GenCC submitters at
-`Limited` (G2P and PanelApp Australia) and would qualify on submitter agreement
-— so the gate now refuses it explicitly, because ClinGen's Congenital Heart
-Disease GCEP disputes it and a source trusted to admit a gene alone must be
-trusted to refuse one. Without that veto LEFTY2 would be published, and a
-headline taken over every mirrored record would have rendered it `limited`,
-burying the dispute in a payload no consumer had reason to inspect. So a
-consumer testing their rendering against the live data will still find nothing
-contested to look at. The first gene ClinGen both grades definitive for one
-in-scope disease and disputes for another will appear as an ordinary
-`"definitive"` row to any client that did not implement this, which is the
-failure this whole section exists to prevent. The divergence
-`has_source_discordance` catches is likewise real but unrealised: ninety genes
-in the full, pre-scope ClinGen mirror carry both a supportive and a contesting
-call, but none of the diseases those ninety concern is in CHD scope
-(`build/validity.py`'s `_has_source_discordance` docstring has the
-measurement).
+**Six published genes set both flags today — and none of them is contested for
+the disease it is graded on.** Measured against a real build (2026-10-25): of the
+185 mirrored genes, eight set `has_conflicting_evidence`, and the same eight set
+`has_source_discordance`. Six are published: **BRAF, KRAS, MAP2K1, PTPN11, RAF1
+and SOS1**. Each is `Definitive` for Noonan syndrome (or a Noonan subtype), and
+ClinGen's RASopathy expert panel marks each `Disputed` for Costello syndrome,
+cardiofaciocutaneous syndrome or both — a panel saying which gene belongs to
+which syndrome, not that the gene's role in CHD is in doubt. Both syndromes
+entered scope with `2.15`, and that is what made these the first contested
+genes this API has published. The flags are computed over a gene's in-scope
+records, not per disease, so they cannot tell "disputed for a sibling syndrome"
+from "disputed for the disease it is graded on"; read the `validity.records`
+marked `Disputed` to see which.
+
+The other two are not published. **LEFTY2** (HGNC:3122) has two GenCC
+submitters at `Limited` and would qualify on submitter agreement, but ClinGen's
+Congenital Heart Disease GCEP disputes it, and the gate refuses it explicitly: a
+source trusted to admit a gene alone must be trusted to refuse one. **A2ML1**
+(HGNC:23336) is refused the same way: Genomics England PanelApp and PanelApp
+Australia agree on it, and ClinGen's RASopathy panel disputes it for Noonan
+syndrome itself. Without that veto both would be
+published, with the dispute buried in a payload no consumer had reason to
+inspect.
+
+So a consumer testing their rendering against the live data now has contested
+genes to look at, and **a client that pairs nothing with `headline_confidence`
+shows all six as ordinary `"definitive"` rows** — the failure this section
+exists to prevent.
 
 **A consumer must pair `headline_confidence` with `has_conflicting_evidence`
 and present a contested gene distinctly** — a badge, a different colour, an
@@ -1873,10 +1948,10 @@ The list is always present and may be empty. Every group it names is a key of
 ### The same failure in a second shape: a gene the atlas has not curated
 
 `headline_confidence` is published for every gene, curated here or not, so a
-consumer that renders it alone presents 91 of the 92 published genes as this
+consumer that renders it alone presents 118 of the 119 published genes as this
 atlas's assessment of them. It is not: it is a ClinGen expert panel's, and this
 atlas has recorded nothing about those genes beyond republishing it with its
-provenance. On 16 of the 92 it is `null` — no panel graded the gene, and
+provenance. On 21 of the 119 it is `null` — no panel graded the gene, and
 `admitted_by` names the GenCC submitters whose agreement admitted it instead.
 
 **A consumer must not present a `not_yet_curated` gene as one the atlas has

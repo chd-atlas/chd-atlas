@@ -103,6 +103,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile
+from chd_atlas.orphanet_scope import Warrant
 from chd_atlas.vocab import AtlasCuration, Classification, ValiditySource, ValidityState
 
 # What the published set *is*, in one sentence, on both page kinds that show it.
@@ -133,12 +134,15 @@ _SCOPE_RULE: Final = (
     '<p class="scope-rule">A gene is published here when an external authority already '
     "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
     "panel</strong> classifies it <strong>Limited or better</strong> for a disease that "
-    "an external authority treats as congenital heart disease, or <strong>two or more "
+    "an external authority treats as congenital heart disease (or in which "
+    "<strong>Orphanet records a structural heart malformation in at least 30% of "
+    "cases</strong>), or <strong>two or more "
     "Gene Curation Coalition submitters</strong> independently assert it and no ClinGen "
     "panel disputes it. "
     "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
     "is any gene: every scope term names the authority it came from "
-    "(<code>curation/chd_scope.yaml</code>), and every gene page names the authority that "
+    "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
+    "page names the authority that "
     "admitted the gene. A classification is not the same as definitive for congenital "
     "heart disease: for many of these genes the disease graded is a syndrome of which a "
     "cardiac lesion is one feature, and the disease the panel actually named is shown "
@@ -166,7 +170,9 @@ _NOT_CURATED: Final = (
 _NOT_CURATED_UNGRADED: Final = (
     "<p>The atlas has <strong>not yet curated</strong> a lesion assertion for this gene, "
     "and <strong>no ClinGen expert panel has graded it</strong> for a disease an external "
-    "authority treats as congenital heart disease. It is published because the Gene "
+    "authority treats as congenital heart disease (or in which Orphanet records a "
+    "structural heart malformation in at least 30% of cases). It is published because "
+    "the Gene "
     "Curation Coalition submitters named above independently assert it; their "
     "classifications are mirrored with their provenance intact, and no classification on "
     "this page is the atlas's own assessment.</p>"
@@ -766,6 +772,52 @@ def _validity_section(gene_validity: GeneValidity) -> str:
         "republished with its provenance intact.</p>"
         f"{data_table(_VALIDITY_HEADERS, rows)}"
     )
+
+
+def _orphanet_notes(
+    gene_validity: GeneValidity, warrants: Mapping[str, Warrant], labels: Mapping[str, str]
+) -> str:
+    """Why each Orphanet-scoped disease in this gene's records counts as CHD here.
+
+    Since 2026-10-25 (issue #8 part 1) a syndrome can be in scope because Orphanet
+    records structural heart malformations in at least 30% of its cases --
+    `orphanet_scope.FREQUENCY_FLOOR`, `Frequent (79-30%)` -- rather than because
+    an authority curated it as CHD. Without this note PTPN11 would sit in a CHD
+    atlas with a Noonan grade and nothing saying why Noonan counts, and a reader
+    would take the grade for a grade for heart disease.
+
+    One paragraph per distinct Orphanet-scoped disease among the gene's records,
+    sorted by disease id, outside every fold: it is particular to this gene. The
+    phenotype labels and bands are Orphanet's, verbatim; a subtype also says which
+    syndrome its warrant is inherited from, and through which OMIM mapping.
+    """
+    diseases = sorted({record.disease for record in gene_validity.records} & set(warrants))
+    notes = []
+    for disease in diseases:
+        found = warrants[disease]
+        label = html.escape(labels.get(disease, disease))
+        phenotypes = "; ".join(
+            f"{html.escape(a.label)} at <em>{html.escape(a.frequency or '')}</em>"
+            for a in found.phenotypes
+        )
+        if found.via == "subtype":
+            claim = (
+                f"<strong>{label} is in scope because Orphanet records a structural heart "
+                f"malformation in at least 30% of cases of {html.escape(found.name)}</strong>, "
+                f"the syndrome it is a subtype of (Orphanet maps {html.escape(found.omim or '')} "
+                f"under {html.escape(found.orpha)}): {phenotypes}."
+            )
+        else:
+            claim = (
+                f"<strong>{label} is in scope because Orphanet records a structural heart "
+                f"malformation in at least 30% of its cases</strong>: {phenotypes} "
+                f"(Orphanet, {html.escape(found.orpha)})."
+            )
+        notes.append(
+            f'<p class="notice-inline">{claim} The classifications above are for the '
+            "syndrome, not for heart disease.</p>"
+        )
+    return "".join(notes)
 
 
 def _evidence_section(
@@ -3876,6 +3928,8 @@ def build_gene_pages(
     datasets: Mapping[str, Dataset] | None = None,
     phases: CardiacPhaseFile | None = None,
     combined: Mapping[str, Sequence[CombinedRow]] | None = None,
+    scope_warrants: Mapping[str, Warrant] | None = None,
+    scope_labels: Mapping[str, str] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -3921,6 +3975,8 @@ def build_gene_pages(
     profile_by_gene = profiles or {}
     dataset_registry = datasets or {}
     combined_by_gene = combined or {}
+    warrants = scope_warrants or {}
+    labels = scope_labels or {}
     for gene in sorted(facts):
         fact = facts[gene]
         symbol = symbols.get(gene, gene)
@@ -3940,6 +3996,10 @@ def build_gene_pages(
             + _SCOPE_RULE
             + grade_legend()
             + _validity_section(gene_validity)
+            # Directly under the classifications it qualifies: a Noonan grade
+            # is a grade for the syndrome, and the note says why that syndrome
+            # counts as CHD here at all.
+            + _orphanet_notes(gene_validity, warrants, labels)
             + (
                 _evidence_section(records, publications)
                 if fact.atlas_curation is AtlasCuration.CURATED

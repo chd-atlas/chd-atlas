@@ -12,6 +12,7 @@ from chd_atlas.corpus import Corpus, load_curation, unexpected_curation_entries
 from chd_atlas.genes import GeneRegistry
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.models.dataset import Dataset
+from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import (
     PROFILE_QUANTILES,
     PROFILES,
@@ -42,8 +43,10 @@ from chd_atlas.validate.referential import (
     validate_references,
 )
 from chd_atlas.validate.scope import (
+    orphanet_candidates,
     scope_candidates,
     validate_curation_is_in_scope,
+    validate_orphanet_warrants,
     validate_scope_attribution,
     validate_scope_terms,
 )
@@ -744,6 +747,18 @@ def validate_repository(root: Path) -> ValidationReport:
         # Same branch, same reasoning again: a corpus that failed to load empties
         # `corpus.chd_scope`, and every scope term would then look absent.
         scope_location = str(root / "curation" / "chd_scope.yaml")
+        # SCP006/SCP008. One call site, before the validity-mirror if/else and
+        # reached on both of its branches, because an Orphanet warrant is checked
+        # against the Orphanet mirrors and the pinned HPO release, neither of which
+        # is a validity mirror (CLAUDE.md section 4.34: a call that appears in an
+        # `if` and an `else` is two call sites).
+        orphanet_tables = load_orphanet_tables(root)
+        structural = pinned_structural_phenotypes(root, registry.ontology_files())
+        issues.extend(
+            validate_orphanet_warrants(
+                corpus.chd_scope, orphanet_tables, structural, scope_location
+            )
+        )
         mirrored = _mirrored_validity(root)
         if mirrored is None:
             # SCP000 alone is a WARNING, and `ValidationReport.ok` ignores
@@ -777,6 +792,13 @@ def validate_repository(root: Path) -> ValidationReport:
             issues.extend(
                 scope_candidates(
                     scope_terms, labels, diseases_by_gene, in_scope_genes, scope_location
+                )
+            )
+            # SCP007 needs the mirrored labels, so it lives on this branch only,
+            # beside SCP003, the other "terms a curator should look at" digest.
+            issues.extend(
+                orphanet_candidates(
+                    scope_terms, labels, orphanet_tables, structural, scope_location
                 )
             )
             # `Corpus` does not record which file each assertion was loaded from
