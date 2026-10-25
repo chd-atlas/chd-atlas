@@ -223,14 +223,18 @@ def validate_table(path: Path, schema: TableSchema) -> list[ValidationIssue]:
             # rather than Python `re.fullmatch`. The two engines are not the same
             # implementation, so this is only safe because it has been measured,
             # not reasoned about: every value of every pattern-bearing column in
-            # every committed mirror (98,538 non-null values) plus an adversarial
+            # every committed mirror (212,113 non-null values, as pinned by the
+            # test below on 2026-10-25) plus an adversarial
             # synthetic set (trailing/embedded/leading newlines, case, leading
             # zeros, full-width and Arabic-Indic Unicode digits, stray `^`/`$`
             # characters, a 1,000-digit value) produced byte-identical offender
             # sets under both engines for every pattern used in this file —
             # `HGNC_PATTERN`, `MONDO_PATTERN`, `SEQUENCE_ONTOLOGY_PATTERN`,
-            # `MODIFICATION_PATTERN`, `UNIPROT_PATTERN`, and the inline
-            # `gencc_submissions.sgc_id` pattern. See
+            # `MODIFICATION_PATTERN`, `UNIPROT_PATTERN`, the PMID, cohort-list
+            # and Orphanet scope patterns (`ORPHA:`, `OMIM:`, `HP:` and the
+            # `ORPHA|OMIM` cross-reference target), and the inline
+            # `gencc_submissions.sgc_id` and `submitted_on` (ISO date prefix)
+            # patterns. See
             # `tests/unit/test_tables.py::test_polars_pattern_engine_agrees_with_python_re`.
             # `re.fullmatch` anchors both ends implicitly; `str.contains` does
             # not, but every pattern above already carries `^` and `$`, so no
@@ -442,7 +446,14 @@ GENCC_SUBMISSIONS = TableSchema(
         Column("moi", pl.String),
         Column("classification", pl.String, allowed=_GENCC_CLASSIFICATIONS),
         Column("submitter", pl.String),
-        Column("submitted_on", pl.String, nullable=True),
+        # Every GenCC value begins with an ISO calendar date (30,410 of 30,410
+        # measured); what follows varies. The column stays nullable on purpose: a
+        # third party's missing date must not fail the whole build. The pattern
+        # skips nulls, so `docs/data-api.md` promises the prefix for any
+        # non-null value only, and the gene page truncates to it. The trailing `.*$` is not
+        # decoration: the engine-agreement test compares `re.fullmatch` with
+        # `str.contains`, and a bare prefix pattern would disagree under it.
+        Column("submitted_on", pl.String, nullable=True, pattern=r"^\d{4}-\d{2}-\d{2}.*$"),
         Column("report_url", pl.String, nullable=True),
     ),
     # The submitter, and then its own row id -- see

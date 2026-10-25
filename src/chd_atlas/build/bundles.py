@@ -147,9 +147,9 @@ def _expression_profile(profiles: Mapping[str, ExpressionProfile], gene: str) ->
 def _validity_record(record: ValidityRecord) -> dict[str, Json]:
     """One mirrored classification, JSON-ready.
 
-    Every record in the published array carries the same eleven keys, whichever
+    Every record in the published array carries the same thirteen keys, whichever
     source it came from. `sop`, `classification_date` and `gcep` are ClinGen-only
-    and `submitter` is GenCC-only on `ValidityRecord` itself (see its
+    and `submitter`, `submitted_on` and `sgc_id` are GenCC-only on `ValidityRecord` itself (see its
     docstring), and each is `null` on a record from the other source rather than
     left out of the object. The alternative — omitting a source's absent fields
     — would publish an array whose objects differ in shape, which is a trap for
@@ -173,6 +173,8 @@ def _validity_record(record: ValidityRecord) -> dict[str, Json]:
         "gcep": record.gcep,
         "report_url": record.report_url,
         "submitter": record.submitter,
+        "submitted_on": record.submitted_on,
+        "sgc_id": record.sgc_id,
     }
 
 

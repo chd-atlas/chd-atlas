@@ -135,8 +135,8 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
     if kind == "validity_record":
         # TBX5 (HGNC:11604) is the committed corpus's one asserted gene, and its
         # first record is ClinGen's -- `build.validity._sort_key` sorts
-        # `(source, disease, moi, submitter)`, and "clingen" precedes "gencc"
-        # lexically.
+        # `(source, disease, moi, submitter, sgc_id)`, and "clingen" precedes
+        # "gencc" lexically.
         return dict(load("genes/HGNC_11604.json")["validity"]["records"][0])
     if kind == "scope_term":
         # The documented example is an Orphanet-path subtype, so the published
@@ -728,3 +728,30 @@ def test_the_doc_states_the_population_the_build_publishes(site: Path) -> None:
     assert f"behind this document publishes {pages} of them" in doc
     assert f"never the {genes} this atlas publishes" in doc
     assert f"this atlas publishes {genes} of them" in doc
+
+
+def test_the_report_url_census_in_the_doc_is_the_census_the_build_publishes(site: Path) -> None:
+    """The `report_url` bullet's figures, measured against a real build (section 4.24).
+
+    The sentence went stale once already -- it read "157 of the 266" for a build
+    publishing 470 GenCC records -- and nothing could see it, because stale prose
+    stays internally consistent. Each figure is anchored on the words either side
+    of it, so a documented "189" cannot pass for a built "89" (the prefix trap
+    `test_the_documented_manifest_census_is_the_census_the_build_publishes` records).
+    """
+    bundles = sorted((site / "genes").glob("HGNC_*.json"))
+    gencc = [
+        record
+        for bundle in bundles
+        for record in json.loads(bundle.read_text())["validity"]["records"]
+        if record["source"] == "gencc"
+    ]
+    homepages = ("https://panelapp-aus.org", "http://panelapp-aus.org")
+    null = sum(record["report_url"] is None for record in gencc)
+    homepage = sum((record["report_url"] or "").rstrip("/") in homepages for record in gencc)
+    doc = " ".join(DOC.read_text().split())
+
+    assert f"Of the {len(gencc)} GenCC records across the {len(bundles)} gene bundles," in doc
+    assert f", {null} publish `report_url: null`" in doc
+    assert f"and {homepage} more point at" in doc
+    assert f"so {null + homepage} of the {len(gencc)} offer" in doc

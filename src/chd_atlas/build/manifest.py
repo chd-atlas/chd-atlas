@@ -393,7 +393,13 @@ from chd_atlas.corpus import Corpus
 # carries the display obligation: a Noonan grade is a grade for the syndrome,
 # and a consumer showing it must say why the syndrome counts, which is what
 # `scope.json`'s `orphanet` object is for.
-SCHEMA_VERSION: Final = "2.15"
+#
+# 2.16 adds `submitted_on` and `sgc_id` to every record of a bundle's
+# `validity.records`, `null` on a ClinGen record. Additive, so MINOR. Until it,
+# a GenCC classification published no date at all -- 470 of 591 records on
+# 2026-10-25 -- and no identifier: `(source, disease, moi, submitter)` is not
+# unique, and PKD1L1 publishes two Ambry submissions that share it.
+SCHEMA_VERSION: Final = "2.16"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is

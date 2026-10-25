@@ -97,6 +97,43 @@ def test_reports_a_value_failing_its_pattern(tmp_path: Path) -> None:
     assert [i.code for i in issues] == ["TBL005"]
 
 
+@pytest.mark.parametrize(
+    ("submitted_on", "codes"),
+    [
+        ("2018-05-31 20:04:32", []),
+        ("2025-01-17T00:00:00.000000Z", []),
+        ("2021-09-08T16:00:00.000Z", []),
+        ("", []),  # null is allowed
+        ("31/05/2018", ["TBL005"]),
+        ("May 2018", ["TBL005"]),
+        ("20180531", ["TBL005"]),
+    ],
+)
+def test_gencc_submitted_on_must_begin_with_a_calendar_date(
+    tmp_path: Path, submitted_on: str, codes: list[str]
+) -> None:
+    """The three real shapes pass; a value the date prefix would not truncate
+    cleanly is reported, because `docs/data-api.md` promises the prefix."""
+    row = "\t".join(
+        [
+            "SGC-1",
+            "HGNC:1",
+            "G",
+            "MONDO:0000001",
+            "d",
+            "Unknown",
+            "Strong",
+            "S",
+            submitted_on,
+            "",
+        ]
+    )
+    header = "\t".join(c.name for c in GENCC_SUBMISSIONS.columns)
+    path = _write(tmp_path / "gencc_submissions.tsv", f"{header}\n{row}\n")
+    issues = validate_table(path, GENCC_SUBMISSIONS)
+    assert [i.code for i in issues] == codes
+
+
 def test_integer_columns_stay_integers(tmp_path: Path) -> None:
     """Guards the reason polars was chosen over pandas: nullable ints must not become floats."""
     path = _write(
@@ -931,6 +968,7 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         r"^SO:\d{7}$",
         r"^MOD:\d{5}$",
         r"^SGC-\d+$",
+        r"^\d{4}-\d{2}-\d{2}.*$",
         r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$",
         r"^PMID:\d+$",
         r"^[a-z0-9]+(_[a-z0-9]+)*(;[a-z0-9]+(_[a-z0-9]+)*)*$",
@@ -1007,6 +1045,16 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         "HP:001627",
         "HP:0001627\n",
         "ORPHAOMIM:1",
+        # `gencc_submissions.submitted_on`: a date prefix, then anything.
+        "2018-05-31 20:04:32",
+        "2025-01-17T00:00:00.000000Z",
+        "2018-05-31",
+        "2018-5-31",
+        " 2018-05-31",
+        "x2018-05-31",
+        "2018-05-31\n",
+        "2018-05-31\nz",
+        "２０１８-05-31",
     ]
     adversarial_series = pl.Series("v", adversarial, dtype=pl.String)
 
@@ -1070,7 +1118,10 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     # rows, each with its `gene` column pattern-checked. The quantile mirror is
     # computed over the whole transcriptome, not the registry, and came out
     # byte-identical.
-    assert total_compared == 181_703
+    #
+    # **181,703 -> 212,113**, when `gencc_submissions.submitted_on` gained its
+    # date-prefix pattern: all 30,410 rows carry a value (awk count).
+    assert total_compared == 212_113
 
     for pattern in patterns:
         compiled = re.compile(pattern)

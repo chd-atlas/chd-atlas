@@ -54,7 +54,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.15",
+  "schema_version": "2.16",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -205,6 +205,10 @@ wrong by the next one.
   which is what `scope.json`'s `orphanet` object is for. It also brought the first
   published genes that set `has_conflicting_evidence` — see
   [contested genes](#contested-genes-the-one-consumer-obligation).
+  `2.16` added `submitted_on` and `sgc_id` to every record in a bundle's
+  [`validity.records`](#the-bundles-validity-object-mirrored-attributed-never-authored-here),
+  `null` on a ClinGen record. Additive. Before it, a GenCC classification
+  carried no date at all.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -571,7 +575,9 @@ behind those fields live:
     "classification_date": "2025-03-25T16:00:00.000Z",
     "gcep": "Syndromic Disorders Gene Curation Expert Panel",
     "report_url": "https://search.clinicalgenome.org/kb/gene-validity/CGGV:assertion_24e6c85a-33cf-4248-be1f-6431c7c6b1e5-2025-03-25T160000.000Z",
-    "submitter": null
+    "submitter": null,
+    "submitted_on": null,
+    "sgc_id": null
   }
   ```
 
@@ -584,30 +590,31 @@ behind those fields live:
     reads `classification_term`; one that wants to filter or rank reads
     `classification` and must handle `null`.
   - `sop`, `classification_date` and `gcep` are populated only on a ClinGen
-    record; `submitter` only on a GenCC record. The field a record's own
-    source does not carry is published as `null` rather than omitted, so
-    every object in `records` has the same shape and a consumer never has to
-    check `source` before it can look a key up.
-  - **A GenCC record has no date and no submission identifier, and this is a
-    deliberate omission rather than a missing join.** `classification_date` is
-    ClinGen's date, so it is `null` on every GenCC record — but GenCC does
-    publish a date of its own, and an identifier for the submission itself, and
-    this atlas mirrors both and publishes neither.
-    `mirrors/gencc_submissions.tsv` carries `submitted_on` and `sgc_id`; no
-    published byte carries either. Measured against a real build (2026-10-25):
-    of the 591 validity records across the 119 gene bundles, 470 are GenCC, and
-    every GenCC row in the mirror has a non-null `submitted_on` and a non-null
-    `sgc_id`. So a consumer rendering a date column has nothing to show for 470
-    of 591 records, and cannot key a GenCC record by
-    anything more stable than the `(source, disease, moi, submitter)` tuple that
-    distinguishes it.
-  - **`report_url` does not always lead back to the submission.** Of those 266
-    GenCC records, 109 publish `report_url: null` and 48 more point at
-    `https://panelapp-aus.org` — a homepage, not a submission — so 157 of the
-    266 offer a reader no published route back to the record behind the
-    classification (measured 2026-08-06). Attribute these to their `submitter`
-    and present them as classifications this atlas mirrors; do not render them
-    as though every one resolves to a citable report.
+    record; `submitter`, `submitted_on` and `sgc_id` only on a GenCC record.
+    The field a record's own source does not carry is published as `null`
+    rather than omitted, so every object in `records` has the same shape and a
+    consumer never has to check `source` before it can look a key up.
+  - **A GenCC record's date is `submitted_on`, not `classification_date`.**
+    `classification_date` is ClinGen's and is `null` on every GenCC record.
+    `submitted_on` is the date the submitter attached to its submission
+    (GenCC's `submitted_as_date`), and `sgc_id` is GenCC's identifier for the
+    submission; both since `2.16`, both verbatim from the mirror. Every GenCC
+    record's `submitted_on` is either `null` or begins with an ISO calendar
+    date: the mirror's schema enforces the prefix and permits a missing date,
+    and all 30,410 mirrored submissions carry one today. It is `null` on every
+    ClinGen record. When it is not `null`, take its first ten characters: what
+    follows varies by submitter, and occasionally within one
+    (`2018-05-31 20:04:32`, `2025-01-17T00:00:00.000000Z`), and the
+    space-separated shape states no time zone, so do not parse it as an
+    instant. Key a GenCC record on `sgc_id`.
+  - **`report_url` does not always lead back to the submission.** Of the 470
+    GenCC records across the 119 gene bundles, 189 publish `report_url: null`
+    and 76 more point at `https://panelapp-aus.org` — a homepage, not a
+    submission — so 265 of the 470 offer a reader no published route back to
+    the record behind the classification (measured 2026-10-25; 157 of 266 on
+    2026-08-06, before the population widened). Attribute these to their
+    `submitter` and present them as classifications this atlas mirrors; do not
+    render them as though every one resolves to a citable report.
   - `sop` is published because ClinGen's committed mirror spans SOP4 through
     SOP12 with no crosswalk between framework versions published anywhere. A
     classification attributed to ClinGen without its SOP version is an
