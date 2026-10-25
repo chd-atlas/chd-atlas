@@ -1064,7 +1064,13 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     # genes to 185 and the burden converters re-ran against it: 31 genes x 2
     # (`hgnc_id`, `uniprot`) + 330 burden rows x 3 + the 297 of them with a
     # control cohort + 33 combined rows x 3 = 1,448.
-    assert total_compared == 178_014
+    #
+    # **178,014 -> 181,703 the same day**, when `mirrors/profiles` was
+    # regenerated for the 185-gene registry: 31 genes x 119 assay groups = 3,689
+    # rows, each with its `gene` column pattern-checked. The quantile mirror is
+    # computed over the whole transcriptome, not the registry, and came out
+    # byte-identical.
+    assert total_compared == 181_703
 
     for pattern in patterns:
         compiled = re.compile(pattern)

@@ -47,7 +47,7 @@ What the build produced, and a checksum for every file in it.
   "counts": {
     "assertions": 1, "burden_combined": 108, "burden_rows": 1210, "cohort_families": 3,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
-    "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 93,
+    "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
   },
   "files": {
