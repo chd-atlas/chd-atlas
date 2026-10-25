@@ -7,14 +7,65 @@ the registry was first mirrored. Until schema 2.17, of those six columns,
 published byte, and `name` reached only search's `terms`; a bundle identified
 its gene by HGNC id and symbol. Measured 2026-10-25: 0 of the 185 registry
 rows lack any of those six columns.
+
+**Two links are required, and a page that cannot carry them is refused rather
+than published without them.** A reader leaving a gene page for variant-level
+data goes to gnomAD for population frequencies and to ClinVar for clinical
+interpretations. gnomAD is keyed on the Ensembl gene id and ClinVar on the NCBI
+Gene id -- not on the symbol. HGNC retires symbols, and ClinVar runs a bare
+symbol as a search of every field: measured 2026-10-25, `NKX2-5` matched 901
+records where `1482[geneid]` matched 891, and the 10 extra are all variants in
+other genes (four in TBX5, the rest in TBX20, HAND2, HCN4 and others) whose
+records merely mention NKX2-5. `external_links` raises on a gene missing
+either id, so a regenerated mirror that drops one fails the build instead of
+shipping pages with the link silently gone.
+
+The URL shapes are a published contract, pinned against literals in
+`tests/unit/test_build_identity.py`. **A status code checks none of them**:
+gnomAD, ClinVar, ClinGen and UniProt serve their pages from applications that
+answer HTTP 200 for an id that does not exist (gnomAD does for
+ENSG00000000000). Each was checked on 2026-10-25, for NKX2-5, by a request
+that does fail on a nonexistent id:
+
+- gnomAD: the GraphQL API's `gene(gene_id: "ENSG00000183072",
+  reference_genome: GRCh38)` returns symbol NKX2-5, and "Gene not found" for
+  ENSG00000000000. Its `DatasetId` enum lists `gnomad_r4` and no later release.
+- ClinVar: the link's own query through E-utilities -- `esearch` with
+  `db=clinvar&term=1482[geneid]` -- counts 891 records, and 0 for
+  `99999999[geneid]`.
+- Ensembl: REST `lookup/id/ENSG00000183072` returns display_name NKX2-5, and
+  HTTP 400 "not found" for ENSG00000000000. The Summary URL redirects (308) to
+  Ensembl's feature-explorer page, which answers 200 for NKX2-5 and 404 for
+  ENSG00000000000.
+- UniProt: REST `uniprotkb/P52952.json` returns primaryAccession P52952 with
+  gene NKX2-5, and HTTP 404 for Q00000; the entry page answers 200 for both.
+- ClinGen: no API was checked. The gene page answers 200 for HGNC:99999999
+  too, but is rendered on the server, and its `<title>` reads "NKX2-5 curation
+  results" for HGNC:2488 and "ClinGen Web" for the nonexistent id.
+
+OMIM is absent: it needs a MIM number `genes.tsv` does not carry.
+
+`GNOMAD_DATASET` pins the release rather than leaving it to gnomAD's default:
+an unpinned link changes what it shows with no change to this atlas, and
+gnomAD keeps earlier releases browsable. Re-check and bump it when gnomAD
+publishes a new major release -- the GraphQL `DatasetId` enum is where one
+appears.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Final
 
 from chd_atlas.build.emit import Json
+
+GNOMAD_DATASET: Final = "gnomad_r4"
+
+# Ensembl's stable human gene id. The mirror schema constrains nothing about
+# this column and its value is interpolated into an `href`, so it is checked
+# here, where it becomes a URL. Measured 2026-10-25: all 185 registry rows match.
+_ENSEMBL_GENE: Final = re.compile(r"ENSG\d{11}")
 
 
 @dataclass(frozen=True)
@@ -23,7 +74,8 @@ class GeneIdentity:
 
     Every field optional: the mirror schema permits a null in every one of these
     columns but `name`, and a gene the registry does not hold has none at all
-    (`EMPTY_IDENTITY`).
+    (`EMPTY_IDENTITY`). The two that matter are required by `external_links`,
+    where a missing one fails the build rather than costing a link.
     `ncbi_gene` is an `int` because the schema reads it as one, and the bundle
     publishes it as one.
     """
@@ -36,9 +88,17 @@ class GeneIdentity:
     mane_select: str | None = None
 
 
-# The identity of a gene the registry does not hold. Its bundle publishes six
-# nulls.
+# The identity of a gene the registry does not hold. Its page is refused by
+# `external_links`; its bundle publishes six nulls.
 EMPTY_IDENTITY: Final = GeneIdentity()
+
+
+@dataclass(frozen=True)
+class ExternalLink:
+    """One outbound link: what a reader sees, and where it goes."""
+
+    label: str
+    href: str
 
 
 def identity_payload(identity: GeneIdentity) -> dict[str, Json]:
@@ -56,3 +116,40 @@ def identity_payload(identity: GeneIdentity) -> dict[str, Json]:
         "uniprot": identity.uniprot,
         "mane_select": identity.mane_select,
     }
+
+
+def external_links(gene: str, identity: GeneIdentity) -> tuple[ExternalLink, ...]:
+    """The gene page's link row: gnomAD and ClinVar first, both required. D52.
+
+    Raises `ValueError` naming the gene and the missing id rather than leaving
+    a link out -- the failure this project calls its characteristic one is a
+    green build that quietly publishes less than it promised. `raise`, never
+    `assert`: `-O` strips `assert`.
+    """
+    ensembl, ncbi = identity.ensembl_gene, identity.ncbi_gene
+    if ensembl is None or ncbi is None:
+        absent = [
+            label
+            for label, value in (("Ensembl gene id", ensembl), ("NCBI Gene id", ncbi))
+            if value is None
+        ]
+        missing = " or ".join(absent)
+        raise ValueError(
+            f"{gene} has no {missing} in mirrors/genes.tsv; D52 requires every "
+            f"published gene page to link gnomAD and ClinVar, which are keyed on them"
+        )
+    if not _ENSEMBL_GENE.fullmatch(ensembl):
+        raise ValueError(f"{gene}: {ensembl!r} is not an Ensembl gene id (ENSG + 11 digits)")
+    links = [
+        ExternalLink(
+            "gnomAD", f"https://gnomad.broadinstitute.org/gene/{ensembl}?dataset={GNOMAD_DATASET}"
+        ),
+        ExternalLink("ClinVar", f"https://www.ncbi.nlm.nih.gov/clinvar/?term={ncbi}%5Bgeneid%5D"),
+        ExternalLink("ClinGen", f"https://search.clinicalgenome.org/kb/genes/{gene}"),
+        ExternalLink("Ensembl", f"https://www.ensembl.org/Homo_sapiens/Gene/Summary?g={ensembl}"),
+    ]
+    if identity.uniprot is not None:
+        links.append(
+            ExternalLink("UniProt", f"https://www.uniprot.org/uniprotkb/{identity.uniprot}/entry")
+        )
+    return tuple(links)

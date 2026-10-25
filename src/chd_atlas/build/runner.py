@@ -177,8 +177,9 @@ def _gene_identities(root: Path) -> dict[str, GeneIdentity]:
     A second projection of the registry rather than more fields on
     `GeneLabels`, which is the search vocabulary -- what a visitor might type --
     and is consumed as such by `build_search`. These are what a bundle publishes
-    as `identity`. Both read the same file through the same `_cell` cleaning, so
-    a whitespace-only cell is absent in each.
+    as `identity` and what a page shows and links by. Both read the same file
+    through the same `_cell` cleaning, so a whitespace-only cell is absent in
+    each.
 
     The same empty fallbacks as `_gene_registry`, unreachable behind
     `build_site`'s gate for the same reason.
@@ -486,6 +487,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         facts,
         emitter,
         symbols=symbols,
+        identities=identities,
         validity=validity,
         assertions=_assertions_by_gene(corpus),
         publications={publication.id: publication for publication in corpus.publications},

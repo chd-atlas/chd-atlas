@@ -529,8 +529,10 @@ One gene's whole detail page, in one fetch.
   (`mirrors/genes.tsv`), with one cell the atlas chooses: RBM10's `uniprot`,
   where HGNC lists two accessions (see the `mirrors/genes.tsv` notes below).
   Every key is present on every gene and `null` only where the registry holds no
-  value; `ncbi_gene` is an integer. The bundle carries the ids, not URLs built
-  from them.
+  value; `ncbi_gene` is an integer. The gene page links gnomAD by
+  `ensembl_gene` and ClinVar by `ncbi_gene`, and the build fails rather than
+  publish a gene missing either, so a build that completes never publishes
+  either as `null`. The bundle carries the ids, not the URLs.
 - `assertions` carry their full `evidence` array, including each item's
   `locator`, `strength` and `summary` — the record a curator is judged on.
   Assertion fields: `curated_on`, `curator`, `evidence`, `extracardiac_features`,
@@ -1238,11 +1240,16 @@ data.
 ## `genes/<slug>.html`
 
 One page per published gene, rendering that gene's bundle for a reader. A
-summary column carries the headline classification as a chip — with a
-`conflicting evidence` and a `sources disagree` chip beside it when those flags
-are set — then `validity_state`, `atlas_curation`, the lesion groups, the
-assertion, functional-record and publication counts, and a link to the gene's
-own JSON. Beside it, the mirrored validity table in two groups — **Expert panel
+summary column carries, under the gene's symbol, its approved name, locus and
+MANE Select transcript, then a row of links out: gnomAD and ClinVar first and
+ClinGen and Ensembl after them, all four on every page, and UniProt where the
+registry has an accession. Below them come the HGNC id and the headline
+classification as a chip — with a `conflicting evidence` and a `sources
+disagree` chip beside it when those flags are set — then the disease that grade
+is for (or, for a gene admitted on submitter agreement, the submitters who
+admitted it), `validity_state`, `atlas_curation`, the lesion groups, the
+assertion, functional-record, curated-publication and burden-row counts, and a
+link to the gene's own JSON. Beside it, the mirrored validity table in two groups — **Expert panel
 (ClinGen)** first, then **Other curators (GenCC)** — each row giving who curated
 it, the disease, the mode of inheritance in one vocabulary (ClinGen's `AD` reads
 as GenCC's "Autosomal dominant"), the authority's own `classification_term`

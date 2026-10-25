@@ -17,6 +17,7 @@ from chd_atlas.build.burden import BurdenRow, CombinedRow
 from chd_atlas.build.concordance import cohort_families, evidence_axes
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.pages import (
     _EM_DASH,
     _SCOPE_RULE,
@@ -5778,3 +5779,106 @@ def test_an_empty_authority_group_is_a_sentence_not_an_empty_table(
     assert section.count(panel_heading) == 1
     assert section.count(other_heading) == 1
     assert section.index(panel_heading) < section.index(other_heading)
+
+
+# GATA4's row of `mirrors/genes.tsv`, measured 2026-10-25.
+_GATA4_IDENTITY: Final = GeneIdentity(
+    name="GATA binding protein 4",
+    locus="8p23.1",
+    ensembl_gene="ENSG00000136574",
+    ncbi_gene=2626,
+    uniprot="P43694",
+    mane_select="NM_001308093.3",
+)
+
+
+def test_a_gene_page_names_its_gene_and_links_gnomad_and_clinvar_first(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D52, sliced to the rail and then to its link row (section 4.19)."""
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        facts_uncurated,
+        emitter,
+        symbols={GATA4: "GATA4"},
+        identities={GATA4: _GATA4_IDENTITY},
+        validity={GATA4: _validity()},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    rail = _slice_between(_page(tmp_path, "HGNC_4173.html"), '<aside class="rail">', ("</aside>",))
+    assert "<p>GATA binding protein 4</p>" in rail
+    assert "<p>8p23.1 · MANE Select NM_001308093.3</p>" in rail
+    # Under the symbol and above the HGNC id, where `_rail`'s docstring puts it.
+    assert rail.index("</h1>") < rail.index("<p>GATA binding protein 4</p>") < rail.index("<code>")
+    links = re.findall(
+        r'<a href="([^"]+)">([^<]+)</a>', _slice_between(rail, '<p class="xrefs">', ("</p>",))
+    )
+    assert links[:2] == [
+        ("https://gnomad.broadinstitute.org/gene/ENSG00000136574?dataset=gnomad_r4", "gnomAD"),
+        ("https://www.ncbi.nlm.nih.gov/clinvar/?term=2626%5Bgeneid%5D", "ClinVar"),
+    ]
+    assert len(links) == 5
+
+
+def test_the_rails_identity_text_is_escaped(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """`name`, `locus` and `mane_select` are free text in the mirror schema.
+
+    None carries a pattern in `tables.GENES`, so each reaches the rail as
+    whatever HGNC published. Until the locus and MANE cases were added, a mutant
+    dropping the escape on that line passed all 1218 tests (measured by review,
+    2026-10-25).
+    """
+    build_gene_pages(
+        facts_uncurated,
+        Emitter(root=tmp_path),
+        symbols={GATA4: "GATA4"},
+        identities={
+            GATA4: replace(
+                _GATA4_IDENTITY, name="<b>x</b>", locus="<i>8p</i>", mane_select="<s>NM_1</s>"
+            )
+        },
+        validity={GATA4: _validity()},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    rail = _slice_between(_page(tmp_path, "HGNC_4173.html"), '<aside class="rail">', ("</aside>",))
+    assert "<p>&lt;b&gt;x&lt;/b&gt;</p>" in rail
+    assert "<p>&lt;i&gt;8p&lt;/i&gt; · MANE Select &lt;s&gt;NM_1&lt;/s&gt;</p>" in rail
+    assert "<b>" not in rail and "<i>" not in rail and "<s>" not in rail
+
+
+@pytest.mark.parametrize(
+    "identities",
+    [
+        {GATA4: replace(_GATA4_IDENTITY, ensembl_gene=None)},
+        {GATA4: replace(_GATA4_IDENTITY, ncbi_gene=None)},
+        {},
+    ],
+    ids=["no Ensembl id", "no NCBI Gene id", "absent from the registry"],
+)
+def test_a_gene_page_that_cannot_carry_its_required_links_is_refused(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts], identities: dict[str, GeneIdentity]
+) -> None:
+    """D52: refused, not published without them. "absent from the registry" is the
+    case a lookup returning `None` and skipping the row would get wrong."""
+    with pytest.raises(ValueError, match="D52"):
+        build_gene_pages(
+            facts_uncurated,
+            Emitter(root=tmp_path),
+            symbols={GATA4: "GATA4"},
+            identities=identities,
+            validity={GATA4: _validity()},
+            assertions={},
+            publications={},
+            burden={},
+            cohorts={},
+        )

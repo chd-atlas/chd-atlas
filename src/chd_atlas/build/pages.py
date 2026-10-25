@@ -43,12 +43,13 @@ mapping the bundles were written from, so the two pages cannot name different
 diseases for one gene.
 
 Every value interpolated into a page goes through `render.py`, which escapes
-text, links and attributes -- except the three bare interpolations in `_rail`,
-which escape themselves and say so. Nothing curated or mirrored is reviewed the
-way page copy is, and this is the one artifact kind where a `<` in a disease
-label is the difference between a string and a script tag. A mirrored disease
-label now reaches two more places for that reason: the rail row and the browse
-cell, both of which go through `definition_list` and `data_table` respectively.
+text, links and attributes -- except the bare interpolations in `_rail` (three,
+plus its identity block), which escape themselves and say so. Nothing curated or
+mirrored is reviewed the way page copy is, and this is the one artifact kind
+where a `<` in a disease label is the difference between a string and a script
+tag. A mirrored disease label now reaches two more places for that reason: the
+rail row and the browse cell, both of which go through `definition_list` and
+`data_table` respectively.
 
 The research-use notice is `render.document`'s, not this module's, so it is on
 every gene page and on the browse page without either builder mentioning it.
@@ -70,6 +71,7 @@ from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_f
 from chd_atlas.build.concordance import FamilyState, family_state
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter, Json
+from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, external_links
 from chd_atlas.build.paths import GENE_INDEX_PAGE, gene_bundle_path, gene_page_path
 from chd_atlas.build.profiles import (
     EMPTY_EXPRESSION_PROFILE,
@@ -792,6 +794,8 @@ def _rail(
     diseases: Sequence[str],
     submitters: Sequence[str],
     burden_rows: int,
+    *,
+    identity: GeneIdentity | None = None,
 ) -> str:
     """The summary column, populated for every gene whether curated here or not.
 
@@ -819,6 +823,13 @@ def _rail(
     title and tagline that reads as "definitive for congenital heart disease".
     For KMT2D it means Kabuki syndrome 1. The row is what stops the chip standing
     alone on the first screen.
+
+    **The gene's identity sits under its symbol (D52)**: approved name, locus,
+    MANE Select transcript, and a link row with gnomAD and ClinVar first.
+    `external_links` raises for a gene missing the ids those two are keyed on,
+    so a page is refused rather than published without them. `identity=None`
+    renders none of it; only a caller holding no registry at all passes that,
+    and `build_site` always passes one.
     """
     headline = fact.headline_confidence
     chips = [
@@ -852,13 +863,30 @@ def _rail(
         ("curated publications", str(len(fact.publications))),
         ("burden rows", str(burden_rows)),
     ]
+    identity_block = ""
+    if identity is not None:
+        links = external_links(gene, identity)
+        details = [identity.locus] if identity.locus else []
+        if identity.mane_select:
+            details.append(f"MANE Select {identity.mane_select}")
+        identity_block = (
+            (f"<p>{html.escape(identity.name)}</p>" if identity.name else "")
+            + (f"<p>{html.escape(' · '.join(details))}</p>" if details else "")
+            + '<p class="xrefs">'
+            + " · ".join(
+                f'<a href="{html.escape(link.href)}">{html.escape(link.label)}</a>'
+                for link in links
+            )
+            + "</p>"
+        )
     bundle = gene_bundle_path(HgncId(gene))
-    # `html.escape` here rather than a `render.py` primitive: these three are
-    # bare interpolations into markup this function assembles, and every other
-    # value on the page reaches it through `chip`, `definition_list` or
-    # `data_table`, which escape their own arguments.
+    # `html.escape` here rather than a `render.py` primitive: these three, and
+    # the identity block above, are bare interpolations into markup this
+    # function assembles, and every other value on the page reaches it through
+    # `chip`, `definition_list` or `data_table`, which escape their own
+    # arguments.
     return (
-        f'<aside class="rail"><h1>{html.escape(symbol)}</h1>'
+        f'<aside class="rail"><h1>{html.escape(symbol)}</h1>{identity_block}'
         f"<p><code>{html.escape(gene)}</code></p><p>{''.join(chips)}</p>"
         f"{definition_list(facts)}"
         f'<p><a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
@@ -4085,6 +4113,7 @@ def build_gene_pages(
     combined: Mapping[str, Sequence[CombinedRow]] | None = None,
     scope_warrants: Mapping[str, Warrant] | None = None,
     scope_labels: Mapping[str, str] | None = None,
+    identities: Mapping[str, GeneIdentity] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -4096,6 +4125,12 @@ def build_gene_pages(
     `symbols` is the same `{gene: labels.symbol}` projection `build_genes` and
     `build_landing` take; a gene absent from it reads as its own HGNC id, the
     same registry fallback those two apply.
+
+    `identities` is `runner._gene_identities`' return (D52). Given a mapping,
+    every gene must carry the ids its required links are keyed on: a gene
+    absent from it gets `EMPTY_IDENTITY`, which `external_links` refuses. `None`
+    renders no identity block at all -- the unit suites that do not exercise
+    identity pass nothing -- and `build_site` always passes the registry.
 
     A gene absent from `validity` gets `uncurated()` -- the section under its own
     heading, each authority group stating it holds no record, never a missing
@@ -4137,6 +4172,7 @@ def build_gene_pages(
         symbol = symbols.get(gene, gene)
         records = assertions.get(gene, [])
         gene_validity = validity.get(gene, uncurated())
+        identity = None if identities is None else identities.get(gene, EMPTY_IDENTITY)
         body = (
             '<div class="layout">'
             + _rail(
@@ -4146,6 +4182,7 @@ def build_gene_pages(
                 _graded_diseases(gene_validity, fact.headline_confidence),
                 agreeing_submitters(gene_validity),
                 len(burden.get(gene, ())),
+                identity=identity,
             )
             + "<div>"
             + _SCOPE_RULE

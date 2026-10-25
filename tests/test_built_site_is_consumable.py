@@ -775,3 +775,23 @@ def test_datasets_json_orders_its_stages_by_order_not_by_declaration(site: Path)
         )
         checked += 1
     assert checked >= 1, "no dataset carried stages; this guard would pass vacuously"
+
+
+def test_every_gene_page_links_gnomad_and_clinvar_from_its_registry_ids(site: Path) -> None:
+    """D52, the page half: what the unit suites cannot see. They pass `identities`
+    to `build_gene_pages` themselves or not at all, so a runner that stopped
+    threading it would leave them green while every real page lost its link row.
+    The count is derived, never pinned."""
+    with (REPO / "mirrors" / "genes.tsv").open(encoding="utf-8") as handle:
+        registry = {row["hgnc_id"]: row for row in csv.DictReader(handle, delimiter="\t")}
+    entries = _read(site, "genes/index.json")["genes"]
+    assert len(entries) > 1, "the build published no genes; the fixture is broken"
+    for entry in entries:
+        row = registry[entry["gene"]]
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        start = page.index('<p class="xrefs">')
+        xrefs = page[start : page.index("</p>", start)]
+        gnomad = f"https://gnomad.broadinstitute.org/gene/{row['ensembl_gene']}?dataset=gnomad_r4"
+        clinvar = f"https://www.ncbi.nlm.nih.gov/clinvar/?term={row['ncbi_gene']}%5Bgeneid%5D"
+        assert f'href="{gnomad}"' in xrefs, entry["gene"]
+        assert f'href="{clinvar}"' in xrefs, entry["gene"]
