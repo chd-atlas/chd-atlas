@@ -38,6 +38,7 @@ from chd_atlas.build.concordance import (
     gene_concordance,
 )
 from chd_atlas.build.emit import Emitter
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.landing import build_landing
 from chd_atlas.build.literature import build_literature, build_sources
 from chd_atlas.build.manifest import source_commit, write_manifest
@@ -170,6 +171,42 @@ def _pipes(raw: object) -> tuple[str, ...]:
     return tuple(part.strip() for part in str(raw).split("|") if part.strip())
 
 
+def _gene_identities(root: Path) -> dict[str, GeneIdentity]:
+    """The identity columns of `mirrors/genes.tsv`, keyed on HGNC id. D52.
+
+    A second projection of the registry rather than more fields on
+    `GeneLabels`, which is the search vocabulary -- what a visitor might type --
+    and is consumed as such by `build_search`. These are what a bundle publishes
+    as `identity`. Both read the same file through the same `_cell` cleaning, so
+    a whitespace-only cell is absent in each.
+
+    The same empty fallbacks as `_gene_registry`, unreachable behind
+    `build_site`'s gate for the same reason.
+    """
+    path = root / "mirrors" / "genes.tsv"
+    if not path.is_file():
+        return {}
+    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
+    if frame is None or "hgnc_id" not in frame.columns:
+        return {}
+
+    identities: dict[str, GeneIdentity] = {}
+    for row in frame.to_dicts():
+        gene = _cell(row.get("hgnc_id"))
+        if gene is None:
+            continue
+        ncbi = row.get("ncbi_gene")
+        identities[gene] = GeneIdentity(
+            name=_cell(row.get("name")),
+            locus=_cell(row.get("locus")),
+            ensembl_gene=_cell(row.get("ensembl_gene")),
+            ncbi_gene=int(ncbi) if ncbi is not None else None,
+            uniprot=_cell(row.get("uniprot")),
+            mane_select=_cell(row.get("mane_select")),
+        )
+    return identities
+
+
 def _assertions_by_gene(corpus: Corpus) -> dict[str, list[LesionAssertion]]:
     """Every curated assertion, grouped by the gene it is about, ordered by id.
 
@@ -232,6 +269,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # decision already made.
     corpus, _ = load_curation(root)
     genes = _gene_registry(root)
+    identities = _gene_identities(root)
 
     # Unreachable behind the gate above in the same way `_gene_registry`'s
     # empty-mirror fallback is: TBL012 is an error, so `validate_repository`
@@ -390,6 +428,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         corpus,
         emitter,
         symbols=symbols,
+        identities=identities,
         omics=omics,
         variants=variants,
         validity=validity,

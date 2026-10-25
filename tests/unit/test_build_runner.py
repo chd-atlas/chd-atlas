@@ -10,8 +10,9 @@ from typing import Any
 
 import pytest
 
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.profiles import ProfileCensus
-from chd_atlas.build.runner import BuildRefused, _gene_registry, build_site
+from chd_atlas.build.runner import BuildRefused, _gene_identities, _gene_registry, build_site
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.corpus import load_curation
 from chd_atlas.issues import Severity, ValidationIssue
@@ -534,3 +535,35 @@ def test_the_site_carries_the_terms_of_everything_it_republishes(
         assert source["name"] and source["url"] and source["licence"]
     # Ordered, because this is a published array like every other.
     assert [source["id"] for source in published] == sorted(by_id)
+
+
+def test_the_registry_reads_each_genes_identity_with_blank_cells_as_none(tmp_path: Path) -> None:
+    """D52's ids come from one row of `mirrors/genes.tsv`, cleaned like the labels are.
+
+    A whitespace-only cell is absent, by the same `_cell` rule the symbol uses;
+    a row with no `hgnc_id` has nothing to key on and is dropped. `ncbi_gene`
+    must arrive as an `int` -- the bundle publishes it as one.
+    """
+    mirror = tmp_path / "mirrors"
+    mirror.mkdir()
+    (mirror / "genes.tsv").write_text(
+        "hgnc_id\tsymbol\tname\taliases\tensembl_gene\tncbi_gene\tlocus\tuniprot\tmane_select\n"
+        "HGNC:11604\tTBX5\tT-box transcription factor 5\t\tENSG00000089225\t6910\t12q24.21\t"
+        "Q99593\tNM_181486.4\n"
+        "HGNC:4173\tGATA4\tGATA binding protein 4\t\t\t\t \t\t\n"
+        "\tNONAME\tUnkeyed row\t\t\t\t\t\t\n"
+    )
+
+    identities = _gene_identities(tmp_path)
+
+    assert list(identities) == ["HGNC:11604", "HGNC:4173"]
+    assert identities["HGNC:11604"] == GeneIdentity(
+        name="T-box transcription factor 5",
+        locus="12q24.21",
+        ensembl_gene="ENSG00000089225",
+        ncbi_gene=6910,
+        uniprot="Q99593",
+        mane_select="NM_181486.4",
+    )
+    assert type(identities["HGNC:11604"].ncbi_gene) is int
+    assert identities["HGNC:4173"] == GeneIdentity(name="GATA binding protein 4")

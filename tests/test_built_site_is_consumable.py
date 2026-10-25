@@ -1,4 +1,5 @@
 # tests/test_built_site_is_consumable.py
+import csv
 import gzip
 import json
 import math
@@ -236,6 +237,30 @@ def test_tbx5_publishes_its_mirrored_validity_with_the_provenance_behind_it(
     assert clingen["source"] == "clingen"
     for field in ("source", "classification_term", "disease", "sop", "report_url"):
         assert clingen[field], f"{field} is empty on TBX5's ClinGen record"
+
+
+def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
+    """D52 on the committed corpus. A runner that stops passing `identities` to
+    `build_genes` publishes six nulls on every bundle -- which the API doc defines
+    as "the registry holds no value" -- with every unit test green, because those
+    pass `identities` themselves. This compares every published bundle against
+    `mirrors/genes.tsv`. The count is derived, never pinned.
+
+    Compared after stripping, as `runner._cell` strips: HGNC's own name for
+    HGNC:2348 ends in a space ("CREB binding lysine acetyltransferase "), the one
+    cell of 1,850 in the mirror with surrounding whitespace (measured 2026-10-25).
+    """
+    with (REPO / "mirrors" / "genes.tsv").open(encoding="utf-8") as handle:
+        registry = {row["hgnc_id"]: row for row in csv.DictReader(handle, delimiter="\t")}
+    entries = _read(site, "genes/index.json")["genes"]
+    assert len(entries) > 1, "the build published no genes; the fixture is broken"
+    for entry in entries:
+        row = registry[entry["gene"]]
+        identity = _read(site, entry["bundle"])["identity"]
+        for key in ("name", "locus", "ensembl_gene", "uniprot", "mane_select"):
+            assert identity[key] == (row[key].strip() or None), (entry["gene"], key)
+        assert identity["ncbi_gene"] == int(row["ncbi_gene"]), entry["gene"]
+        assert type(identity["ncbi_gene"]) is int, entry["gene"]
 
 
 def _page_links(site: Path) -> list[tuple[str, str, str]]:

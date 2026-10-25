@@ -54,7 +54,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.16",
+  "schema_version": "2.17",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -209,6 +209,9 @@ wrong by the next one.
   [`validity.records`](#the-bundles-validity-object-mirrored-attributed-never-authored-here),
   `null` on a ClinGen record. Additive. Before it, a GenCC classification
   carried no date at all.
+  `2.17` added [`identity`](#genesslugjson) to every gene bundle — name, locus,
+  Ensembl and NCBI Gene ids, UniProt accession and MANE Select transcript.
+  Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -487,6 +490,14 @@ One gene's whole detail page, in one fetch.
 {
   "gene": "HGNC:11604",
   "symbol": "TBX5",
+  "identity": {
+    "name": "T-box transcription factor 5",
+    "locus": "12q24.21",
+    "ensembl_gene": "ENSG00000089225",
+    "ncbi_gene": 6910,
+    "uniprot": "Q99593",
+    "mane_select": "NM_181486.4"
+  },
   "headline_confidence": "definitive",
   "validity_state": "expert_curated",
   "atlas_curation": "curated",
@@ -514,6 +525,12 @@ One gene's whole detail page, in one fetch.
 }
 ```
 
+- `identity` is the gene's row of the HGNC registry this atlas mirrors
+  (`mirrors/genes.tsv`), with one cell the atlas chooses: RBM10's `uniprot`,
+  where HGNC lists two accessions (see the `mirrors/genes.tsv` notes below).
+  Every key is present on every gene and `null` only where the registry holds no
+  value; `ncbi_gene` is an integer. The bundle carries the ids, not URLs built
+  from them.
 - `assertions` carry their full `evidence` array, including each item's
   `locator`, `strength` and `summary` — the record a curator is judged on.
   Assertion fields: `curated_on`, `curator`, `evidence`, `extracardiac_features`,
@@ -1370,15 +1387,17 @@ rows already carry their own `gene` column, so a consumer filters one way
 everywhere. Where the two exist side by side they agree; `genes` is the one
 `count` is built from.
 
-`mirrors/genes.tsv` is the mirror table this site publishes least of, and the
-one most likely to be assumed present. It holds 185 rows — exactly the genes
-ClinGen or GenCC curates within the scope `curation/chd_scope.yaml` declares, of
-which 119 clear the publication gate — across ten columns, and **five of those ten
-reach no published byte at all**: `ensembl_gene`, `ncbi_gene`, `locus`,
-`uniprot` and `mane_select`, each populated on all 185 rows (re-measured
-2026-10-25). `hgnc_id`, `symbol`, `name`, `aliases` and — since `2.13` —
-`prev_symbols` are published, the last three as `terms` in
-`search/index.json.gz`.
+`mirrors/genes.tsv` holds 185 rows — exactly the genes ClinGen or GenCC curates
+within the scope `curation/chd_scope.yaml` declares, of which 119 clear the
+publication gate — across ten columns. The six identity columns (`name`,
+`locus`, `ensembl_gene`, `ncbi_gene`, `uniprot`, `mane_select`) are populated on
+all 185 rows (re-measured 2026-10-25). **All ten columns reach a published byte
+since `2.17`**; before it, `ensembl_gene`, `ncbi_gene`, `locus`, `uniprot` and
+`mane_select` reached none. `hgnc_id` and `symbol` are published on every gene
+bundle and index row; `name`, `aliases` and — since `2.13` — `prev_symbols` are
+published as `terms` in `search/index.json.gz`; and `name`, `locus`,
+`ensembl_gene`, `ncbi_gene`, `uniprot` and `mane_select` are the bundle's
+[`identity`](#genesslugjson) object, for each published gene.
 
 **`prev_symbols` was a lookup input only until `2.13`, and this paragraph said
 so.** It carries the HGNC symbols a gene has had withdrawn, and it arrived for
@@ -1399,12 +1418,20 @@ looking for, where showing both is the only honest answer. A consumer building
 its own index from `terms` should expect a term to name more than one record,
 as it already could for a shared alias.
 
-So **this API carries no cross-reference to any other identifier space.** A
-consumer that needs an Ensembl gene id, a MANE Select transcript, a UniProt
-accession or a cytogenetic band for a published gene must resolve `hgnc_id`
-against HGNC itself; there is no key to look for and no bundle field that will
-appear later without a `schema_version` bump. The atlas identifies a gene by its
-HGNC id and leaves the mapping to the authority that maintains it.
+**Since `2.17` each bundle carries four cross-references for its gene, and no
+others.** Its [`identity`](#genesslugjson) object holds the Ensembl gene id, the
+NCBI Gene id, the UniProt accession and the MANE Select transcript, plus the
+gene's cytogenetic band, mirrored from HGNC rather than mapped by this atlas —
+with one exception the atlas resolves itself. HGNC lists two UniProt accessions
+for RBM10 (HGNC:9896), `P0DW28|P98175`, in alphabetical order, and the first is
+MINAS-60, a 130-residue microprotein read from an alternative frame inside
+RBM10. The converter pins RBM10's own protein, `P98175`, and refuses to run if
+any other gene gains a second accession, until a curator has chosen one. Until
+`2.17` the API carried none of these. No other identifier for the gene — an
+OMIM number, a transcript other than MANE Select — is published, and a consumer
+that needs one must resolve `hgnc_id` against HGNC itself. The atlas identifies
+a gene by its HGNC id and leaves every further mapping to the authority that
+maintains it.
 
 ## `omics/profile_quantiles/<accession>.json`
 

@@ -399,7 +399,14 @@ from chd_atlas.corpus import Corpus
 # a GenCC classification published no date at all -- 470 of 591 records on
 # 2026-10-25 -- and no identifier: `(source, disease, moi, submitter)` is not
 # unique, and PKD1L1 publishes two Ambry submissions that share it.
-SCHEMA_VERSION: Final = "2.16"
+#
+# 2.17 adds `identity` to every gene bundle: the gene's approved name, locus,
+# Ensembl and NCBI Gene ids, UniProt accession and MANE Select transcript from
+# `mirrors/genes.tsv`, every key always present. Additive, so MINOR. All six
+# were mirrored for every published gene; before 2.17 `locus`, `ensembl_gene`,
+# `ncbi_gene`, `uniprot` and `mane_select` reached no published byte, and
+# `name` only search's `terms`.
+SCHEMA_VERSION: Final = "2.17"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is
