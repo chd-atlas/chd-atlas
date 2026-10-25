@@ -1,8 +1,7 @@
 # src/chd_atlas/build/validity.py
 """Gene-disease validity, mirrored and attributed -- never authored here.
 
-Design decision D12 (`docs/superpowers/specs/2026-08-03-validity-backbone-design.md`):
-the atlas publishes no validity classification of its own. One curator cannot
+Design decision D12: the atlas publishes no validity classification of its own. One curator cannot
 out-curate a chartered expert panel, and the resource that tried is the
 cautionary case: CHDgene publishes a documented 3-tier ranking under which all
 189 genes carry 5/5 stars.
