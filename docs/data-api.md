@@ -216,7 +216,7 @@ wrong by the next one.
 ## The site root: `index.html`
 
 The page a person opens directly rather than fetches as JSON, and the entry
-point to the other 93. It states what the atlas is, the same development-status
+point to the other 120. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
@@ -232,7 +232,7 @@ as the browse page's strip legend and the gene page's matrix legend. The three
 cannot come to describe the same four states in different words.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
-build behind this document publishes 94 of them — this one, `genes/index.html`
+build behind this document publishes 121 of them — this one, `genes/index.html`
 and one per published gene — and each has an entry in `files` giving the sha256
 of the bytes served at it. A page is published output, so it is verifiable
 output.
@@ -1008,7 +1008,7 @@ cannot be confused with "the build dropped it".
 **That is still the real shape for a gene no profile dataset's rows mention.**
 `mirrors/profiles/E-MTAB-6814.tsv` is committed, and `manifest.json`'s
 `counts.profile_genes`/`counts.profile_datasets` say how far that reaches:
-92 genes carry a developmental expression profile, across 1 dataset. Most
+119 genes carry a developmental expression profile, across 1 dataset. Most
 published genes carry the populated shape today, not the empty one above.
 The nested shape below is illustrative — restructured for
 readability (a real gene's `stages` runs to a dozen or more entries, one per
@@ -1180,7 +1180,7 @@ never goes through that mechanism at all: it has no gene column, so
   *lowest* percentile in that run, so an unexpressed gene never reads above
   the median it shares with every other unexpressed one. `n_genes` is the
   size of the *source* transcriptome that cell's grid was built from — tens
-  of thousands of genes, never the 92 this atlas publishes — because "top 4%"
+  of thousands of genes, never the 119 this atlas publishes — because "top 4%"
   names no population without its denominator.
 
 **Percentiles are not comparable across organs, and — more importantly — not
@@ -1199,7 +1199,7 @@ development where none occurred, or miss it where it did.
 
 **Why the quantile grid is published at all, and exactly how far that goes.**
 A percentile's input is the whole source transcriptome — tens of thousands of
-genes — and this atlas publishes 92 of them; design decision D32 forbids
+genes — and this atlas publishes 119 of them; design decision D32 forbids
 re-hosting the matrix a percentile was read against. Without a published grid,
 `median_percentile` would be a number nobody outside this atlas could check.
 [`omics/profile_quantiles/<accession>.json`](#omicsprofile_quantilesaccessionjson)
