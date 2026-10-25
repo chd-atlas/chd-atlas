@@ -96,7 +96,13 @@ from chd_atlas.corpus import Corpus
 # literal because there is no data source for it to drift out of sync with; a
 # wrong repository link is a code review problem, not a silent-evidence-loss
 # one.
-_REPOSITORY_URL = "https://github.com/enriquea/chd-atlas"
+#
+# Two constants, not one. The front page names the project by its organization,
+# but a link to a file must go through the repository: measured 2026-10-23,
+# `https://github.com/chd-atlas/blob/main/docs/data-api.md` answers 404 while the
+# same path under `chd-atlas/chd-atlas` answers 200.
+_ORGANIZATION_URL = "https://github.com/chd-atlas"
+_REPOSITORY_URL = "https://github.com/chd-atlas/chd-atlas"
 
 # A caption that told a reader to wait for something that had already happened.
 #
@@ -346,7 +352,7 @@ def _render(
       and a checksum for every file in it.</li>
     <li><a href="sources.json"><code>sources.json</code></a> — what the atlas mirrors, and
       on whose terms.</li>
-    <li><a href="{_REPOSITORY_URL}">{html.escape(_REPOSITORY_URL)}</a> — source, curation
+    <li><a href="{_ORGANIZATION_URL}">{html.escape(_ORGANIZATION_URL)}</a> — source, curation
       workflow and the full published API documentation.</li>
   </ul>
 
