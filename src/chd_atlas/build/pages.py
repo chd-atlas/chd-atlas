@@ -3207,6 +3207,11 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     a reader who has read them once should not have to scroll past them again.
     `<details>` is native HTML, needs no script, and its contents are in the
     document for a crawler, a `curl` and a reader with JavaScript disabled.
+
+    **The fold stays, and ends on a link to `methods.html#cohorts`** (P4,
+    2026-10-26), which lists every cohort in the registry. Only this gene's
+    cohorts are here; the full list is a second place a caveat reaches, never
+    a replacement for this one (CLAUDE.md section 9).
     """
     cited = sorted(
         {identifier for row in rows for identifier in (*row.case_cohorts, *row.control_cohorts)}
@@ -3221,7 +3226,9 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
         return ""
     return (
         '<details class="cohort-notes"><summary>About these cohorts, and what '
-        "qualifies every number above</summary><ul>" + "".join(items) + "</ul></details>"
+        "qualifies every number above</summary><ul>"
+        + "".join(items)
+        + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
     )
 
 

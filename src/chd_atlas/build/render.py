@@ -252,6 +252,11 @@ STYLESHEET: Final = """
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
   .cohort-notes summary { cursor: pointer; color: var(--muted); }
   .cohort-notes li { margin: 0.5rem 0; }
+  /* `methods.html#cohorts`: each name above its description rather than beside
+     it, since the base `dl` grid sizes its label column to the widest label.
+     (0,1,1) against the base rule's (0,0,1). */
+  dl.cohort-list { display: block; }
+  .cohort-list dd { margin: 0.15rem 0 0.9rem; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: break-word; }

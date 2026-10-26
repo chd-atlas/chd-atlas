@@ -32,12 +32,17 @@ a page with no gene on it.
   the full forms of notices a gene page keeps in one line. Two more state in
   general what each forest plot's folded key says of its own marks (D57), and
   what a block with no effect measure shows instead of a plot.
+* `#cohorts` is curated data under one written paragraph: every record of
+  `curation/cohorts.yaml`, the same ones `cohorts.json` publishes. A gene page
+  keeps the notes of its own cohorts, folded, and links here (P4).
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
-unique to each, as one label-chip-gloss triple per rung; `#validity` and
-`#rare-variants` whole, as literals; and the phrases the move retired as absent
-from the whole page.
+unique to each, as one label-chip-gloss triple per rung; `#validity`,
+`#rare-variants` and, on a fixture registry, `#cohorts` whole, as literals; and
+the phrases the move retired as absent from the whole page.
+`tests/test_built_site_is_consumable.py` checks `#cohorts` against the
+`cohorts.json` of a real build.
 
 Written through `Emitter.write_text`, for the reason `pages.py` gives: `Json`'s
 union includes `str`, so `write_json` would type-check and publish the page as a
@@ -47,11 +52,12 @@ of one commit write the same bytes.
 
 from __future__ import annotations
 
+import html
 from collections.abc import Mapping
 from typing import Final
 
 from chd_atlas.build.emit import Emitter
-from chd_atlas.build.paths import METHODS_PAGE
+from chd_atlas.build.paths import COHORTS, METHODS_PAGE
 from chd_atlas.build.render import document, grade_key
 from chd_atlas.models.cohort import Cohort
 
@@ -239,11 +245,55 @@ _RARE_VARIANTS: Final = (
     "so its block shows its counts and p-values in a table instead of a plot.</p>"
 )
 
+# Every collection the rare-variant rows cite, with its curated description
+# (P4, 2026-10-26). A gene page folds the notes of only the collections its own
+# rows cite (`pages._cohort_notes`, whose fold ends on a link here) and keeps
+# them: CLAUDE.md section 9 forbids narrowing where a cohort caveat reaches, so
+# this is a second place, not a move. It is the whole registry -- the records
+# `cohorts.json` publishes, and every one of the 13 is cited by a mirror row
+# (measured 2026-10-26) -- so "every sample collection ... draws on" describes
+# the list both ways.
+_COHORTS_INTRO: Final = (
+    '<h2 id="cohorts">Cohorts</h2>'
+    "<p>Every sample collection a rare-variant study in this atlas draws on, with what "
+    "qualifies every number drawn from it. Two studies that name the same collection "
+    "describe partly the same people. The same records are published as "
+    f'<a href="{COHORTS}"><code>{COHORTS}</code></a>.</p>'
+)
+
+
+def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
+    """The registry as a definition list: name and id, then the description.
+
+    Sorted by id here, because `burden.cohort_registry` returns the YAML's order
+    and an array derived from a mapping is the caller's to sort (CLAUDE.md
+    section 9) -- the same order `cohorts.json` publishes. Every curated field
+    is escaped: names, descriptions and urls are free text. A url is the
+    collection's public page, linked inside its own description; a cohort with
+    none (4 of 13) gets no link rather than an empty one.
+
+    `cohort-list` is layout only. The base `dl` is a two-column grid whose label
+    column grows to its widest label, which suits the grade key's chips and
+    would give a cohort's full name most of the line.
+    """
+    items = "".join(
+        f"<dt>{html.escape(cohort.name)} (<code>{html.escape(cohort.id)}</code>)</dt>"
+        f"<dd>{html.escape(cohort.description)}"
+        + (f' <a href="{html.escape(cohort.url)}">source</a>' if cohort.url else "")
+        + "</dd>"
+        for cohort in sorted(cohorts.values(), key=lambda cohort: cohort.id)
+    )
+    return f'{_COHORTS_INTRO}<dl class="cohort-list">{items}</dl>'
+
+
+# The page's own account of what it holds (CLAUDE.md section 4.29); the cohort
+# list joined it on 2026-10-26.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
-    "classification means, how the validity records are listed, and how to read the "
-    "rare-variant results and the expression figures.</p>"
+    "classification means, how the validity records are listed, how to read the "
+    "rare-variant results and the expression figures, and every sample collection the "
+    "rare-variant studies draw on.</p>"
 )
 
 
@@ -251,8 +301,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
     """Emit `methods.html`, the site's reading notes (D50).
 
     `cohorts` is the registry `runner.build_site` already hands the gene pages
-    (`burden.cohort_registry`). No section reads it yet; it is accepted now so
-    the runner's call does not change when the cohort section arrives.
+    (`burden.cohort_registry`); `#cohorts` lists all of it.
     """
     sections = (
         '<h2 id="scope">Which genes are here, and what a classification means</h2>'
@@ -260,6 +309,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         + grade_key()
         + _VALIDITY
         + _RARE_VARIANTS
+        + _cohorts(cohorts)
     )
     emitter.write_text(
         METHODS_PAGE,

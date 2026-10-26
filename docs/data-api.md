@@ -273,6 +273,11 @@ page can link the paragraph it shortens.
   study block with no effect measure shows instead of a plot. A gene page keeps
   one-line forms of the first two and links here, and each forest plot's
   folded key ends with a link here.
+- `#cohorts` lists every sample collection in the registry, sorted by id: its
+  name, id, description and public page where it has one — the same records as
+  [`cohorts.json`](#cohortsjson). A gene page keeps the notes of the cohorts
+  its own rows cite, folded at the end of its rare-variant section, and that
+  fold ends with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -934,7 +939,8 @@ Five obligations, each of which is a wrong claim if you get it wrong:
    `"taa_cases"`; that file maps each to a name, a URL where one exists, and the
    caveats that qualify every number drawn from it. `taa_cases` is 777 probands
    with **thoracic aortic aneurysm, a condition outside this atlas's scope** — a
-   row citing it is not a plain CHD case set, and only the description says so.
+   row citing it is not a plain CHD case set, and nothing in the row says so but
+   its `method_note`; the description is the caveat in full.
 
    Until schema `2.9` these ids resolved to nothing at all: the descriptions
    lived in the repository and reached a reader only through the gene *page*,
@@ -1839,7 +1845,7 @@ them. Added in schema `2.9`.
     {
       "id": "taa_cases",
       "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
-      "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases. TAA IS NOT CONGENITAL HEART DISEASE and is explicitly out of this atlas's scope …",
+      "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases; the study's abstract describes its probands as \"probands with CHD including cases with sporadic thoracic aortic aneurysm\". Thoracic aortic aneurysm is outside this atlas's scope …",
       "url": null
     }
   ]

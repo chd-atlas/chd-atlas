@@ -48,7 +48,8 @@ S6's `case` column counts CHD **and** sporadic thoracic aortic aneurysm
 probands together. The study says so in its abstract -- "probands with CHD
 including cases with sporadic thoracic aortic aneurysm" -- and S2 Table puts
 the TAA series (PMID 21092924) at 777 of the 7,958 contributing individuals,
-about 10%. `curation/chd_scope.yaml` places aortopathy outside this atlas.
+about 10%. Thoracic aortic aneurysm is outside this atlas's scope:
+`curation/chd_scope.yaml` lists no aortic aneurysm term.
 
 Every row therefore names `taa_cases` in `case_cohorts`, whose registry entry
 states the exclusion in as many words, and carries a `method_note` saying it on

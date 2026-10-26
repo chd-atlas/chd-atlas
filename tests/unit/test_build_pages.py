@@ -1504,6 +1504,13 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     notes = _slice_between(page, '<details class="cohort-notes">', ("</details>",))
     assert "survivorship bias against severe CHD" in notes
     assert "enriched for syndromic CHD" in notes
+    # The fold stays (P4: narrowing where a cohort caveat reaches is what this
+    # test exists to stop) and ends on a link to the whole registry on
+    # methods.html, so this section links its anchor like every other
+    # (2026-10-26, D50). Last in the fold, after the list it extends.
+    assert notes.endswith(
+        '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p>'
+    )
 
 
 def test_the_page_says_what_was_counted_not_only_how_many(

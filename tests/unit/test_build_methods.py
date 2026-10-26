@@ -14,19 +14,52 @@ from __future__ import annotations
 
 import html
 import re
+from typing import Final
 
 import pytest
 
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
+from chd_atlas.models.cohort import Cohort
 
 
 @pytest.fixture(scope="module")
 def page(tmp_path_factory: pytest.TempPathFactory) -> str:
-    """The page as built, with no cohorts: `#scope` reads none of them."""
+    """The page as built, with no cohorts: only `#cohorts` reads them, and
+    `cohort_page` below builds it with a registry."""
     root = tmp_path_factory.mktemp("methods")
     build_methods(Emitter(root=root), cohorts={})
+    return (root / METHODS_PAGE).read_text(encoding="utf-8")
+
+
+# Inserted out of id order, because `burden.cohort_registry` returns the YAML's
+# order and the section must sort. Insertion order is not seed-dependent, so a
+# dropped sort fails here under every PYTHONHASHSEED (CLAUDE.md section 4.42),
+# and the names sort differently from the ids (D, G, U against c, d, u), so a
+# sort on the name fails too. Every curated field a reader sees carries a
+# character that must be escaped.
+_REGISTRY: Final = {
+    "ukbb": Cohort(
+        id="ukbb",
+        name="UK Biobank & partners",
+        description="Adults recruited at 40-69.",
+        url="https://example.org/ukbb?a=1&b=2",
+    ),
+    "ddd": Cohort(
+        id="ddd",
+        name="Deciphering Developmental Disorders (DDD)",
+        description="Enriched for <b>syndromic</b> CHD & more.",
+    ),
+    "cnchd": Cohort(id="cnchd", name="German Competence Network", description="German registry."),
+}
+
+
+@pytest.fixture(scope="module")
+def cohort_page(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The page as built from a three-cohort registry."""
+    root = tmp_path_factory.mktemp("methods-cohorts")
+    build_methods(Emitter(root=root), cohorts=_REGISTRY)
     return (root / METHODS_PAGE).read_text(encoding="utf-8")
 
 
@@ -55,6 +88,15 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert '<a href="genes/index.html">Genes</a>' in page
     assert '<a href="methods.html">How to read this atlas</a>' in page
     assert '<h2 id="scope">' in page
+    # The page's own account of what it holds (CLAUDE.md section 4.29: a
+    # summary that omits what the page publishes passes every other check).
+    # The cohort list joined it on 2026-10-26.
+    assert (
+        "<p>What every gene page assumes, written once: which genes are here and what each "
+        "classification means, how the validity records are listed, how to read the "
+        "rare-variant results and the expression figures, and every sample collection the "
+        "rare-variant studies draw on.</p>"
+    ) in page
 
 
 def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
@@ -398,6 +440,45 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     assert _section(page, "rare-variants") == (
         '<h2 id="rare-variants">Rare-variant association</h2>'
         + "".join(f"<p>{paragraph}</p>" for paragraph in expected)
+    )
+
+
+def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -> None:
+    """Every cohort, with its curated description, once, for a reader (P4, 2026-10-26).
+
+    A gene page folds the notes of only the collections its own rows cite
+    (`pages._cohort_notes`) and ends the fold on a link here; this is the
+    whole registry, the records `cohorts.json` publishes for a program. The
+    fold stays on the gene page: CLAUDE.md section 9 forbids narrowing where a
+    cohort caveat reaches, and this list adds a place rather than moving one.
+
+    Pinned whole, as one literal. **Sorted by id**, because the registry
+    arrives in the YAML's order and a published list from a mapping is the
+    caller's to sort (CLAUDE.md section 9); the fixture's insertion order and
+    its names both disagree with id order, so a missing sort and a sort on the
+    wrong key both fail. **Escaped, every field**: names, descriptions and
+    urls are free text a curator types. The url is the cohort's public page,
+    so it is a link inside its own description rather than a bare string, and
+    a cohort without one gets nothing rather than an empty link.
+
+    The class on the `<dl>` is layout: the site's base `dl` is a two-column
+    grid sized to its widest label, which suits the grade key's chips and
+    would give a cohort's full name most of the line here.
+    """
+    assert _section(cohort_page, "cohorts") == (
+        '<h2 id="cohorts">Cohorts</h2>'
+        "<p>Every sample collection a rare-variant study in this atlas draws on, with what "
+        "qualifies every number drawn from it. Two studies that name the same collection "
+        "describe partly the same people. The same records are published as "
+        '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
+        '<dl class="cohort-list">'
+        "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"
+        "<dt>Deciphering Developmental Disorders (DDD) (<code>ddd</code>)</dt>"
+        "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
+        "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
+        '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
+        "source</a></dd>"
+        "</dl>"
     )
 
 
