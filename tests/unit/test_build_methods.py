@@ -14,14 +14,19 @@ from __future__ import annotations
 
 import html
 import re
+from pathlib import Path
 from typing import Final
 
 import pytest
 
+from chd_atlas.build.burden import BurdenRow, cohort_registry, load_burden
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
+from chd_atlas.corpus import load_curation
 from chd_atlas.models.cohort import Cohort
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="module")
@@ -63,6 +68,36 @@ def cohort_page(tmp_path_factory: pytest.TempPathFactory) -> str:
     return (root / METHODS_PAGE).read_text(encoding="utf-8")
 
 
+@pytest.fixture(scope="module")
+def registry() -> dict[str, Cohort]:
+    """The committed registry, loaded the way `runner.build_site` loads it."""
+    corpus, issues = load_curation(REPO_ROOT)
+    assert issues == [], issues
+    return cohort_registry(corpus.cohorts)
+
+
+@pytest.fixture(scope="module")
+def real_page(tmp_path_factory: pytest.TempPathFactory, registry: dict[str, Cohort]) -> str:
+    """The page as built from the committed registry: `#cohorts` as published.
+
+    The fixtures above build it with no cohorts or three invented ones, so
+    nothing a curator wrote reached any check on this page until 2026-10-26 --
+    when the published page was found carrying a retired phrase ("the same
+    children") from `pcgc`'s description.
+    """
+    root = tmp_path_factory.mktemp("methods-real")
+    build_methods(Emitter(root=root), cohorts=registry)
+    return (root / METHODS_PAGE).read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def mirrored() -> list[BurdenRow]:
+    """Every row of the committed burden mirror."""
+    rows = [row for rows in load_burden(REPO_ROOT).values() for row in rows]
+    assert rows, "no burden rows loaded; every check on them would pass vacuously"
+    return rows
+
+
 def _section(page: str, anchor: str) -> str:
     """One section: from its `<h2 id=...>` to the next `<h2`, or to `</main>`.
 
@@ -90,12 +125,14 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert '<h2 id="scope">' in page
     # The page's own account of what it holds (CLAUDE.md section 4.29: a
     # summary that omits what the page publishes passes every other check).
-    # The cohort list joined it on 2026-10-26.
+    # The cohort list joined it on 2026-10-26, and the same day it stopped
+    # claiming the list is every collection a study "draws on": it is what the
+    # rows name (`test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`).
     assert (
         "<p>What every gene page assumes, written once: which genes are here and what each "
         "classification means, how the validity records are listed, how to read the "
         "rare-variant results, and every sample collection the "
-        "rare-variant studies draw on.</p>"
+        "rare-variant results name.</p>"
     ) in page
 
 
@@ -368,13 +405,14 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
     """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
 
-    Seven paragraphs, each pinned whole. The first two are the full forms of the
+    Eight paragraphs, each pinned whole. The first two are the full forms of the
     two notices a gene page keeps in one line (`pages._MIRRORED_NOTICE`, which
     links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
     "How to read these numbers" notes; the fifth was the second sentence of its
-    composite note; the last two are below. Each was re-read for a page with no
-    table on it: "In each study's table" anchors what the units sentence
-    describes, and "the rows above it" became "beside it".
+    composite note; the sixth says what `all cases` is; the last two are below.
+    Each was re-read for a page with no table on it: "In each study's table"
+    anchors what the units sentence describes, and "the rows above it" became
+    "beside it".
 
     Recorded decisions that moved with them:
 
@@ -433,6 +471,16 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     other rows in the same panel" was false for 10 union-tagged rows, on 10
     panels, that contain exactly one other drawn row -- "at least one other
     row", as each panel's own key says.
+
+    **Three changes after review (2026-10-26).** The composite paragraph
+    explained `damaging` and nothing said what the `all cases` case group is,
+    though a forest key says it in one clause; the sixth paragraph does, in
+    general, and `test_an_all_cases_row_is_the_union_of_the_case_groups_its_
+    study_splits` holds it to the mirror. "these have none" had no antecedent
+    nearer than "a forest plot", so it names this atlas's. And the muted row was
+    singular, while every panel that draws one draws three -- one synonymous row
+    per case group, 113 panels on a real build -- so it is "one of a study's
+    synonymous rows".
     """
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
@@ -463,20 +511,25 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "result &mdash; the same variants are counted in both. It is shown because a study "
         "that defines its findings by the composite publishes a p-value for it that is not "
         "derivable from the other two.",
+        "Where a study splits its cases into <strong>syndromic</strong> and "
+        "<strong>non-syndromic</strong> groups, its <strong>all cases</strong> group is "
+        "likewise the union of the two, and an <strong>all cases</strong> row is not a result "
+        "independent of theirs. Where a study does not split its cases, <strong>all "
+        "cases</strong> is its whole case set and its only case group.",
         "A forest plot shows each row's effect and interval on a logarithmic axis. A "
         "<strong>filled</strong> marker is a row that survived its own study's correction for "
         "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
         "study published no correction at all &mdash; the atlas computes none of its own. A "
-        "forest plot usually ends in a summary diamond; these have none, because no pooled "
-        "estimate is computed anywhere on this site. A <strong>hatched</strong> bar means no "
-        "interval was published for that row, not a wide one. An arrow to the "
+        "forest plot usually ends in a summary diamond; this atlas's have none, because no "
+        "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
+        "means no interval was published for that row, not a wide one. An arrow to the "
         "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
         "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
         "<strong>left</strong> is an effect of zero &mdash; no case carried the variant "
         "&mdash; which a logarithmic axis has no position for. A row tagged "
         "<strong>union</strong> contains at least one other row in the same panel and is not "
-        "an independent finding. A <strong>muted</strong> row is a study's synonymous row, "
-        "drawn apart from the results it calibrates.",
+        "an independent finding. A <strong>muted</strong> row is one of a study's synonymous "
+        "rows, drawn apart from the results it calibrates.",
         "A study that publishes <strong>no effect measure</strong> for a gene &mdash; no "
         "odds ratio, enrichment or rate ratio &mdash; has nothing to place on an effect axis, "
         "so its block shows its counts and p-values in a table instead of a plot.",
@@ -485,6 +538,40 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         '<h2 id="rare-variants">Rare-variant association</h2>'
         + "".join(f"<p>{paragraph}</p>" for paragraph in expected)
     )
+
+
+def test_an_all_cases_row_is_the_union_of_the_case_groups_its_study_splits(
+    mirrored: list[BurdenRow],
+) -> None:
+    """`#rare-variants`'s case-group sentence, held to the mirror it generalises.
+
+    It says, of every study, that `all cases` is the union of `syndromic` and
+    `non-syndromic` where the study splits its cases, and the whole case set and
+    only case group where it does not. Measured on the committed mirror
+    (2026-10-26): all three studies publish `all`; only PMID:42230622 splits,
+    into 1,471 syndromic and 2,405 non-syndromic cases; and on all 470 cells
+    where it publishes all three strata, the `all` row's cases and carriers are
+    the sum of the other two's and its controls are theirs. A study that arrives
+    with a third case group, or an `all` that is not the sum, makes the sentence
+    false, and fails here rather than on a reader.
+    """
+    strata: dict[str, set[str]] = {}
+    cells: dict[tuple[object, ...], dict[str, BurdenRow]] = {}
+    for row in mirrored:
+        strata.setdefault(row.study, set()).add(row.cohort_stratum)
+        cell = (row.study, row.gene, row.variant_class, row.consequence_class, row.origin)
+        key = (*cell, row.lesion_group, row.count_unit, row.maf_max, row.comparator)
+        assert row.cohort_stratum not in cells.setdefault(key, {}), f"two rows share {key}"
+        cells[key][row.cohort_stratum] = row
+    for study, found in strata.items():
+        assert found in ({"all"}, {"all", "syndromic", "nonsyndromic"}), (study, found)
+    split = [cell for cell in cells.values() if cell.keys() == {"all", "syndromic", "nonsyndromic"}]
+    assert split, "no study splits its cases; the sentence's first half is untested"
+    for cell in split:
+        whole, parts = cell["all"], (cell["syndromic"], cell["nonsyndromic"])
+        assert whole.n_cases == sum(part.n_cases for part in parts), whole
+        assert whole.n_case_carriers == sum(part.n_case_carriers for part in parts), whole
+        assert all(part.n_controls == whole.n_controls for part in parts), whole
 
 
 def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -> None:
@@ -507,13 +594,23 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
 
     The class on the `<dl>` is layout: the site's base `dl` is a two-column
     grid sized to its widest label, which suits the grade key's chips and
-    would give a cohort's full name most of the line here.
+    would give a cohort's full name most of the line here. The link reads
+    "website" (2026-10-26): it leads to the collection's home page, and
+    "source" beside a description read as the citation for it.
+
+    The intro's numbers are pinned against the mirror and the registry by
+    `test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`; here
+    they are only the literal the fixture renders, since the intro is a
+    constant and the fixture's three cohorts are not the ones it counts.
     """
     assert _section(cohort_page, "cohorts") == (
         '<h2 id="cohorts">Cohorts</h2>'
-        "<p>Every sample collection a rare-variant study in this atlas draws on, with what "
-        "qualifies every number drawn from it. Two studies that name the same collection "
-        "describe partly the same people. The same records are published as "
+        "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
+        "its curator recorded. A row may not name every collection its study drew on: the "
+        "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
+        "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
+        "partly the same people, and two that name none in common may still share people "
+        "this registry does not record. The same records are published as "
         '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
         '<dl class="cohort-list">'
         "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"
@@ -521,11 +618,58 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
         "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
         '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
-        "source</a></dd>"
+        "website</a></dd>"
         "</dl>"
     )
 
 
+def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
+    real_page: str, registry: dict[str, Cohort], mirrored: list[BurdenRow]
+) -> None:
+    """`#cohorts`'s intro, on the published page, held to the rows it describes.
+
+    **It claimed a completeness the registry does not have** until 2026-10-26:
+    "every sample collection a rare-variant study in this atlas draws on". The
+    rows for PMID:34324492 name 4 collections, while that study's S2 Table
+    lists 189 case sources holding 7,958 cases, of which those 4 hold 4,242
+    (counted from the supplement's `s007.xlsx`, sheet "S2 Table": 189 source
+    rows summing to its "N" row, 7,958). A reader told the list is complete
+    concludes that two studies naming no collection in common share no people,
+    which the next sentence must not license. It now says what the list is --
+    every collection a row names -- and that a row may not name all its study
+    drew on.
+
+    Every figure in the sentence that the repository can check is checked:
+
+    * "every sample collection a rare-variant row ... names" describes the list
+      both ways: the registry is exactly the ids the mirror's rows cite;
+    * the 4 is that study's distinct case cohorts in the mirror;
+    * 4,242 is the sum of the counts those 4 descriptions open with (1,615,
+      1,221, 629 and 777), and 7,958 is the total `taa_cases` states.
+
+    189 is the supplement's alone; nothing committed carries it.
+    """
+    cited = {cohort for row in mirrored for cohort in (*row.case_cohorts, *row.control_cohorts)}
+    assert cited == set(registry)
+
+    named = sorted(
+        {cohort for row in mirrored if row.study == "PMID:34324492" for cohort in row.case_cohorts}
+    )
+    opening = [re.match(r"([\d,]+) ", registry[cohort].description) for cohort in named]
+    assert all(opening), f"a description for {named} does not open with its case count"
+    held = sum(int(match.group(1).replace(",", "")) for match in opening if match)
+    assert "777 of its 7,958 cases" in registry["taa_cases"].description
+
+    intro = re.search(r'<h2 id="cohorts">Cohorts</h2><p>(.*?)</p>', real_page, re.S)
+    assert intro, "the published page has no cohort intro"
+    assert (
+        f"the rows for PMID:34324492 name {len(named)} of the 189 case sources its S2 Table "
+        f"lists, and those {len(named)} hold {held:,} of its 7,958 cases."
+    ) in intro.group(1)
+    assert (len(named), held) == (4, 4242)
+
+
+@pytest.mark.parametrize("built", ["page", "real_page"])
 @pytest.mark.parametrize(
     "retired",
     [
@@ -565,7 +709,9 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "this study's",
     ],
 )
-def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -> None:
+def test_no_sentence_the_move_retired_comes_back_here(
+    request: pytest.FixtureRequest, built: str, retired: str
+) -> None:
     """Whole page, both spellings of an apostrophe (section 4.35).
 
     A positive literal fails when a sentence is deleted; these fail when a
@@ -573,7 +719,14 @@ def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -
     page it was moved to -- is the failure nobody watches for. Checked on the
     unescaped text too, because the page spells one apostrophe `'` and another
     `&#x27;`, and a retired phrase must not pass by changing which.
+
+    **On the page as published, too** (2026-10-26). It ran only on a page built
+    with no cohorts, so it could not see `#cohorts` -- and the published page
+    carried "the same children", in `pcgc`'s description, the whole time. No
+    retired phrase is exempt from curated text: a curator's sentence on this
+    page is held to what this page may say.
     """
+    page = request.getfixturevalue(built)
     assert retired not in page
     assert retired not in html.unescape(page)
 

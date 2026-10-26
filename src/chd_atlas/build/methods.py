@@ -32,7 +32,9 @@ a page with no gene on it.
   folded reading notes and the composite note's second sentence), and two are
   the full forms of notices a gene page keeps in one line. Two more state in
   general what each forest plot's folded key says of its own marks (D57), and
-  what a block with no effect measure shows instead of a plot.
+  what a block with no effect measure shows instead of a plot; one more, what
+  the `all cases` case group is, which a forest key says in one clause
+  (2026-10-26).
 * `#cohorts` is curated data under one written paragraph: every record of
   `curation/cohorts.yaml`, the same ones `cohorts.json` publishes. A gene page
   keeps the notes of its own cohorts, folded, and links here (P4).
@@ -40,8 +42,10 @@ a page with no gene on it.
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
 unique to each, as one label-chip-gloss triple per rung; `#validity`,
-`#rare-variants` and, on a fixture registry, `#cohorts` whole, as literals; and
-the phrases the move retired as absent from the whole page.
+`#rare-variants` and, on a fixture registry, `#cohorts` whole, as literals; the
+cohort intro's figures against the mirror and the committed registry; and the
+phrases the move retired as absent from the whole page, built with no cohorts
+and with the committed registry.
 `tests/test_built_site_is_consumable.py` checks `#cohorts` against the
 `cohorts.json` of a real build.
 
@@ -277,6 +281,20 @@ _RARE_VARIANTS: Final = (
     "result &mdash; the same variants are counted in both. It is shown because a study "
     "that defines its findings by the composite publishes a p-value for it that is not "
     "derivable from the other two.</p>"
+    # The case-group union, which nothing here stated until 2026-10-26: the
+    # paragraph above explained `damaging` while a table's `all cases` row sat
+    # beside the rows it contains. Measured that day on the committed mirror:
+    # all three studies publish an `all` stratum and only PMID:42230622 also
+    # splits its cases, into syndromic (1,471) and non-syndromic (2,405); on all
+    # 470 cells where it publishes all three, the `all` row's cases and carriers
+    # are the sum of the other two's and its controls are theirs. Stated in
+    # general, so it names no study; `test_an_all_cases_row_is_the_union_of_
+    # the_case_groups_its_study_splits` holds it to the mirror.
+    "<p>Where a study splits its cases into <strong>syndromic</strong> and "
+    "<strong>non-syndromic</strong> groups, its <strong>all cases</strong> group is "
+    "likewise the union of the two, and an <strong>all cases</strong> row is not a result "
+    "independent of theirs. Where a study does not split its cases, <strong>all "
+    "cases</strong> is its whole case set and its only case group.</p>"
     # The forest key in general; each panel's own key, conditional clause by
     # clause, is folded under "How to read this chart" (`pages._forest_caption`,
     # D57). Each clause measured against a real build of 9f24190 before it was
@@ -286,20 +304,27 @@ _RARE_VARIANTS: Final = (
     # rows in the same panel" was false for 10 union-tagged rows, on 10 panels,
     # that contain exactly one other drawn row, so it says "at least one", as
     # each panel's key does.
+    #
+    # Two clauses reworded after review (2026-10-26): "these have none" had no
+    # antecedent nearer than "a forest plot", so it names this atlas's; and the
+    # muted row was singular, while every panel that draws one draws three
+    # (measured on a real build: 113 panels, one synonymous row per case group
+    # of PMID:42230622), so it is "one of a study's synonymous rows", true for
+    # one or many.
     "<p>A forest plot shows each row's effect and interval on a logarithmic axis. A "
     "<strong>filled</strong> marker is a row that survived its own study's correction for "
     "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
     "study published no correction at all &mdash; the atlas computes none of its own. A "
-    "forest plot usually ends in a summary diamond; these have none, because no pooled "
-    "estimate is computed anywhere on this site. A <strong>hatched</strong> bar means no "
-    "interval was published for that row, not a wide one. An arrow to the "
+    "forest plot usually ends in a summary diamond; this atlas's have none, because no "
+    "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
+    "means no interval was published for that row, not a wide one. An arrow to the "
     "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
     "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
     "<strong>left</strong> is an effect of zero &mdash; no case carried the variant "
     "&mdash; which a logarithmic axis has no position for. A row tagged "
     "<strong>union</strong> contains at least one other row in the same panel and is not "
-    "an independent finding. A <strong>muted</strong> row is a study's synonymous row, "
-    "drawn apart from the results it calibrates.</p>"
+    "an independent finding. A <strong>muted</strong> row is one of a study's synonymous "
+    "rows, drawn apart from the results it calibrates.</p>"
     # The general form of `pages._NO_EFFECT_MEASURE`, which a block shows in
     # place of a plot (77 pages, every one in PMID:34324492's block).
     "<p>A study that publishes <strong>no effect measure</strong> for a gene &mdash; no "
@@ -312,14 +337,36 @@ _RARE_VARIANTS: Final = (
 # rows cite (`pages._cohort_notes`, whose fold ends on a link here) and keeps
 # them: CLAUDE.md section 9 forbids narrowing where a cohort caveat reaches, so
 # this is a second place, not a move. It is the whole registry -- the records
-# `cohorts.json` publishes, and every one of the 13 is cited by a mirror row
-# (measured 2026-10-26) -- so "every sample collection ... draws on" describes
-# the list both ways.
+# `cohorts.json` publishes -- and every registered collection is cited by a
+# mirror row, so "every sample collection a rare-variant row names" describes
+# the list both ways; `test_the_cohort_list_says_what_its_rows_name_and_what_
+# they_do_not` holds that against the mirror.
+#
+# It read "every sample collection a rare-variant study in this atlas draws on,
+# with what qualifies every number drawn from it" until review (2026-10-26)
+# measured both halves false. PMID:34324492's rows name 4 collections
+# (`decipher`, `isca`, `signature`, `taa_cases`), and the study's S2 Table lists
+# 189 case sources holding 7,958 cases, of which those 4 hold 4,242 -- counted
+# from the supplement's `s007.xlsx` (sheet "S2 Table": 189 source rows whose
+# individuals sum to 7,958, matching the sheet's own "N" row; Signature 1,615,
+# Decipher_database 1,221, PMID 21092924 777, ISCA 629). A reader told the list
+# is complete concludes that two studies naming no collection in common share
+# no people, which is the inference the next sentence must not license; the
+# gene page's pooling sentence was already hedged ("as this atlas has recorded
+# them"). And some descriptions qualify nothing (`isca`'s is a case count), so
+# the list carries "the caveats its curator recorded", whatever they are. The
+# sources the rows do not name are not named here either: an unregistered
+# source has no record to resolve against. The 4 is pinned against the mirror,
+# 4,242 against the four descriptions' own counts and 7,958 against
+# `taa_cases`'s; 189 is the supplement's alone and nothing here can check it.
 _COHORTS_INTRO: Final = (
     '<h2 id="cohorts">Cohorts</h2>'
-    "<p>Every sample collection a rare-variant study in this atlas draws on, with what "
-    "qualifies every number drawn from it. Two studies that name the same collection "
-    "describe partly the same people. The same records are published as "
+    "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
+    "its curator recorded. A row may not name every collection its study drew on: the "
+    "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
+    "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
+    "partly the same people, and two that name none in common may still share people "
+    "this registry does not record. The same records are published as "
     f'<a href="{COHORTS}"><code>{COHORTS}</code></a>.</p>'
 )
 
@@ -332,7 +379,9 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     section 9) -- the same order `cohorts.json` publishes. Every curated field
     is escaped: names, descriptions and urls are free text. A url is the
     collection's public page, linked inside its own description; a cohort with
-    none (4 of 13) gets no link rather than an empty one.
+    none (4 of 13) gets no link rather than an empty one. The link reads
+    "website", not "source" (2026-10-26): it leads to the collection's home
+    page, and "source" beside a description reads as the citation for it.
 
     `cohort-list` is layout only. The base `dl` is a two-column grid whose label
     column grows to its widest label, which suits the grade key's chips and
@@ -341,7 +390,7 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     items = "".join(
         f"<dt>{html.escape(cohort.name)} (<code>{html.escape(cohort.id)}</code>)</dt>"
         f"<dd>{html.escape(cohort.description)}"
-        + (f' <a href="{html.escape(cohort.url)}">source</a>' if cohort.url else "")
+        + (f' <a href="{html.escape(cohort.url)}">website</a>' if cohort.url else "")
         + "</dd>"
         for cohort in sorted(cohorts.values(), key=lambda cohort: cohort.id)
     )
@@ -351,13 +400,16 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 # The page's own account of what it holds (CLAUDE.md section 4.29); the cohort
 # list joined it on 2026-10-26. It names only sections the page renders: the
 # expression section is not on this page yet, and naming it here would promise
-# a reader something the page does not hold.
+# a reader something the page does not hold. "the rare-variant studies draw on"
+# became "the rare-variant results name" the same day, for the reason
+# `_COHORTS_INTRO` records: the list is what the rows name, not all a study
+# drew on.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
     "classification means, how the validity records are listed, how to read the "
     "rare-variant results, and every sample collection the "
-    "rare-variant studies draw on.</p>"
+    "rare-variant results name.</p>"
 )
 
 

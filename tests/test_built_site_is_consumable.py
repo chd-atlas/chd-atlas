@@ -434,7 +434,7 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
         assert name == html.escape(cohort["name"])
         expected = html.escape(cohort["description"])
         if cohort["url"] is not None:
-            expected += f' <a href="{html.escape(cohort["url"])}">source</a>'
+            expected += f' <a href="{html.escape(cohort["url"])}">website</a>'
         assert entry == expected, f"{cohort['id']} is not listed whole"
 
 
