@@ -259,76 +259,97 @@ def test_the_contested_example_is_labelled_with_the_payload_it_comes_from(site: 
     assert "conflicting_lesion_groups" in section
 
 
-def test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows(
+def _card_curation(page: str) -> str:
+    """The visible text of a gene page's curation sentence, on its card (D55)."""
+    rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+    found = re.findall(r'<p class="card-curation">(.*?)</p>', rail, re.S)
+    assert len(found) == 1, f"expected one curation sentence on the card, found {len(found)}"
+    return _text_of(found[0])
+
+
+def test_the_documented_uncurated_sentences_are_the_ones_the_card_actually_shows(
     site: Path,
 ) -> None:
-    """The doc quotes that paragraph verbatim, so drift makes the doc a lie.
+    """The doc quotes both sentences verbatim, so drift makes the doc a lie.
 
-    Both of its clauses are narrower than the obvious wording, and both were
-    made narrower deliberately: "not yet curated **a lesion assertion**" rather
-    than "evidence", because `atlas_curation` is derived from `LesionAssertion`
-    records alone and a gene may carry curated functional evidence while
-    reporting `not_yet_curated`; and "**no classification** on this page is the
-    atlas's own" rather than "nothing on this page", which would deny that same
-    curated work one column from the rail counting it.
-
-    The document was written against the earlier, wider wording and kept it
+    Renamed 2026-10-26 from
+    `test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows`,
+    when D55 moved the main-column notice onto the card as one sentence. What
+    it guards is unchanged: the doc quotes what the page says, and both
+    sentences are narrower than the obvious wording, deliberately -- "every
+    *classification* on this page" rather than "nothing on this page", which
+    would deny functional records the atlas curated for a gene with no lesion
+    assertion; and "no ClinGen expert panel has graded this gene *for a disease
+    an external authority treats as congenital heart disease*", because
+    unscoped it is false for five of the genes admitted on agreement. The doc was
+    once written against the earlier, wider wording of the notice and kept it
     through the fix, reintroducing in prose the ambiguity the code had just
     removed. `EXHAUSTIVE` above pins documented *JSON* examples against the
     build and had nothing to say about a quoted sentence; this closes that.
     Raised by review on #14.
 
-    Compared against a real uncurated gene page rather than against
-    `pages._NOT_CURATED`, so the assertion fails if the constant stops reaching
-    the page at all -- comparing the doc to the constant would pass on a page
-    that renders neither.
+    Compared against real uncurated gene pages, sliced to the card's own
+    curation sentence, rather than against the constants that compose it, so
+    the assertion fails if the sentence stops reaching the card at all --
+    comparing the doc to a constant would pass on a page that renders neither.
     """
+    gata4 = json.loads((site / "genes" / "HGNC_4173.json").read_text())
+    assert gata4["atlas_curation"] == "not_yet_curated", (
+        "GATA4 must still be an uncurated gene for this to test"
+    )
     page = (site / "genes" / "HGNC_4173.html").read_text()
-    assert "not_yet_curated" in page, "GATA4 must still be an uncurated gene for this to test"
 
     text = DOC.read_text()
-    # **The count is read from the build, never written into the marker.** It
-    # was hard-coded as "the 22 genes" here and in the doc, so the assertion
-    # pinned a stale number *in place*: the widening moved it to 91 and this
-    # test went on passing, because it was comparing the doc to itself.
-    uncurated = sum(
-        1
-        for bundle in (site / "genes").glob("*.json")
+    prose = re.sub(r"\s+", " ", text)
+    # **Every count is read from the build, never written into the marker.**
+    # The uncurated count was hard-coded as "the 22 genes" here and in the doc,
+    # so the assertion pinned a stale number *in place*: the widening moved it
+    # to 91 and this test went on passing, because it was comparing the doc to
+    # itself.
+    bundles = [
+        json.loads(bundle.read_text())
+        for bundle in sorted((site / "genes").glob("*.json"))
         if bundle.name != "index.json"
-        and json.loads(bundle.read_text())["atlas_curation"] == "not_yet_curated"
-    )
+    ]
+    uncurated = [b for b in bundles if b["atlas_curation"] == "not_yet_curated"]
+    by_panel = sum(1 for b in uncurated if b["validity_state"] == "expert_curated")
+    by_agreement = sum(1 for b in uncurated if b["validity_state"] == "submitter_curated")
     marker = (
-        f"or, for the {uncurated} genes published today with no curation here, a paragraph saying"
+        f"For the {len(uncurated)} genes published today with no curation here, the card's curation"
     )
-    assert marker in text, f"the doc must state the {uncurated} uncurated genes this build has"
-    # Only the *first* quoted block after the marker. The doc quotes two notices
-    # since 2026-08-06 -- one for a panel-graded gene, one for a
-    # submitter-admitted one -- and joining every `>` line to the end of the file
-    # welds them into a sentence no page has ever rendered.
-    quoted = _first_block_quote(text[text.index(marker) :])
-    assert quoted, "the doc must still quote the notice"
-    # `**bold**` in the quote is `<strong>` on the page; strip both to compare
-    # the sentence rather than its emphasis.
-    assert quoted.replace("**", "") in _text_of(page)
+    assert marker in text, f"the doc must state the {len(uncurated)} uncurated genes this build has"
+    assert f"That wording renders on {by_panel} of those {len(uncurated)} pages" in prose
+    assert f"The {by_agreement} admitted on submitter agreement" in prose
 
-    # **The second notice, on a gene no panel graded.** The doc quotes both, and
-    # the ungraded one is the half that was wrong: every one of the 16
-    # submitter-admitted pages carried "the classification above is an expert
-    # panel's" until 2026-08-06, describing a commercial laboratory's submission
-    # as a chartered panel's classification. Both the old wording (guarding its
-    # return) and the reworded panel-graded notice are asserted absent below. A
-    # gene is chosen by reading `validity_state` off the build rather than by
-    # naming an HGNC id, so this keeps testing the right gene as the population moves.
+    # The two quoted blocks after the marker, each compared with a real card.
+    # Joining every `>` line to the end of the file would weld them into a
+    # sentence no page has ever rendered, so each is read on its own.
+    after = text[text.index(marker) :]
+    panel_quote = _first_block_quote(after)
+    agreement_quote = _first_block_quote(after[after.index("say so instead:") :])
+    assert panel_quote and agreement_quote, "the doc must still quote both sentences"
+    assert panel_quote.replace("**", "") == _card_curation(page)
+
+    # **The second sentence, on a gene no panel graded.** It is the half that
+    # was wrong once: every one of the 16 submitter-admitted pages carried "the
+    # classification above is an expert panel's" until 2026-08-06, describing a
+    # commercial laboratory's submission as a chartered panel's classification.
+    # Both that wording (guarding its return) and the panel-graded sentence are
+    # asserted absent. A gene is chosen by reading `validity_state` off the
+    # build rather than by naming an HGNC id, so this keeps testing the right
+    # gene as the population moves.
     ungraded = next(
         bundle
         for bundle in sorted((site / "genes").glob("*.json"))
         if bundle.name != "index.json"
         and json.loads(bundle.read_text())["validity_state"] == "submitter_curated"
     )
-    ungraded_page = _text_of(ungraded.with_suffix(".html").read_text())
-    assert "no ClinGen expert panel has graded it" in ungraded_page
+    ungraded_html = ungraded.with_suffix(".html").read_text()
+    assert agreement_quote.replace("**", "") == _card_curation(ungraded_html)
+    ungraded_page = _text_of(ungraded_html)
+    assert "no ClinGen expert panel has graded this gene" in ungraded_page
     assert "the classification above is an expert panel's" not in ungraded_page.lower()
-    # A submitter-admitted page must not carry the panel-graded notice either.
+    # A submitter-admitted page must not carry the panel-graded sentence either.
     assert "is a clingen expert panel's or a named curator's" not in ungraded_page.lower()
 
 

@@ -1247,17 +1247,78 @@ data.
 
 ## `genes/<slug>.html`
 
-One page per published gene, rendering that gene's bundle for a reader. A
-summary column carries, under the gene's symbol, its approved name, locus and
-MANE Select transcript, then a row of links out: gnomAD and ClinVar first and
-ClinGen and Ensembl after them, all four on every page, and UniProt where the
-registry has an accession. Below them come the HGNC id and the headline
-classification as a chip — with a `conflicting evidence` and a `sources
-disagree` chip beside it when those flags are set — then the disease that grade
-is for (or, for a gene admitted on submitter agreement, the submitters who
-admitted it), `validity_state`, `atlas_curation`, the lesion groups, the
-assertion, functional-record, curated-publication and burden-row counts, and a
-link to the gene's own JSON. Beside it, the mirrored validity table in two groups — **Expert panel
+One page per published gene, rendering that gene's bundle for a reader.
+
+**The summary column is a card**, written for a clinician reading it first.
+Top to bottom:
+
+1. The gene's symbol, its approved name, locus and MANE Select transcript, then
+   a row of links out: gnomAD and ClinVar first and ClinGen and Ensembl after
+   them, all four on every page, and UniProt where the registry has an
+   accession.
+2. The HGNC id and the headline classification as a chip — with a `conflicting
+   evidence` and a `sources disagree` chip beside it when those flags are set.
+3. Up to three rows. The disease that grade is for (or, for a gene admitted on
+   submitter agreement, the submitters who admitted it). **Also listed by** —
+   how many other institutions in `asserted_by.institutions` list the gene,
+   ClinGen and the admitting submitters excluded; omitted when there are none.
+   **Inheritance** — every distinct mode of the records that carry the
+   warrant: the ClinGen records at the headline grade, or the admitting
+   submitters' records at `Limited` or better, in the validity table's
+   vocabulary. Every mode, not one: a panel can grade one gene at one rung under
+   two modes.
+4. For a graded gene, one line glossing its headline grade in the grade key's
+   own words — on a `limited` gene, that *Limited is not a weak yes*. Where
+   `has_conflicting_evidence` is true, a line under it (or in its place, for a
+   gene no panel graded) naming who disputes or refutes the gene and for what,
+   from the contested records the validity table lists: each authority's own
+   term, the diseases it applies it to, and the authority — the expert panel
+   for a ClinGen record, the submitter for a GenCC one — e.g. "Disputed for
+   Costello syndrome and cardiofaciocutaneous syndrome by the RASopathy Gene
+   Curation Expert Panel; see the validity table." The flag itself does not
+   say which disease; on every gene that sets it today the dispute is for a
+   different disease from the one the headline grade is for.
+5. Where every disease the headline grade is for is in scope through Orphanet's
+   phenotype frequencies, the reason: "Graded for Noonan syndrome as a
+   syndrome; in scope because Orphanet records a structural heart malformation
+   in at least 30% of cases." For a subtype, whose warrant is its syndrome's,
+   the clause names the syndrome the frequency was recorded for ("… of cases
+   of Adams-Oliver syndrome").
+6. **Rare variants**: one line per study and analysis with a result that
+   survives its own study's correction — the rule the evidence matrix's
+   `corrected` state uses, so the two cannot disagree — naming the first such
+   row in the table's own order (the `damaging` union first) with its counts in
+   their own unit, then the group's other surviving results by name ("also
+   surviving: loss-of-function; missense (damaging)") — named, not counted,
+   because the union's components are not further findings. A line from a
+   study by an author of this atlas says so ("study by an atlas author"), as
+   the study's block does. Each line ends with a link to that study's block on
+   the same page (`#study-<PMID digits>`, the `id` of the study's heading):
+   `caveats` where any of the group's surviving rows carries a `method_note`,
+   `details` otherwise, with an accessible name naming the study. Never the
+   most significant row: the atlas ranks nothing.
+
+   **A study that published no corrected p for the gene gets a line of its
+   own**, whether or not another study's results survive: "<study> publishes
+   no corrected p for this gene; judge its results against its scan of 138,609
+   tests (see its block)", with the scan size from the publication's
+   `tests_reported`; where none is recorded the line ends "see its block". The
+   atlas applies no threshold of its own. Whether a study
+   published a correction is read per gene, from its rows.
+
+   With no surviving row, how many independent datasets (cohort families, not
+   studies) tested the gene, and — where some study published a correction for
+   it — that none survives a correction its study published; with no row at
+   all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
+   evidence against a gene — follows whenever the gene has rows.
+7. One sentence saying what the atlas itself has curated (below).
+8. A link to the gene's own JSON.
+
+The page no longer prints `validity_state`, `atlas_curation`, the lesion groups
+or the assertion, functional-record, curated-publication and burden-row counts
+as rows; every one of them is in the bundle, which remains the record.
+
+Beside the card, the mirrored validity table in two groups — **Expert panel
 (ClinGen)** first, then **Other curators (GenCC)** — each row giving who curated
 it, the disease, the mode of inheritance in one vocabulary (ClinGen's `AD` reads
 as GenCC's "Autosomal dominant"), the authority's own `classification_term`
@@ -1266,48 +1327,49 @@ as GenCC's "Autosomal dominant"), the authority's own `classification_term`
 with its SOP for a ClinGen record. ClinGen also submits its classifications to
 GenCC; the page lists such a copy only where its mapped grade, date, inheritance or
 disease differs from the panel's own record, or where it carries no date or has
-no panel record to match. The bundle keeps every record.
+no panel record to match. The bundle keeps every record. A curated gene's page
+follows it with the curated evidence — each assertion, its evidence items with
+their class, strength and summary, and the publications that evidence cites.
 
-Then either the curated evidence — each assertion, its evidence items with
-their class, strength and summary, and the publications that evidence cites —
-or, for the 118 genes published today with no curation here, a paragraph saying
-exactly that:
+For the 118 genes published today with no curation here, the card's curation
+sentence says exactly that:
 
-> The atlas has **not yet curated** a lesion assertion for this gene. Each
-> classification above is a ClinGen expert panel's or a named curator's, mirrored
-> with its provenance intact; no classification on this page is the atlas's own
-> assessment.
+> Not yet curated by the atlas: every classification on this page is a ClinGen
+> expert panel's or a named curator's.
 
-That wording renders on 97 of those 118 pages, the genes a ClinGen panel
-graded. The 21 admitted on submitter agreement have no panel classification to
-describe, and say so instead:
+That wording renders on 97 of those 118 pages, the genes a ClinGen panel holds
+an in-scope record for. The 21 admitted on submitter agreement have no panel
+classification to describe, and say so instead:
 
-> The atlas has **not yet curated** a lesion assertion for this gene, and **no
-> ClinGen expert panel has graded it** for a disease an external authority
-> treats as congenital heart disease (or in which Orphanet records a structural
-> heart malformation in at least 30% of cases). It is published because the Gene
-> Curation Coalition submitters named above independently assert it; their
-> classifications are mirrored with their provenance intact, and no
-> classification on this page is the atlas's own assessment.
+> Not yet curated by the atlas, and no ClinGen expert panel has graded this
+> gene for a disease an external authority treats as congenital heart disease,
+> or in which Orphanet records a structural heart malformation in at least 30%
+> of cases: it is published because the Gene Curation Coalition submitters
+> named above independently assert it.
 
-`validity_state` selects between them, not `headline_confidence is null`: the
-two agree on every gene published today, and two figures that are equal are one
-figure to every test.
+The scope in that second sentence is part of the claim. Unscoped it is false for
+five of the 21: ClinGen grades ACTC1 Definitive for hypertrophic cardiomyopathy
+and ELN Definitive for cutis laxa, for instance, and those diseases are outside
+this atlas's remit, so their records are not on the page to contradict it.
 
-That paragraph is there instead of the section simply being absent. A missing
-evidence section is indistinguishable from "the atlas looked and found
+`validity_state` selects between the two sentences, not `headline_confidence is
+null`: the two agree on every gene published today, and two figures that are
+equal are one figure to every test.
+
+The sentence is there instead of the curation simply going unmentioned. A
+missing evidence section is indistinguishable from "the atlas looked and found
 nothing", and a reader deciding what a gene means clinically must not have to
 infer which.
 
-Read both halves of that sentence precisely, because each is narrower than it
-first appears. **A lesion assertion** is what is absent, not evidence in
-general: `atlas_curation` is derived from curated `LesionAssertion` records
-alone, so a gene can carry functional-evidence records the atlas curated and
-still report `not_yet_curated`. Such a page adds a second paragraph naming
-those records as the atlas's own work, rather than leaving the first to deny
-them. And **no classification** is the atlas's own — not "nothing on this
-page", which would have denied that same curated work one column away from the
-rail counting it.
+Read it precisely, because it is narrower than it first appears. **A lesion
+assertion** is what decides it, not evidence in general: `atlas_curation` is
+derived from curated `LesionAssertion` records alone, so a gene can carry
+functional-evidence records the atlas curated and still report
+`not_yet_curated`. Such a card opens "No lesion assertion yet curated by the
+atlas" instead, and adds "The atlas has curated N functional record(s),
+published in this gene's JSON." — naming those records as the atlas's own work
+rather than denying them in the sentence that counts them. No published gene is
+in that state today.
 
 A gene page carries no script at all — every value on it was rendered at build
 time — and, like the browse page, makes no external request. The bundle remains

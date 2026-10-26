@@ -412,18 +412,27 @@ def agreeing_submitters(entry: GeneValidity) -> tuple[str, ...]:
     orders dict keys only.
     """
     return tuple(
-        sorted(
-            {
-                record.submitter
-                for record in entry.records
-                if record.source is ValiditySource.GENCC
-                and record.submitter
-                and record.submitter != "ClinGen"
-                and record.classification is not None
-                and CLASSIFICATION_RANK[record.classification]
-                >= CLASSIFICATION_RANK[PUBLICATION_FLOOR]
-            }
-        )
+        sorted({record.submitter for record in agreeing_records(entry) if record.submitter})
+    )
+
+
+def agreeing_records(entry: GeneValidity) -> tuple[ValidityRecord, ...]:
+    """The GenCC records whose submitters `agreeing_submitters` counts, in `records` order.
+
+    The rule lives here once, because two consumers read it: the gate, which
+    counts the submitters, and the gene page's card, which states the mode of
+    inheritance those submitters' qualifying records carry (D55). A submitter's
+    *other* records -- a `Supportive` one, or one for a second disease below the
+    floor -- are not what admitted the gene and are not returned.
+    """
+    return tuple(
+        record
+        for record in entry.records
+        if record.source is ValiditySource.GENCC
+        and record.submitter
+        and record.submitter != "ClinGen"
+        and record.classification is not None
+        and CLASSIFICATION_RANK[record.classification] >= CLASSIFICATION_RANK[PUBLICATION_FLOOR]
     )
 
 
@@ -576,10 +585,26 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
             "submitters": list(agreeing_submitters(entry)),
         }
 
-    # One name per institution, and only institutions that actually assert the
-    # gene -- `_asserts` drops the dissenting rungs, which would otherwise be
-    # counted as agreement. A ClinGen expert panel is ClinGen; its GenCC
-    # submissions are the same body and must not count again.
+    institutions = asserting_institutions(entry)
+    return {
+        "admitted_by": admitted,
+        "asserted_by": {"count": len(institutions), "institutions": list(institutions)},
+    }
+
+
+def asserting_institutions(entry: GeneValidity) -> tuple[str, ...]:
+    """`asserted_by.institutions`: every institution asserting the gene in scope, sorted.
+
+    Its own function because two consumers read it -- `admission_provenance`,
+    which publishes it, and the gene page's card, which counts the curators
+    beside the one that admitted the gene (D55) -- and the card must count
+    exactly the list the bundle publishes.
+
+    One name per institution, and only institutions that actually assert the
+    gene -- `_asserts` drops the dissenting rungs, which would otherwise be
+    counted as agreement. A ClinGen expert panel is ClinGen; its GenCC
+    submissions are the same body and must not count again.
+    """
     institutions = {
         record.submitter
         for record in entry.records
@@ -589,7 +614,4 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
         record.source is ValiditySource.CLINGEN and _asserts(record) for record in entry.records
     ):
         institutions.add("ClinGen")
-    return {
-        "admitted_by": admitted,
-        "asserted_by": {"count": len(institutions), "institutions": sorted(institutions)},
-    }
+    return tuple(sorted(institutions))
