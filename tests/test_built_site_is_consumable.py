@@ -7,6 +7,9 @@ import math
 import posixpath
 import re
 import shutil
+import statistics
+from collections import Counter
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -1221,3 +1224,167 @@ def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
             fragments += 1
             assert target in ids, f"{page_path.name} links #{target}, which no element carries"
     assert fragments, "no gene page carries a fragment link; the sweep would pass vacuously"
+
+
+# --- The gene page's prose budget (D50, D57) ----------------------------------
+#
+# What a reader sees on load: text outside every `<details>`, or inside the
+# `<summary>` of an outermost one. Text in `<svg>`, `<style>`, `<script>` and
+# `<head>` is not prose. A block tag ends a run of text, so two paragraphs are
+# never read as one sentence. Ported from the caveat inventory's parser
+# (2026-10-25), with one difference measured below: `<br>` is not read as a
+# space, so the two lines of a matrix header cell count as one word.
+_BLOCK_TAGS = frozenset(
+    {
+        "p", "li", "figcaption", "td", "th", "dt", "dd", "summary", "h1", "h2", "h3", "h4",
+        "h5", "h6", "nav", "div", "ul", "ol", "table", "tr", "details", "figure", "aside",
+        "main", "body", "dl", "thead", "tbody", "form", "select", "option",
+    }
+)  # fmt: skip
+_SKIPPED = frozenset({"svg", "style", "script", "head"})
+_CELLS = frozenset({"td", "th", "dt", "dd"})
+# A word is a whitespace token carrying a letter, a digit, tau or infinity, so
+# a bare dash or middle dot between two links is not one.
+_WORD = re.compile(r"[A-Za-z0-9τ∞]")
+_SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
+
+# Set from the final build of WS3 PR iii (2026-10-26); see the test. Lower each
+# when a page sheds prose. Raising one is a decision, and its commit says why.
+_MEDIAN_VISIBLE_WORDS = 957
+_BOILERPLATE_SENTENCES = 21
+
+
+class _VisibleText(HTMLParser):
+    """A gene page's text blocks as a reader sees them on load."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.skip = self.details = self.summary = self.cells = 0
+        self.buffer: list[str] = []
+        self.blocks: list[tuple[str, bool]] = []  # (text, inside a table/definition cell)
+
+    def _flush(self) -> None:
+        text = " ".join("".join(self.buffer).split())
+        self.buffer = []
+        if text and (self.details == 0 or self.summary):
+            self.blocks.append((text, self.cells > 0))
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _SKIPPED:
+            self.skip += 1
+            return
+        if tag in _BLOCK_TAGS:
+            self._flush()
+        if tag == "details":
+            self.details += 1
+        elif tag == "summary" and self.details == 1:
+            self.summary += 1
+        if tag in _CELLS:
+            self.cells += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _SKIPPED:
+            self.skip -= 1
+            return
+        if tag in _BLOCK_TAGS:
+            self._flush()
+        if tag == "details":
+            self.details -= 1
+        elif tag == "summary" and self.summary:
+            self.summary -= 1
+        if tag in _CELLS:
+            self.cells -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip:
+            self.buffer.append(data)
+
+
+def _visible_blocks(markup: str) -> list[tuple[str, bool]]:
+    parser = _VisibleText()
+    parser.feed(markup)
+    parser.close()
+    return parser.blocks
+
+
+def _words(text: str) -> int:
+    return sum(1 for token in text.split() if _WORD.search(token))
+
+
+def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site: Path) -> None:
+    """D50: site-wide explanation lives once, on `methods.html`; this keeps it there.
+
+    Two figures over every `genes/HGNC_*.html` of the real build, each at most a
+    constant set from a measurement: (a) the median of the words visible on
+    load per page; (b) the boilerplate, the visible sentences of six words or
+    more that are identical on at least 90% of gene pages, each counted once
+    however many pages carry it. Table and definition cells are not sentences
+    and do not count towards (b); they do count towards (a).
+
+    Measured with this parser on builds of `git archive` copies
+    (`PYTHONPATH=<copy>/src`), 119 gene pages each:
+
+    =========================================  ======  ==========================
+    build                                      median  boilerplate
+    =========================================  ======  ==========================
+    cb326ca, `dev` before WS3 PR iii           1,456   32 sentences, 756 words
+    0fc451a, after Tasks 1-5 (#60), #62, #63   1,194   25 sentences, 506 words
+    452625c, after Task 6                        952   20 sentences, 386 words
+    the gene card's link to `methods.html`       957   21 sentences, 395 words
+    =========================================  ======  ==========================
+
+    The card's last line, "How to read this page · this gene as JSON", is one
+    of the 21: nine words, on every page. The plan's baseline read 1,460 on
+    cb326ca with the inventory's parser, which reads `<br>` as a space; this
+    one does not, and reads 4 fewer at the median on each build above (1,460,
+    1,198, 956 and 961 with it). The boilerplate figures are the same under
+    both.
+
+    **Proved able to fail** (2026-10-26): with the full scope rule
+    (`methods.SCOPE_RULE`) rendered after the short form on every gene page,
+    this test failed on both figures -- "median visible words per gene page
+    1260 (budget 957); 27 boilerplate sentences (budget 21)". Each budget
+    lowered by one (956, 20) fails it; both raised (2000, 40) pass.
+
+    The first assertion checks the instrument itself on a page this test
+    writes: a parser that recorded no text would pass the budget on any
+    pages, and one that read folded or `<svg>` text would fail it for a reason
+    that has nothing to do with the pages. **Not guarded:** that table and
+    definition cells are left out of (b). Counting them changes neither
+    figure on cb326ca or on the final build -- no cell sentence of six words
+    or more is on 90% of gene pages -- so that mutant survives here.
+    """
+    assert _visible_blocks(
+        "<html><head><title>no</title></head><body><p>One two.</p><details>"
+        "<summary>Three</summary><p>four</p><details><summary>five</summary></details>"
+        "</details><table><tr><td>six</td></tr></table><svg><text>seven</text></svg>"
+        "</body></html>"
+    ) == [("One two.", False), ("Three", False), ("six", True)]
+
+    pages = sorted((site / "genes").glob("HGNC_*.html"))
+    assert len(pages) > 1, "the build published no gene pages; the budget would pass vacuously"
+    counts: list[int] = []
+    carried: Counter[str] = Counter()
+    for path in pages:
+        blocks = _visible_blocks(path.read_text(encoding="utf-8"))
+        counts.append(sum(_words(text) for text, _ in blocks))
+        carried.update(
+            {
+                sentence
+                for text, cell in blocks
+                if not cell
+                for sentence in _SENTENCE.split(text)
+                if _words(sentence) >= 6
+            }
+        )
+    boilerplate = sorted(sentence for sentence, n in carried.items() if n >= 0.9 * len(pages))
+
+    median = statistics.median(counts)
+    # Both figures in either failure, so one run says how far over each is.
+    report = (
+        f"median visible words per gene page {median} (budget {_MEDIAN_VISIBLE_WORDS}); "
+        f"{len(boilerplate)} boilerplate sentences (budget {_BOILERPLATE_SENTENCES}): "
+        f"{boilerplate}"
+    )
+    assert median <= _MEDIAN_VISIBLE_WORDS, report
+    assert len(boilerplate) <= _BOILERPLATE_SENTENCES, report
