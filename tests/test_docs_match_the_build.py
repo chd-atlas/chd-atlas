@@ -1378,6 +1378,7 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         ("#rare-variants", "How to read rare-variant results"),
         ("#expression", "How to read these figures"),
         ("#expression", "How to read expression figures"),
+        ("#curated-evidence", "How to read curated evidence"),
     ):
         assert f"*{label}*" in doc, label
         assert f'<a href="../methods.html{anchor}">{label}</a>' in every_page, label

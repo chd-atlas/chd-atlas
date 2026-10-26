@@ -278,7 +278,7 @@ output, so it is verifiable output.
 "How to read this atlas": the explanation every gene page assumes, written once
 at the site root rather than repeated on each page (design decision D50), and
 linked from the navigation bar on every page and from the foot of every gene
-page's card, as *How to read this page*. It has five sections, in this order,
+page's card, as *How to read this page*. It has six sections, in this order,
 and each carries an `id`, so a page can link the paragraph it shortens.
 
 - `#scope` states in full the rule that admits a gene to this atlas and the rule
@@ -293,6 +293,15 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   here. It also says what the card's two flags mean, `conflicting evidence` and
   `sources disagree`: each is a flag on the gene, not on a disease, and the
   records behind it may be for different diseases.
+- `#curated-evidence` says what a curated gene's page adds: a lesion
+  assertion is a curator's record that the gene belongs to one or more
+  lesion groups, with its inheritance, mechanism and syndromic status, and each
+  item of evidence behind it cites one publication with its class, the
+  curator's grading of its strength and the curator's summary; an assertion
+  changes nothing mirrored — a gene is published and its grade headlined on
+  the upstream validity records alone; and the *Publications* section lists
+  every publication that evidence cites. A curated gene's evidence section
+  opens with a line linking here, *How to read curated evidence*.
 - `#rare-variants` says how to read a gene page's rare-variant results: that
   the counts and statistics in its study tables are the studies' own, that no
   statistic is pooled across studies, what each count unit means and what an
@@ -1487,8 +1496,11 @@ classification the gene has — "may not", because many published genes have no
 ClinGen or GenCC record for any other disease — and links
 [`methods.html#validity`](#methodshtml). Neither the page nor the bundle carries
 a record for a disease outside scope. A curated gene's page
-follows it with the curated evidence — each assertion, its evidence items with
-their class, strength and summary, and the publications that evidence cites.
+follows it with the curated evidence — a line saying each assertion is this
+atlas's own curation and changes no classification above, linking
+[`methods.html#curated-evidence`](#methodshtml); each assertion, its evidence
+items with their class, strength and summary; and the publications that
+evidence cites.
 
 The rare-variant section opens with one line attributing every count and
 statistic in its study tables to the upstream study — "Every count and statistic

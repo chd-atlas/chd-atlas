@@ -28,6 +28,13 @@ here, and "this page" here names a page with no gene on it.
   abbreviate, for a page with no table on it -- so "a gene page lists", never
   "listed here" or "the panel record above". Its third paragraph states in
   full what the card's two warning chips abbreviate to two words each.
+* `#curated-evidence` was written new (2026-10-26, owner decision E3): what
+  a curated gene's two extra sections hold -- the atlas's own lesion
+  assertions and the publications their evidence cites -- which no page
+  explained while every card's "How to read this page" linked here. Each
+  clause was read off `models/assertion.py`, `pages._evidence_section`,
+  `derive.gene_facts` and `validity.published_genes`; it names no count, so
+  nothing in it expires when a second gene is curated.
 * `#rare-variants` is both: three paragraphs moved off every gene page (the
   folded reading notes and the composite note's second sentence), and two are
   the full forms of notices a gene page keeps in one line. Two more state in
@@ -221,6 +228,45 @@ _VALIDITY: Final = (
     "on every disease they both classify. Neither flag counts a <em>No Known Disease "
     "Relationship</em> record on either side, nor GenCC's <em>Supportive</em>, which "
     "grades no evidence.</p>"
+)
+
+# What a curated gene's page adds (owner decision 2026-10-26, E3). A gene page
+# renders "Curated evidence" and "Publications" only for a gene with a lesion
+# assertion (`pages._evidence_section`, gated on `AtlasCuration.CURATED`), and
+# this page explained every other section but those two. Each clause read off
+# the code that day:
+#
+# * An assertion is `LesionAssertion`: a curator's record that the gene belongs
+#   to one or more lesion groups (`lesion_groups`, at least one), with
+#   `inheritance`, `mechanism` and `syndromic` (isolated, syndromic or both) --
+#   the four rows the page's definition list renders.
+# * Each `Evidence` item cites exactly one publication (`publication`, a
+#   required PMID) and carries `evidence_class`, `strength` (strong, moderate,
+#   supporting or contradictory) and the curator's own `summary` -- the
+#   table's four columns. The owner's draft said "quoted evidence": `summary`
+#   is the curator's summary, not a quotation, and the record locates the
+#   passage instead (`locator`), which the page does not render.
+# * It changes nothing mirrored, and that is D37: `validity.published_genes`
+#   reads the validity records alone, and `derive.gene_facts` headlines the
+#   strongest ClinGen record whatever the assertions say; an assertion feeds
+#   only `lesion_groups` and the curation fields.
+# * "Publications" lists the distinct publications the evidence cites, sorted,
+#   with their id, title and year (`_CITATION_HEADERS`).
+_CURATED_EVIDENCE: Final = (
+    '<h2 id="curated-evidence">Curated evidence</h2>'
+    "<p>Where this atlas has curated a gene itself, its page carries a <strong>Curated "
+    "evidence</strong> section. Each entry is a <strong>lesion assertion</strong>: a "
+    "curator's record that the gene belongs to one or more congenital heart disease lesion "
+    "groups, with its inheritance, its mechanism and whether it is isolated, syndromic or "
+    "both. Each item of evidence behind an assertion cites one publication, and gives the "
+    "class of the evidence, its strength as the curator grades it (strong, moderate, "
+    "supporting or contradictory) and the curator's summary of what the publication "
+    "shows.</p>"
+    "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
+    "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
+    "validity records alone, so no assertion admits a gene or moves its grade. The "
+    "<strong>Publications</strong> section that follows lists every publication the "
+    "evidence cites, with its title and year.</p>"
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
@@ -584,13 +630,15 @@ _EXPRESSION: Final = (
 # removed once for promising a section the page did not yet hold. "the
 # rare-variant studies draw on" became "the rare-variant results name" the same
 # day, for the reason `_COHORTS_INTRO` records: the list is what the rows name,
-# not all a study drew on.
+# not all a study drew on. The curated-evidence clause joined it with
+# `#curated-evidence` (E3), in gene-page order.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
-    "classification means, how the validity records are listed, how to read the "
-    "rare-variant results, every sample collection the rare-variant results name, and "
-    "how to read the developmental expression figures.</p>"
+    "classification means, how the validity records are listed, what the atlas's own "
+    "curated evidence is, how to read the rare-variant results, every sample collection "
+    "the rare-variant results name, and how to read the developmental expression "
+    "figures.</p>"
 )
 
 
@@ -605,6 +653,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         + SCOPE_RULE
         + grade_key()
         + _VALIDITY
+        + _CURATED_EVIDENCE
         + _RARE_VARIANTS
         + _cohorts(cohorts)
         + _EXPRESSION

@@ -131,26 +131,30 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert '<a href="methods.html">How to read this atlas</a>' in page
     # The sections in the order the introduction names them and a gene page
     # renders them, and nothing else at that rank (written once all five
-    # existed, 2026-10-26).
+    # existed, 2026-10-26; `#curated-evidence` made six the same day, E3, in
+    # gene-page order: a curated gene's evidence follows its validity table).
     assert re.findall(r'<h2 id="([^"]+)"', page) == [
         "scope",
         "validity",
+        "curated-evidence",
         "rare-variants",
         "cohorts",
         "expression",
     ]
-    assert page.count("<h2") == 5
+    assert page.count("<h2") == 6
     # The page's own account of what it holds (CLAUDE.md section 4.29: a
     # summary that omits what the page publishes passes every other check).
     # The cohort list joined it on 2026-10-26, and the same day it stopped
     # claiming the list is every collection a study "draws on": it is what the
     # rows name (`test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`).
-    # The expression section joined it the same day, once the page held one.
+    # The expression section joined it the same day, once the page held one,
+    # and the curated evidence with its own section (E3).
     assert (
         "<p>What every gene page assumes, written once: which genes are here and what each "
-        "classification means, how the validity records are listed, how to read the "
-        "rare-variant results, every sample collection the rare-variant results name, and "
-        "how to read the developmental expression figures.</p>"
+        "classification means, how the validity records are listed, what the atlas's own "
+        "curated evidence is, how to read the rare-variant results, every sample collection "
+        "the rare-variant results name, and how to read the developmental expression "
+        "figures.</p>"
     ) in page
 
 
@@ -418,6 +422,48 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
     # Written once on this page, in the grade key.
     assert page.count("Every classification on this site is mirrored") == 1
     assert "Every classification in this atlas is an upstream" not in page
+
+
+def test_curated_evidence_says_what_an_assertion_is_and_that_it_changes_nothing_mirrored(
+    page: str,
+) -> None:
+    """The two sections only a curated gene's page carries (owner decision 2026-10-26, E3).
+
+    TBX5's page has "Curated evidence" and "Publications" and this page
+    explained every other section but those, while the card's "How to read
+    this page" promised it. Each clause read off the code that day:
+    `LesionAssertion` (lesion groups, inheritance, mechanism, syndromic status
+    -- the four rows the page's definition list renders), `Evidence` (one
+    required publication, a class, a strength of four values, the curator's
+    summary -- the table's four columns), `validity.published_genes` and
+    `derive.gene_facts` (the gate and the headline read the validity records
+    alone, D37), and `pages._evidence_section` (the publications cited, with
+    title and year).
+
+    **One clause of the owner's draft was false.** "Each claim tied to a
+    publication and quoted evidence": an evidence item's `summary` is the
+    curator's summary, not a quotation, and the record locates the passage
+    instead (`locator`), which no page renders. It says "summary".
+
+    Pinned whole, as a literal, and it names no count: a second curated gene
+    must not make it stale.
+    """
+    assert _section(page, "curated-evidence") == (
+        '<h2 id="curated-evidence">Curated evidence</h2>'
+        "<p>Where this atlas has curated a gene itself, its page carries a <strong>Curated "
+        "evidence</strong> section. Each entry is a <strong>lesion assertion</strong>: a "
+        "curator's record that the gene belongs to one or more congenital heart disease lesion "
+        "groups, with its inheritance, its mechanism and whether it is isolated, syndromic or "
+        "both. Each item of evidence behind an assertion cites one publication, and gives the "
+        "class of the evidence, its strength as the curator grades it (strong, moderate, "
+        "supporting or contradictory) and the curator's summary of what the publication "
+        "shows.</p>"
+        "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
+        "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
+        "validity records alone, so no assertion admits a gene or moves its grade. The "
+        "<strong>Publications</strong> section that follows lists every publication the "
+        "evidence cites, with its title and year.</p>"
+    )
 
 
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:

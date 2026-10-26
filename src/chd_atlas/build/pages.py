@@ -1628,8 +1628,14 @@ def _evidence_section(
                 )
             )
         )
+    # The section's link to `methods.html#curated-evidence` (owner decision
+    # 2026-10-26, E3), in the pattern of the other sections' one-line intros.
+    # "above" is true in this position: the validity table renders first.
     return (
         "<h2>Curated evidence</h2>"
+        "<p>Each lesion assertion below is this atlas's own curation, and changes no "
+        'classification above. <a href="../methods.html#curated-evidence">How to read '
+        "curated evidence</a>.</p>"
         + "".join(blocks)
         + "<h2>Publications</h2>"
         + data_table(_CITATION_HEADERS, citations)

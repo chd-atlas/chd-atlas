@@ -267,6 +267,7 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     ]
     assert page.index('<p class="card-curation">') < page.index("</aside>")
     assert "The atlas has <strong>not yet curated</strong> a lesion assertion" not in page
+    assert "#curated-evidence" not in page
     assert "Holt-Oram syndrome" in _validity_table(page)
     assert "GATA4" in page
 
@@ -329,6 +330,17 @@ def test_a_curated_gene_page_carries_its_evidence_quote_and_pmid(
     assert "Not curated by the atlas" not in page
     assert "No lesion assertion curated by the atlas" not in page
     assert 'href="../genes/HGNC_11604.json"' in page
+    # The section links its reading notes, in the pattern of every other
+    # section's intro (owner decision 2026-10-26, E3); sliced to the section.
+    section = page[page.index("<h2>Curated evidence</h2>") : page.index("<h2>Publications</h2>")]
+    assert section.startswith(
+        "<h2>Curated evidence</h2><p>Each lesion assertion below is this atlas's own "
+        "curation, and changes no classification above. "
+        '<a href="../methods.html#curated-evidence">How to read curated evidence</a>.</p>'
+    )
+    assert page.index("<h2>Mirrored gene&ndash;disease validity</h2>") < page.index(
+        "<h2>Curated evidence</h2>"
+    )
 
 
 def test_a_symbol_carrying_markup_is_escaped(
