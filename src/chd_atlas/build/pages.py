@@ -3002,16 +3002,21 @@ def _forest_caption(
     sight: the measure, its range, and what 1 means for that measure. Every
     other clause folds under "How to read this chart", which closes on a link
     to `methods.html#rare-variants`, where the key is stated once in general.
-    **Not every folded clause is the same wherever it renders.** The mark
-    clauses are: each says what a mark means in words that do not change with
-    the panel. The not-fully-split clause is not -- it is a warning about this
-    panel, that a tagged row's components are not all drawn on it -- and it
-    folds too, as the approved D57 spec places it; measured 2026-10-26 on a
-    real build, it is folded on 10 panels on 10 pages (TBX5, TBX20, ZEB2,
-    CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL). This docstring said "only
-    the axis clause is particular to its panel" until then. **The fold
-    changed no clause's condition**: each still renders only where it is
-    true, inside the toggle. The muted clause alone was reworded, to name the
+    **Not every clause is the same wherever it renders.** The mark clauses
+    are: each says what a mark means in words that do not change with the
+    panel. The not-fully-split clause is not -- it is a warning about this
+    panel, that a tagged row's components are not all drawn on it. It folded
+    with the rest as the approved D57 spec placed it, on 10 panels on 10 pages
+    (TBX5, TBX20, ZEB2, CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL, measured
+    2026-10-26), and **the owner moved it to the visible line the same day
+    (E1)**, in a short form that names the `union` tag itself, since the
+    clause explaining the tag stays folded. The owner's draft said "some rows
+    it contains are not plotted; the table below has every row": on every one
+    of those 10 panels exactly one component is missing, and it is a cell the
+    study never published, so it is in no table either -- the clause says "at
+    least one" and "every row this study published for this gene". **Neither
+    move changed a clause's condition**: each still renders only where it is
+    true. The muted clause alone was reworded, to name the
     row's role ("its negative control") instead of linking the section the
     toggle already links -- and again the same day, to "one of this study's
     synonymous rows", because each of the 113 panels that draws one draws
@@ -3138,13 +3143,6 @@ def _forest_caption(
             "A row tagged <strong>union</strong> contains at least one other row in this panel "
             "and is not an independent finding: " + "; ".join(reasons) + ". "
         )
-        if any(_is_union(row, kinds) and not _fully_split(row, rows, kinds) for row in rows):
-            parts.append(
-                "Here a tagged row is <strong>not fully split</strong>: at least one of the "
-                "rows it contains is not itself plotted, so what sits under a union on this "
-                "panel is part of it and not all of it. The table below carries every row "
-                "this study published for this gene. "
-            )
     if any(row.consequence_class == "synonymous" for row in rows):
         # What this clause owes the reader is what the *muting* means, which
         # nothing else on the panel says, and the row's role, in two words.
@@ -3161,9 +3159,20 @@ def _forest_caption(
         )
     # The axis clause is first and unconditional, and the pooling clause is
     # unconditional too, so `rest` is never empty.
+    # Particular to this panel, so on the visible line beside the axis and only
+    # where it fires (owner decision 2026-10-26, E1); the union clause it
+    # qualifies stays folded, and this names the tag itself so it reads
+    # without it.
+    split = (
+        " A row tagged <strong>union</strong> here is <strong>not fully split</strong>: at "
+        "least one of the rows it contains is not plotted; the table below carries every row "
+        "this study published for this gene."
+        if any(_is_union(row, kinds) and not _fully_split(row, rows, kinds) for row in rows)
+        else ""
+    )
     axis, rest = parts[0], "".join(parts[1:]).strip()
     return (
-        f"<figcaption><p>{axis.strip()}</p>"
+        f"<figcaption><p>{axis.strip()}{split}</p>"
         '<details class="chart-notes"><summary>How to read this chart</summary>'
         f"<p>{rest}</p>"
         '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
@@ -4026,8 +4035,9 @@ def _other_gap_clause(reasons: frozenset[str]) -> str:
     """Every gap reason *except* the detection floor's, spelled out.
 
     The floor is excluded because it is the one reason with its own required
-    wording -- `_percentile_cell`'s rule 5, and the same sentence
-    `_band_caption` and `_spark_caption` each carry in full. Everything else
+    wording -- `_percentile_cell`'s rule 5, the sentence `_spark_caption`
+    carries in its fold, and the short form `_band_caption` carries on its
+    visible line (E1). Everything else
     resolves through `_PLACEMENT_GAP_CLAUSE`, so a caption and the table cell
     three lines below it cannot spell one gap two ways.
 
@@ -4144,10 +4154,19 @@ def _band_caption(
     a link to `methods.html#expression`, where the axes are stated once in
     general; the link reads "How to read expression figures", for the reason
     the forest's names its section rather than the nav's "How to read this
-    atlas". **The fold changed no clause's condition**, and the no-row clause
-    stays after the floor clause in the same paragraph: its first spelling,
-    "different again", contrasts itself with the floor clause and points at
-    nothing without it in front.
+    atlas". **The fold changed no clause's condition.**
+
+    **The floor clause came back out of the fold (owner decision 2026-10-26,
+    E1)**, in a short form on the visible line and only where it fires. It is
+    particular to this gene -- a tick is drawn because a stage of this organ
+    reads below the floor -- and measured on a build of 3b766ba it fired on 32
+    of the 112 trajectory pages, inside the toggle on every one. The owner's
+    draft said "Ticks under the axis"; a tick is a `marker` centred on the axis
+    line, so it says "on the axis", and it keeps "beneath the foot of the
+    scale rather than at a value on it", which stops a reader reading a tick as
+    a measurement. The no-row clause's first spelling read "different again" while the floor
+    clause sat before it in this paragraph; it reads "different" now, a
+    contrast with the tick the visible line has just explained.
     """
     named = ", ".join(html.escape(phase.label) for phase, _, _ in _banded_phases(entry, phases))
     attribution = html.escape(phases.attributed_to) if phases is not None else ""
@@ -4159,10 +4178,12 @@ def _band_caption(
     # that interrupt a *line*: a leading or trailing unplaced stage draws a
     # tick and breaks nothing, and it still needs explaining.
     ticked = frozenset(point.gap or "" for point in series if point.value is None)
+    # Visible, on the line above the toggle, and only where it fires (E1). A
+    # tick is a `marker` centred on the axis line, 8 px (`_FLOOR_GAP`) below
+    # the foot of the value scale: "on the axis", never "under" it.
     floor_clause = (
-        f" Below this dataset's detection floor ({_fmt(floor)} {unit}) no percentile is "
-        "published and the stage is ticked on the axis instead &mdash; below the foot of "
-        "the scale, not at a value on it."
+        f" Ticks on the axis mark stages below this dataset's detection floor "
+        f"({_fmt(floor)} {unit}), beneath the foot of the scale rather than at a value on it."
         if floor is not None and ProfileGap.BELOW_DETECTION_FLOOR.value in ticked
         else ""
     )
@@ -4177,15 +4198,18 @@ def _band_caption(
             "says nothing about how high the gene reads there."
         )
     _, no_row = _line_breaks(series)
-    # Two spellings, because the sentence contrasts itself with the clause
-    # above it and that clause is not always there. "A break with no tick
-    # under it is different again" on a figure drawing no tick at all sends a
-    # reader hunting for one -- the defect this whole caption was rewritten
-    # for, reintroduced one sentence later (CLAUDE.md section 4.27).
+    # Two spellings, because the sentence contrasts itself with the floor
+    # clause and that clause is not always there. "A break with no tick under
+    # it is different" on a figure drawing no tick at all sends a reader
+    # hunting for one -- the defect this whole caption was rewritten for,
+    # reintroduced one sentence later (CLAUDE.md section 4.27). It read
+    # "different again" while the floor clause sat before it in this
+    # paragraph; since E1 that clause is on the visible line above the toggle,
+    # so the contrast is with a tick, which that line has just explained.
     gap_clause = ""
     if lined and no_row:
         gap_clause = (
-            " A break in the line with no tick under it is different again: this dataset has "
+            " A break in the line with no tick under it is different: this dataset has "
             "<strong>no row for this organ at that stage</strong>, so there is no measurement "
             "to place, low or otherwise."
             if floor_clause
@@ -4204,11 +4228,11 @@ def _band_caption(
         "order, evenly spaced &mdash; the axis is <strong>order, not elapsed time</strong>. "
         f"Vertical: median abundance in whole {html.escape(tissue)}, {unit}, on a log scale; "
         f"the axis runs {_fmt(low)} to {_fmt(high)} and is fitted to <strong>this gene</strong>, "
-        "so a curve's height compares nothing to another gene's.</p>"
+        f"so a curve's height compares nothing to another gene's.{floor_clause}</p>"
     )
     # Never empty: `_trajectory` draws nothing without a band, so there is
     # always a phase to name.
-    notes = f"{floor_clause}{tick_clause}{gap_clause} Shaded: {named} ({attribution}).".strip()
+    notes = f"{tick_clause}{gap_clause} Shaded: {named} ({attribution}).".strip()
     return visible + _chart_notes(notes)
 
 

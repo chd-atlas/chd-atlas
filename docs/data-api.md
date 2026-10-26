@@ -1535,15 +1535,15 @@ every fold:
 
 Each forest plot — one per study and effect measure — shows one line of its
 caption: the axis, naming the effect measure, its range on a logarithmic scale
-and what the line at 1 means for that measure. The rest of its key is folded
-under *How to read this chart*: what each mark means — filled and hollow
-markers, hatched bars, arrows, muted and `union`-tagged rows — each only where
-the panel draws one, and why there is no summary diamond, ending with a link,
-*How to read rare-variant results*, to
-[`methods.html#rare-variants`](#methodshtml), which states the key in general.
-Where a `union`-tagged row contains a row the panel does not plot, the fold
-also says the panel is *not fully split*: what sits under that union on the
-panel is part of it, not all of it, and the table below carries every row.
+and what the line at 1 means for that measure. Where a `union`-tagged row
+contains a row the panel does not plot, the same line says the row is *not
+fully split* and that the table below carries every row the study published
+for the gene. The rest of its key is folded under *How to read this chart*:
+what each mark means — filled and hollow markers, hatched bars, arrows, muted
+and `union`-tagged rows — each only where the panel draws one, and why there
+is no summary diamond, ending with a link, *How to read rare-variant results*,
+to [`methods.html#rare-variants`](#methodshtml), which states the key in
+general.
 
 The developmental expression section, last on the page, opens with one visible
 line: "Every measurement below is from whole, bulk tissue: a low or absent
@@ -1556,11 +1556,13 @@ are not comparable across organs or developmental stages — and defines τ and
 the developmental phases each stage names. Each chart — a phase-banded
 trajectory per cardiac organ where one can be drawn, and the organ small
 multiples — shows one line of its caption: its axes, in stage order rather than
-elapsed time, and the range of its abundance axis. The rest of its key is
-folded under *How to read this chart*, ending with a link, *How to read
-expression figures*, to `methods.html#expression`. Under a trajectory the fold
-always names the shaded phases and their source; what a tick on the axis means,
-and why the line breaks where this dataset has no row for the organ, it adds
+elapsed time, and the range of its abundance axis. Under a trajectory that ticks
+a stage below the dataset's detection floor, the same line says what the ticks
+mark, with the floor's value. The rest of its key is folded under *How to read
+this chart*, ending with a link, *How to read expression figures*, to
+`methods.html#expression`. Under a trajectory the fold always names the shaded
+phases and their source; why the line breaks where this dataset has no row for
+the organ, and what a tick means for any reason other than the floor, it adds
 only where the figure shows one. Under the small multiples it always says why
 the panels share one axis, which organ is drawn heavier as this atlas's
 declared cardiac tissue (or, where this dataset placed nothing there, that no

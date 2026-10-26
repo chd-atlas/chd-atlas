@@ -2237,6 +2237,18 @@ def test_every_particular_caveat_survives_outside_the_fold(
     same day: the card's no-correction line also carries "138,609" ("judge its
     results against its scan of 138,609 tests"), so the bare number would pass
     with the method line folded away.
+
+    **Two chart caveats joined the list on the owner's decision of 2026-10-26
+    (E1)**, each particular to its figure and each folded under "How to read
+    this chart" until then: a forest panel's warning that a `union`-tagged
+    row is not fully split (10 panels on 10 pages, measured on a build of
+    3b766ba), and the trajectory's note that its ticks are stages below the
+    detection floor (32 of 112 trajectories). Each is required outside every
+    fold, once, where it fires -- the `all cases` row below has its syndromic
+    half drawn and no non-syndromic one, and the heart series has a stage
+    below the floor -- and absent from the whole page where it does not, so a
+    clause moved back into the toggle fails the first half and one rendered
+    unconditionally fails the second.
     """
     rows = [
         _burden_row(consequence_class="lof"),
@@ -2247,13 +2259,37 @@ def test_every_particular_caveat_survives_outside_the_fold(
             method_note="Cases include 777 sporadic thoracic aortic aneurysm probands.",
         ),
     ]
+    publications = {_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS}
     page = _burden_page(
         tmp_path,
         facts_uncurated,
-        rows,
-        publications={_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS},
+        [*rows, _burden_row(cohort_stratum="all", consequence_class="lof")],
+        publications=publications,
     )
     unfolded = re.sub(r"<details.*?</details>", "", page, flags=re.S)
+    split = "A row tagged <strong>union</strong> here is <strong>not fully split</strong>"
+    assert split in unfolded
+    assert page.count("not fully split") == 1, "the split warning is on the page twice"
+    # The same studies with every tagged row fully split -- here, no union at all.
+    whole = _burden_page(tmp_path / "split", facts_uncurated, rows, publications=publications)
+    assert "not fully split" not in whole
+
+    # The trajectory's floor note, against a heart series with and without a
+    # stage below the floor.
+    def trajectory(*stages: tuple[str, float | None], into: str) -> str:
+        return _expression_page(
+            tmp_path / into,
+            {GATA4: _heart_series(*stages)},
+            _HEART_DATASET,
+            phases=_cardiac_phases(),
+        )
+
+    ticks = "Ticks on the axis mark stages below this dataset's detection floor (1 tpm)"
+    below = trajectory(("4wpc", 5.0), ("5wpc", None), ("6wpc", 40.0), into="below")
+    assert ticks in re.sub(r"<details.*?</details>", "", below, flags=re.S)
+    assert below.count("Ticks on the axis") == 1, "the floor note is on the page twice"
+    above = trajectory(("4wpc", 5.0), ("5wpc", 12.0), ("6wpc", 40.0), into="above")
+    assert "Ticks on the axis" not in above
 
     # The atlas's claim about itself.
     assert "computes none of them" in unfolded
@@ -3106,7 +3142,7 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
 
     # PMID:40127276 sorts first and `enrichment_ratio` before `odds_ratio`.
     consequence_short, stratum_short, complete = _forest_figures(section)
-    warning = "a tagged row is <strong>not fully split</strong>"
+    warning = "here is <strong>not fully split</strong>"
     assert warning in consequence_short
     assert warning in stratum_short
     assert warning not in complete
@@ -3558,11 +3594,11 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     The key was one `<figcaption>` of up to twelve sentences under every panel
     -- 185 panels on 114 pages, measured on a build of 9f24190. The axis clause
     (the measure, its range, and what 1 means for that measure) stays in sight
-    and every other clause folds. Most of them describe a mark in words that
-    are the same wherever that mark is drawn; the not-fully-split clause does
-    not -- it warns about this panel -- and folds too, as the D57 spec places
-    it (10 panels on 10 pages, measured 2026-10-26). This docstring said the
-    axis clause alone was particular to its panel until then. **Each clause
+    and every other clause folds but one. Most of them describe a mark in
+    words that are the same wherever that mark is drawn; the not-fully-split
+    clause does not -- it warns about this panel. It folded too, as the D57
+    spec placed it (10 panels on 10 pages, measured 2026-10-26), and the owner
+    moved it to the visible line the same day (E1). **Each clause
     keeps its condition**: the tests above that assert a clause renders only
     beside its mark slice the figure, which contains the toggle, so they hold
     unchanged; this one asserts where the clauses sit.
@@ -3647,9 +3683,14 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         '<details class="chart-notes"><summary>How to read this chart</summary>'
     )
     assert toggle, "the forest key is not folded behind a toggle"
+    # The not-fully-split warning is on the visible line since the owner's
+    # decision of 2026-10-26 (E1): it is particular to this panel.
     assert visible == (
         "<p>Axis: <strong>OR</strong> on a logarithmic scale, 0.562 to 50; the vertical "
-        "line is <strong>1</strong>, no association.</p>"
+        "line is <strong>1</strong>, no association. A row tagged <strong>union</strong> "
+        "here is <strong>not fully split</strong>: at least one of the rows it contains is "
+        "not plotted; the table below carries every row this study published for this "
+        "gene.</p>"
     )
     assert folded == (
         "<p>A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
@@ -3672,10 +3713,6 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         "and is not an independent finding: <code>damaging</code> is the loss-of-function "
         "and damaging-missense rows together; <code>all cases</code> is the syndromic and "
         "non-syndromic rows together. "
-        "Here a tagged row is <strong>not fully split</strong>: at least one of the rows it "
-        "contains is not itself plotted, so what sits under a union on this panel is part of "
-        "it and not all of it. The table below carries every row this study published for "
-        "this gene. "
         "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
         "rows, its negative control, drawn apart from the results it calibrates.</p>"
         '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
@@ -5068,7 +5105,8 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
             )
         )
 
-    tick = "the stage is ticked on the axis instead"
+    # The floor clause's words since E1 (2026-10-26), on the visible line.
+    tick = "Ticks on the axis mark stages below this dataset's detection floor"
     no_row = "no row for this organ at that stage"
 
     # Ticked and unbroken: the floor clause, and nothing about a missing row.
@@ -5082,9 +5120,9 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     assert tick not in unsampled
     assert no_row in unsampled
     # And it does not point back at a clause this figure does not carry.
-    # "A break with no tick under it is different again" beside no tick at
-    # all is the same defect one sentence further on.
-    assert "different again" not in unsampled
+    # "A break with no tick under it is different" beside no tick at all is
+    # the same defect one sentence further on.
+    assert "is different:" not in unsampled
 
     # Both causes at once -- the caption owes a reader both sentences.
     both = caption(
@@ -5097,7 +5135,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     )
     assert tick in both
     assert no_row in both
-    assert "different again" in both
+    assert "is different:" in both
 
     # Neither: an unbroken, fully placed series says nothing about either.
     clean = caption(("4wpc", 5.0), ("5wpc", 40.0), ("6wpc", 275.0))
@@ -5115,7 +5153,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # stage table below, from the same map and deliberately so, and answers a
     # section-wide check on it whatever the caption said.
     caption_only = _band_caption_text(grid)
-    assert "Below this dataset's detection floor" not in caption_only
+    assert tick not in caption_only
     assert "no complete percentile grid is published for this organ at this stage" in caption_only
     # And the mark is still accounted for rather than left on the axis with
     # nothing said about it, which is the defect the floor clause was written
@@ -5126,7 +5164,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # value on it. Measured: KIF20A's axis starts at 42 tpm against a 1 tpm
     # floor, so its 6 ticks sat where the axis reads 38.6 tpm; the words are
     # what stop a reader interpolating them.
-    assert "below the foot of the scale, not at a value on it" in ticked
+    assert "beneath the foot of the scale rather than at a value on it" in ticked
 
 
 def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> None:
@@ -5148,10 +5186,15 @@ def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> 
 
     The fixture is the one that earns every clause the floor allows at once: a
     below-floor stage between two placed ones (the floor clause) and a stage
-    with no heart row (the no-row clause). **The no-row clause is pinned after
-    the floor clause, in one paragraph**, because its first spelling --
-    "different again" -- contrasts itself with the floor clause, and split
-    from it, or set before it, the contrast points at nothing.
+    with no heart row (the no-row clause).
+
+    **The floor clause is on the visible line since the owner's decision of
+    2026-10-26 (E1)**, in a short form, because it is particular to this gene;
+    `test_every_particular_caveat_survives_outside_the_fold` requires it there
+    where it fires and nowhere where it does not. The no-row clause stays
+    folded, and its first spelling reads "different" rather than "different
+    again": the clause it contrasts with is now the line above the toggle, not
+    the sentence before it in the same paragraph.
 
     Pinned whole, both halves, as literals.
     """
@@ -5185,19 +5228,18 @@ def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> 
         "curated developmental order, evenly spaced &mdash; the axis is <strong>order, not "
         "elapsed time</strong>. Vertical: median abundance in whole heart, tpm, on a log "
         "scale; the axis runs 5 to 275 and is fitted to <strong>this gene</strong>, so a "
-        "curve's height compares nothing to another gene's.</p>"
+        "curve's height compares nothing to another gene's. Ticks on the axis mark stages "
+        "below this dataset's detection floor (1 tpm), beneath the foot of the scale rather "
+        "than at a value on it.</p>"
     )
     assert folded == (
-        '<p class="method">Below this dataset\'s detection floor (1 tpm) no percentile is '
-        "published and the stage is ticked on the axis instead &mdash; below the foot of the "
-        "scale, not at a value on it. A break in the line with no tick under it is different "
-        "again: this dataset has <strong>no row for this organ at that stage</strong>, so "
-        "there is no measurement to place, low or otherwise. Shaded: Atrial septum "
-        "morphogenesis (Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)).</p>"
+        '<p class="method">A break in the line with no tick under it is different: this '
+        "dataset has <strong>no row for this organ at that stage</strong>, so there is no "
+        "measurement to place, low or otherwise. Shaded: Atrial septum morphogenesis "
+        "(Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)).</p>"
         '<p class="method"><a href="../methods.html#expression">How to read expression '
         "figures</a></p></details>"
     )
-    assert folded.index("ticked on the axis") < folded.index("different again")
 
 
 def test_the_line_never_spans_a_stage_the_atlas_did_not_place(tmp_path: Path) -> None:
