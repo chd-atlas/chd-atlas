@@ -338,6 +338,18 @@ def _render(
         )
     )
 
+    # The sentence after Orphanet's names every other source `sources.json`
+    # records as `permitted_with_attribution` (owner decision 2026-10-26, R10:
+    # one hand-written sentence, not a generated list): Mondo's mappings
+    # (`mondo_sssom`, CC-BY-4.0), the Expression Atlas (`expression_atlas_
+    # e_mtab_6814`, EMBL-EBI Terms of Use, not CC BY) and the two CC-BY-4.0
+    # rare-variant supplements (`audain2026_sd3`, `sierant2025_ds6`). The
+    # owner's draft said the rare-variant results come "from the supplements of
+    # the studies cited, under CC BY 4.0": Audain et al. 2021's S6 Table is
+    # CC0-1.0 (`audain2021_s6`), so it is named apart. A hand-written sentence
+    # can drift, so `test_the_front_page_names_every_source_that_requires_
+    # attribution` fails the day `sources.json` gains one it does not name.
+    #
     # "Where this data comes from" named Orphanet zero times until 2026-10-26,
     # while the syndromes its frequencies bring into scope are the only route in
     # for some published genes (26 of 119 drop when those terms are removed,
@@ -401,6 +413,11 @@ def _render(
     to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
     Free access data from Orphanet. &copy; INSERM 1999. Available on
     <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY 4.0;
+    developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
+    (experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results are
+    taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both CC BY
+    4.0, and of Audain et al. 2021, CC0.
     <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
     date or a checksum, and carries the licence and attribution terms each of these is
     mirrored under.</p>

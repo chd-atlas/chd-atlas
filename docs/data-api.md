@@ -257,7 +257,9 @@ the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 carrying rare-variant evidence, and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
-than written by hand. It links to
+than written by hand. Its *Where this data comes from* names every source
+[`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
+the licence where it is CC BY. It links to
 `genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
 [`methods.html`](#methodshtml) (from the navigation bar every page shares) and
 the repository. Self-contained: no external request, no build timestamp,

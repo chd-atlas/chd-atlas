@@ -966,6 +966,14 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
         "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
         "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
         'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        # Every other attribution-required source, in one hand-written sentence
+        # (owner decision 2026-10-26, R10); `test_built_site_is_consumable.py`
+        # holds the set it names to `sources.json`.
+        "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY "
+        "4.0; developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s "
+        "(experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results "
+        "are taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both "
+        "CC BY 4.0, and of Audain et al. 2021, CC0. "
         '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
         "a date or a checksum, and carries the licence and attribution terms each of these is "
         "mirrored under.</p>"

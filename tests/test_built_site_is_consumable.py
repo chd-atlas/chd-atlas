@@ -1287,6 +1287,54 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
     ) in landing
 
 
+# Per source `sources.json` records as `permitted_with_attribution`, a phrase
+# the front page must carry: its name, and its licence where that is CC BY.
+_ATTRIBUTED_ON_THE_FRONT_PAGE: dict[str, str] = {
+    "hpo": "Human Phenotype Ontology",
+    "orphanet_product1": "mirrored under CC BY 4.0 — Orphadata Science",
+    "orphanet_product4": "mirrored under CC BY 4.0 — Orphadata Science",
+    "mondo_sssom": "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored "
+    "under CC BY 4.0",
+    "expression_atlas_e_mtab_6814": "EMBL-EBI Expression Atlas's (experiment E-MTAB-6814), "
+    "under EMBL-EBI's Terms of Use",
+    "audain2026_sd3": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
+    "sierant2025_ds6": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
+}
+
+
+def test_the_front_page_names_every_source_that_requires_attribution(site: Path) -> None:
+    """The attribution sentence is hand-written, so it is held to `sources.json` (R10).
+
+    Owner decision 2026-10-26: "Where this data comes from" named ClinGen,
+    GenCC, HPO and Orphanet, and not Mondo, the Expression Atlas or the CC BY
+    rare-variant supplements, all of which `sources.json` records as
+    `permitted_with_attribution`. One hand-written sentence now names them.
+    The set of attribution-required sources must equal the keys pinned above,
+    so a source added to `mirrors/sources.yaml` with that term fails here until
+    the page names it and a phrase is pinned; each phrase must be on the page,
+    with the licence where it is CC BY. Measured on a real build the day it was
+    written: 7 such sources.
+    """
+    sources = json.loads((site / "sources.json").read_text(encoding="utf-8"))["sources"]
+    required = {
+        source["id"]
+        for source in sources
+        if source["redistribution"] == "permitted_with_attribution"
+    }
+    assert required == set(_ATTRIBUTED_ON_THE_FRONT_PAGE), (
+        "sources.json's attribution-required sources changed; name each on index.html "
+        f"and pin a phrase here: {sorted(required ^ set(_ATTRIBUTED_ON_THE_FRONT_PAGE))}"
+    )
+    licences = {source["id"]: source["licence"] for source in sources}
+    page = (site / "index.html").read_text(encoding="utf-8")
+    where = page[page.index("<h2>Where this data comes from</h2>") :]
+    where = " ".join(html.unescape(re.sub(r"<[^>]+>", "", where[: where.index("<h2", 4)])).split())
+    for source, phrase in sorted(_ATTRIBUTED_ON_THE_FRONT_PAGE.items()):
+        assert phrase in where, f"{source}: {phrase!r} is not on the front page"
+        if licences[source] == "CC-BY-4.0":
+            assert "CC BY 4.0" in phrase, source
+
+
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
     """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".
 
