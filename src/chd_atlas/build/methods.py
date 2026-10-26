@@ -290,11 +290,17 @@ _RARE_VARIANTS: Final = (
     # are the sum of the other two's and its controls are theirs. Stated in
     # general, so it names no study; `test_an_all_cases_row_is_the_union_of_
     # the_case_groups_its_study_splits` holds it to the mirror.
+    #
+    # The last clause said `all cases` was a study's "whole case set" until
+    # review on 2026-10-26: it is not a denominator. PMID:34324492's rows count
+    # 7,107 cases of the 7,958 its own note gives the study, and
+    # PMID:40127276's count 3,887 trios or an allele total against 11,555
+    # probands. What holds of every study is the narrower claim: not a subgroup.
     "<p>Where a study splits its cases into <strong>syndromic</strong> and "
     "<strong>non-syndromic</strong> groups, its <strong>all cases</strong> group is "
     "likewise the union of the two, and an <strong>all cases</strong> row is not a result "
     "independent of theirs. Where a study does not split its cases, <strong>all "
-    "cases</strong> is its whole case set and its only case group.</p>"
+    "cases</strong> is its only case group: every case the row counts, not a subgroup.</p>"
     # The forest key in general; each panel's own key, conditional clause by
     # clause, is folded under "How to read this chart" (`pages._forest_caption`,
     # D57). Each clause measured against a real build of 9f24190 before it was
@@ -316,15 +322,18 @@ _RARE_VARIANTS: Final = (
     # `concordance.survives_own_correction` for every row but a synonymous one
     # (`pages._survived_correction`): a depleted row that cleared its
     # correction is drawn hollow, and "did not" survive would be false of it.
-    # 0 published rows are in that state (measured that day).
+    # 0 published rows are in that state (measured that day). "Non-synonymous"
+    # since review the same day: a synonymous row that survived its correction is
+    # drawn filled and muted (`pages._mark_class`), never hollow -- latent, as no
+    # mirrored synonymous row carries a corrected p.
     "<p>A forest plot shows each row's effect and interval on a logarithmic axis. A "
     "<strong>filled</strong> marker is a row that survived its own study's correction for "
     "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
     "study published no correction at all &mdash; the atlas computes none of its own. A "
-    "row that survived its correction without pointing to enrichment in cases is drawn "
-    "hollow too: it is not evidence for the gene. A forest plot usually ends in a "
-    "summary diamond; this atlas's have none, because no "
-    "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
+    "non-synonymous row that survived its correction without pointing to enrichment in "
+    "cases is drawn hollow too: it is not evidence for the gene. A forest plot usually "
+    "ends in a summary diamond; this atlas's have none, because no pooled estimate is "
+    "computed anywhere on this site. A <strong>hatched</strong> bar "
     "means no interval was published for that row, not a wide one. An arrow to the "
     "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
     "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "

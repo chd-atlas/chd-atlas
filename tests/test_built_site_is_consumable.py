@@ -1143,7 +1143,7 @@ def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list
             label = html.escape(term["label"])
             assert note.startswith(f"<strong>{label} is in scope because"), (entry["gene"], note)
             assert note.endswith(
-                f"The classifications below for {label} are for the syndrome as a whole, "
+                f"The classifications below for {label} are for that disease as a whole, "
                 "not for heart disease."
             ), (entry["gene"], note)
             warrant = term["orphanet"]

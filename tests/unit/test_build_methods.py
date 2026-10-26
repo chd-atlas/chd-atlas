@@ -487,6 +487,14 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     a depleted row that cleared its correction is drawn hollow, and "a hollow
     marker is a row that did not" survive is false of it. Latent: 0 published
     rows are in that state.
+
+    **Two clauses narrowed after a later review (2026-10-26).** That sentence
+    said "a row", and a synonymous row that survived its correction is drawn
+    filled and muted, not hollow, so it says "a non-synonymous row". And the
+    case-group paragraph called an unsplit study's `all cases` its "whole case
+    set", a denominator equivalence no study's rows bear out (PMID:34324492's
+    count 7,107 of its 7,958 cases); it now says only that the group is not a
+    subgroup, and the old phrase is asserted absent.
     """
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
@@ -521,15 +529,15 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "<strong>non-syndromic</strong> groups, its <strong>all cases</strong> group is "
         "likewise the union of the two, and an <strong>all cases</strong> row is not a result "
         "independent of theirs. Where a study does not split its cases, <strong>all "
-        "cases</strong> is its whole case set and its only case group.",
+        "cases</strong> is its only case group: every case the row counts, not a subgroup.",
         "A forest plot shows each row's effect and interval on a logarithmic axis. A "
         "<strong>filled</strong> marker is a row that survived its own study's correction for "
         "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
         "study published no correction at all &mdash; the atlas computes none of its own. A "
-        "row that survived its correction without pointing to enrichment in cases is drawn "
-        "hollow too: it is not evidence for the gene. A forest plot usually ends in a "
-        "summary diamond; this atlas's have none, because no "
-        "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
+        "non-synonymous row that survived its correction without pointing to enrichment in "
+        "cases is drawn hollow too: it is not evidence for the gene. A forest plot usually "
+        "ends in a summary diamond; this atlas's have none, because no pooled estimate is "
+        "computed anywhere on this site. A <strong>hatched</strong> bar "
         "means no interval was published for that row, not a wide one. An arrow to the "
         "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
         "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
@@ -554,8 +562,8 @@ def test_an_all_cases_row_is_the_union_of_the_case_groups_its_study_splits(
     """`#rare-variants`'s case-group sentence, held to the mirror it generalises.
 
     It says, of every study, that `all cases` is the union of `syndromic` and
-    `non-syndromic` where the study splits its cases, and the whole case set and
-    only case group where it does not. Measured on the committed mirror
+    `non-syndromic` where the study splits its cases, and its only case group --
+    not a subgroup -- where it does not. Measured on the committed mirror
     (2026-10-26): all three studies publish `all`; only PMID:42230622 splits,
     into 1,471 syndromic and 2,405 non-syndromic cases; and on all 470 cells
     where it publishes all three strata, the `all` row's cases and carriers are
@@ -711,6 +719,10 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         "the same children",
         # True of one study, stated in general (2026-10-26).
         "uncorrected scale",
+        # `all cases` is not a study's denominator (2026-10-26): PMID:34324492's
+        # rows count 7,107 of its 7,958 cases, PMID:40127276's 3,887 trios or an
+        # allele total against 11,555 probands.
+        "whole case set",
         # The forest key's own deictics: no panel and no study is in sight here,
         # so its clauses are restated in general, never pasted (D57).
         "in this panel",

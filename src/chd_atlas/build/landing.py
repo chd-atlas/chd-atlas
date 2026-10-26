@@ -356,8 +356,9 @@ def _render(
     to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
     Free access data from Orphanet. &copy; INSERM 1999. Available on
     <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
-    <a href="sources.json">sources.json</a> identifies each release by version or checksum,
-    and carries the licence and attribution terms each of these is mirrored under.</p>
+    <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
+    date or a checksum, and carries the licence and attribution terms each of these is
+    mirrored under.</p>
   <dl>
     <dt>{_MIRRORED_ROW_LABEL}</dt>
     <dd>{mirrored_gene_count}</dd>

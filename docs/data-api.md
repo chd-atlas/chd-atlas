@@ -298,10 +298,10 @@ page can link the paragraph it shortens.
   absent row does not mean, the synonymous negative control, what a
   damaging composite row is, that a study's `all cases` group is the union of
   its syndromic and non-syndromic groups where it splits its cases (and its
-  whole case set where it does not), what each mark on a forest plot means, and
-  what a study block with no effect measure shows instead of a plot. A gene page
-  keeps one-line forms of the first two and links here, and each forest plot's
-  folded key ends with a link here.
+  only case group, not a subgroup, where it does not), what each mark on a
+  forest plot means, and what a study block with no effect measure shows
+  instead of a plot. A gene page keeps one-line forms of the first two and
+  links here, and each forest plot's folded key ends with a link here.
 - `#cohorts` lists every sample collection a rare-variant row names, sorted by
   id: its name, id, description and public page where it has one — the same
   records as [`cohorts.json`](#cohortsjson). It says too that a row may not name

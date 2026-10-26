@@ -6047,6 +6047,11 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     scoped by an authority, below two Noonan notes. The subtype's literal now
     runs to the end of its note, so a note that names the wrong one of its two
     diseases (the syndrome its warrant is inherited from) fails too.
+
+    **It ends on "that disease as a whole"**, not "the syndrome as a whole"
+    (review, 2026-10-26): in a subtype's note the sentence before names the
+    parent -- "of cases of Noonan syndrome, the syndrome it is a subtype of" --
+    so "the syndrome" had the parent as its nearest antecedent. Asserted absent.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -6081,20 +6086,23 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
         "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of its cases</strong>: Abnormal pulmonary valve "
         "morphology at <em>Frequent (79-30%)</em> (Orphanet, ORPHA:648). The classifications "
-        "below for Noonan syndrome are for the syndrome as a whole, not for heart disease."
+        "below for Noonan syndrome are for that disease as a whole, not for heart disease."
     )
     subtype = (
         "<strong>Noonan syndrome 4 is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of cases of Noonan syndrome</strong>, the syndrome it "
         "is a subtype of (Orphanet maps OMIM:610733 under ORPHA:648): Abnormal pulmonary "
         "valve morphology at <em>Frequent (79-30%)</em>. The classifications below for "
-        "Noonan syndrome 4 are for the syndrome as a whole, not for heart disease."
+        "Noonan syndrome 4 are for that disease as a whole, not for heart disease."
     )
     assert direct in section and subtype in section
     # Each note names its own disease, because the table below it is not only
     # that syndrome's: Holt-Oram syndrome's record sits under both notes here,
     # as NOTCH1-related AOS spectrum disorder's does under NOTCH1's.
     assert "The classifications below are for the syndrome" not in section
+    # And it ends on "that disease": after a subtype's "the syndrome it is a
+    # subtype of", "the syndrome as a whole" reads as the parent's.
+    assert "for the syndrome as a whole" not in section
     # Sorted by disease id: MONDO:0012547 before MONDO:0018997.
     assert section.index(subtype) < section.index(direct)
     # Above both groups, not under either.

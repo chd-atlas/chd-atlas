@@ -1289,3 +1289,11 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     methods = _text_of((site / "methods.html").read_text())
     assert "a flag on the gene, not on a disease" in methods
     assert "Both are flags on the gene, not on a disease" in doc
+    # An unsplit study's `all cases` is not its whole case set: PMID:34324492's
+    # rows count 7,107 of its 7,958 cases. The doc restated `#rare-variants`'
+    # retired "whole case set" until review on 2026-10-26.
+    assert "all cases is its only case group: every case the row counts, not a subgroup" in (
+        methods
+    )
+    assert "only case group, not a subgroup, where it does not" in doc
+    assert "whole case set" not in doc

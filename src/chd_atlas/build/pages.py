@@ -197,9 +197,13 @@ _SCOPE_SHORT: Final = (
 #   admitted on agreement carry a ClinGen record for a disease out of scope,
 #   measured 2026-10-26 against `mirrors/clingen_gene_validity.tsv`. Those
 #   records reach no page, so the page could not even show the reader the
-#   record that contradicted it. The scope clause is the grade key's `ungraded`
-#   gloss's (`render.GRADE_GLOSS`, on `methods.html#scope`) and the gene
-#   index's em-dash sentence's, word for word, so the three describe one gate.
+#   record that contradicted it. The scope clause -- "for any of the diseases
+#   in scope here" -- is the grade key's `ungraded` gloss's (`render.GRADE_GLOSS`,
+#   on `methods.html#scope`) and the gene index's em-dash sentence's, word for
+#   word, so the three scope the claim alike. Only that clause is shared: the
+#   rest of each sentence is its own (this one says the submitters
+#   "independently assert it", the gloss that they "classify it Limited or
+#   better").
 # * **"In scope here" names the list, not a property of a disease.** The clause
 #   read "for a disease an external authority treats as congenital heart
 #   disease, or in which Orphanet records a structural heart malformation in at
@@ -1532,6 +1536,13 @@ def _orphanet_notes(
     valve beneath its two Adams-Oliver notes. "The classifications below for
     Adams-Oliver syndrome" is true above that table; "the classifications
     below" was not.
+
+    **And it ends on "that disease", not "the syndrome"** (review, the same
+    day). A subtype's note names its parent syndrome in the sentence before --
+    "... of cases of Noonan syndrome, the syndrome it is a subtype of" -- so
+    "for Noonan syndrome 4 are for the syndrome as a whole" had the parent as
+    its nearest antecedent, and read as saying the subtype's grades are the
+    parent's.
     """
     diseases = sorted({record.disease for record in gene_validity.records} & set(warrants))
     notes = []
@@ -1557,7 +1568,7 @@ def _orphanet_notes(
             )
         notes.append(
             f'<p class="notice-inline">{claim} The classifications below for {label} are for '
-            "the syndrome as a whole, not for heart disease.</p>"
+            "that disease as a whole, not for heart disease.</p>"
         )
     return "".join(notes)
 
@@ -2745,11 +2756,12 @@ def _mark_class(row: BurdenRow, glyph: str) -> str:
     A synonymous row that *does* survive is drawn muted rather than in the
     result colour, because it is the study's own negative control and a
     surviving one is a warning about the comparison rather than a finding
-    (`methods.html#rare-variants` says the rest). No published row is in that state
-    today -- all 261 published synonymous rows come from the study that
-    publishes no correction -- so the branch is exercised by its test rather
-    than by the corpus. Hollowness is what may not be traded away here: it
-    carries the correction, which the muted colour does not.
+    (`methods.html#rare-variants` says the rest). No published row was in that
+    state when measured on 2026-10-26 -- every mirrored synonymous row then came
+    from PMID:42230622, which publishes no correction -- so the branch is
+    exercised by its test rather than by the corpus. Hollowness is what may not
+    be traded away here: it carries the correction, which the muted colour does
+    not.
     """
     if not _survived_correction(row):
         return f"chart-{glyph}-open"
