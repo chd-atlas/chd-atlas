@@ -1454,6 +1454,18 @@ def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
     `_repeats_the_panel` decides which of ClinGen's own GenCC copies are
     listed. Measured on a real build 2026-10-25: 591 records, 121 copies folded,
     470 rows rendered.
+
+    **The intro states the table's own truth condition (2026-10-26, D50).** The
+    grade key's last sentence -- a gene page lists only records for diseases in
+    this atlas's remit -- left the page with the key for `methods.html#scope`,
+    and it is a fact about *this* table, so a short form of it now sits where
+    the table is, linking `methods.html#validity` for how the records are
+    listed. Both groups are filtered, not only ClinGen's: `gene_validity` drops
+    an out-of-scope row from either mirror before a gene is keyed. It says the
+    table **may not** be every classification the gene has, not that it is
+    not: measured 2026-10-26 against the committed mirrors, 43 of the 119
+    published genes have no ClinGen or GenCC record for any disease outside
+    scope, so "is not" would be false on 43 pages.
     """
     panel = [r for r in gene_validity.records if r.source is ValiditySource.CLINGEN]
     submitted = [r for r in gene_validity.records if r.source is ValiditySource.GENCC]
@@ -1465,7 +1477,9 @@ def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
     return (
         "<h2>Mirrored gene&ndash;disease validity</h2>"
         "<p>Every classification below is an upstream panel's or submitter's, "
-        "republished with its provenance intact.</p>"
+        "republished with its provenance intact. Only records for diseases in this "
+        "atlas&#x27;s remit are listed, so this may not be every classification this gene "
+        'has (<a href="../methods.html#validity">how these records are listed</a>).</p>'
         + notes
         + "<h3>Expert panel (ClinGen)</h3>"
         + (data_table(_VALIDITY_HEADERS, panel_rows) if panel_rows else _NO_PANEL_RECORD)

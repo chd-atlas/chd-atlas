@@ -390,6 +390,10 @@ def test_a_non_http_report_url_never_becomes_a_link(
     Measured 2026-08-04 with the guard removed (`Link(text="open", href=url) if
     url else _EM_DASH`): 3 failed, 619 passed -- one failure per case here, and
     no other test in the suite noticed.
+
+    Since 2026-10-26 (D50) the section's intro links `methods.html#validity`,
+    so "no anchor in the section" can no longer pass; the check reads the two
+    authority groups, from the first `<h3>` on, which is where every row is.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -404,8 +408,10 @@ def test_a_non_http_report_url_never_becomes_a_link(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert "<a href=" not in _validity_table(page)
-    assert "<td>SOP11</td>" in _validity_table(page)
+    section = _validity_table(page)
+    groups = section[section.index("<h3>") :]
+    assert "<a href=" not in groups
+    assert "<td>SOP11</td>" in groups
     assert report_url.strip() not in page
 
 
@@ -5831,6 +5837,17 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     raw -- ClinGen's `AD` against GenCC's phrase, an ISO timestamp against a
     space-separated one -- so each raw surface the old table exposed is pinned
     by at least one assertion.
+
+    **The intro states the table's own truth condition since 2026-10-26 (D50).**
+    The grade key said "a gene page lists only records for diseases in this
+    atlas's remit", and the key left the page for `methods.html#scope`; so the
+    intro now says it where the table is, and links `methods.html#validity`
+    for how the records are listed. Pinned whole, sliced from the heading to
+    the first group: nothing else sits there on a gene with no Orphanet note.
+    It says the table **may not** be every classification the gene has, not
+    that it is not: measured 2026-10-26 against the committed mirrors, 43 of
+    the 119 published genes have no ClinGen or GenCC record for any disease
+    outside scope, so "is not" was false on 43 pages.
     """
     panel = replace(_validity().records[0], classification_date="2024-11-07T17:00:00.000Z")
     submission = ValidityRecord(
@@ -5878,9 +5895,12 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     assert "<td>2018-05-31</td>" in section and "20:04:32" not in section
     intro = (
         "<p>Every classification below is an upstream panel's or submitter's, "
-        "republished with its provenance intact.</p>"
+        "republished with its provenance intact. Only records for diseases in this "
+        "atlas&#x27;s remit are listed, so this may not be every classification this gene "
+        'has (<a href="../methods.html#validity">how these records are listed</a>).</p>'
     )
-    assert intro in section
+    head = section[: section.index("<h3>")]
+    assert head == "<h2>Mirrored gene&ndash;disease validity</h2>" + intro
     # "below" is true only above both groups.
     assert section.index(intro) < section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.count("<td>Autosomal dominant</td>") == 2

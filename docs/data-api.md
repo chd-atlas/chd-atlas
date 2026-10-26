@@ -260,6 +260,10 @@ page can link the paragraph it shortens.
   the grade key: what each rung means, glossed from ClinGen's Gene-Disease
   Validity SOP, and where a disputed or refuted record is listed. The gene index
   and every gene page carry a one-line short form of the rule that links here.
+- `#validity` says how a gene page lists the mirrored validity records: in two
+  groups, which of ClinGen's own GenCC copies are listed, and that a record for
+  a disease outside this atlas's remit is not shown. Every gene page's validity
+  table opens with a one-sentence short form of that last point and links here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1359,7 +1363,12 @@ the date as
 with its SOP for a ClinGen record. ClinGen also submits its classifications to
 GenCC; the page lists such a copy only where its mapped grade, date, inheritance or
 disease differs from the panel's own record, or where it carries no date or has
-no panel record to match. The bundle keeps every record. A curated gene's page
+no panel record to match. The bundle keeps every record. The table's intro says
+that only records for in-scope diseases are listed, so the table may not be every
+classification the gene has — "may not", because many published genes have no
+ClinGen or GenCC record for any other disease — and links
+[`methods.html#validity`](#methodshtml). Neither the page nor the bundle carries
+a record for a disease outside scope. A curated gene's page
 follows it with the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites.
 

@@ -30,10 +30,15 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> str:
 
 
 def _section(page: str, anchor: str) -> str:
-    """One section: from its `<h2 id=...>` to the next `<h2`, or the end of the page."""
+    """One section: from its `<h2 id=...>` to the next `<h2`, or to `</main>`.
+
+    `</main>` rather than the end of the page (2026-10-26), so the last section
+    can be pinned whole without the shell's closing tags -- or the newline the
+    shell puts before them -- in its literal.
+    """
     start = page.index(f'<h2 id="{anchor}">')
-    end = page.find("<h2", start + 1)
-    return page[start:] if end == -1 else page[start:end]
+    ends = [i for i in (page.find("<h2", start + 1), page.find("</main>", start)) if i != -1]
+    return (page[start : min(ends)] if ends else page[start:]).rstrip("\n")
 
 
 def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
@@ -218,6 +223,47 @@ def test_scope_states_where_a_dispute_is_listed_without_pointing_below(page: str
     )
 
 
+def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
+    """How the validity table is listed, in full; each gene page links it (D50).
+
+    A gene page's validity intro says only records for in-scope diseases are
+    listed, and links here for the rest: the two groups, which of ClinGen's own
+    GenCC copies are listed, and what is not shown at all.
+
+    The copy sentence describes `pages._repeats_the_panel`, read 2026-10-26: a
+    copy is hidden only when a panel record matches it on disease, mapped grade,
+    inheritance (in the page's vocabulary) and calendar date, and a copy with no
+    date matches nothing -- so it is listed where any of the four differs, where
+    it has no date, or where there is no panel record to match.
+
+    **Two clauses differ from the plan's text, each forced by a measurement**
+    (2026-10-26, on the committed mirrors and a real build):
+
+    * "Each gene's JSON keeps every record" read, beside the next paragraph's
+      "that record is not shown", as though the JSON held the out-of-scope
+      records. It holds none: 591 bundle records, 0 for a disease outside
+      scope (`validity.gene_validity` drops them before a gene is keyed). It
+      does hold every copy -- all 121 -- so it now says that.
+    * "so a gene page is not every classification the gene has" was false for
+      43 of the 119 published genes, which have no ClinGen or GenCC record for
+      any disease outside scope. It says "may not be", as the gene page does.
+    """
+    section = _section(page, "validity")
+    assert section == (
+        '<h2 id="validity">Mirrored validity records</h2>'
+        "<p>Every classification in this atlas is an upstream panel's or submitter's, "
+        "republished with its provenance intact. A gene page lists them in two groups: the "
+        "ClinGen expert panel's own records first, then other curators' submissions to the "
+        "Gene Curation Coalition (GenCC). ClinGen also submits its own classifications to "
+        "GenCC; a gene page lists such a copy only where its mapped grade, date, inheritance "
+        "or disease differs from the panel's own record, or where it carries no date or has "
+        "no panel record to match. Each gene's JSON keeps every copy, listed or not.</p>"
+        "<p>Only records for diseases in this atlas's remit are listed. A panel may have "
+        "classified the same gene for a disease outside it, and that record is not shown, so "
+        "a gene page may not be every classification the gene has.</p>"
+    )
+
+
 @pytest.mark.parametrize(
     "retired",
     [
@@ -231,6 +277,9 @@ def test_scope_states_where_a_dispute_is_listed_without_pointing_below(page: str
         "the table below",
         # A one-submitter gate is not the gate (2026-08-06).
         "one or more Gene Curation",
+        # The gene page's copy notice (`pages._CLINGEN_COPY_NOTICE`): "here" and
+        # "the panel record above" name a table this page does not have (D50).
+        "listed here only",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -> None:

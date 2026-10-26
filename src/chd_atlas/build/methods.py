@@ -19,6 +19,12 @@ sentences, and the rung glosses (`render.GRADE_GLOSS`), which stay verbatim on
 purpose because a gene page's card glosses its headline grade from the same
 constant, and one rung must not be glossed two ways.
 
+`#validity` (2026-10-26) is the one section whose gene-page sentences did not
+leave: the ClinGen-copy notice stays on the page as it is (P5), and the table's
+intro keeps a short form of its scope. The section states in full what those
+abbreviate, written for a page with no table on it -- so "a gene page lists",
+never "listed here" or "the panel record above".
+
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
 unique to each, as one label-chip-gloss triple per rung; and the phrases the
@@ -88,6 +94,37 @@ SCOPE_RULE: Final = (
     "its page and in the gene index.</p>"
 )
 
+# How a gene page's validity table is listed (2026-10-26, D50). The page's own
+# intro states the short form -- only in-scope records are listed -- and links
+# here. The copy sentence describes `pages._repeats_the_panel` and is copied
+# from `docs/data-api.md`'s account of it, read against the function that day:
+# a copy is hidden only on a match on disease, mapped grade, inheritance and
+# calendar date, and a copy with no date matches nothing.
+#
+# Two clauses are narrower than the text this was drafted from, each measured
+# 2026-10-26 on the committed mirrors and a real build:
+#
+# * "Each gene's JSON keeps every record" read, beside the next paragraph's
+#   "that record is not shown", as though the JSON held the out-of-scope
+#   records. It holds none -- 591 bundle records, 0 for a disease outside
+#   scope -- and all 121 copies, so it says "every copy".
+# * "a gene page is not every classification the gene has" was false for 43 of
+#   the 119 published genes, which have no ClinGen or GenCC record for any
+#   disease outside scope. "may not be", as the gene page says.
+_VALIDITY: Final = (
+    '<h2 id="validity">Mirrored validity records</h2>'
+    "<p>Every classification in this atlas is an upstream panel's or submitter's, "
+    "republished with its provenance intact. A gene page lists them in two groups: the "
+    "ClinGen expert panel's own records first, then other curators' submissions to the "
+    "Gene Curation Coalition (GenCC). ClinGen also submits its own classifications to "
+    "GenCC; a gene page lists such a copy only where its mapped grade, date, inheritance "
+    "or disease differs from the panel's own record, or where it carries no date or has "
+    "no panel record to match. Each gene's JSON keeps every copy, listed or not.</p>"
+    "<p>Only records for diseases in this atlas's remit are listed. A panel may have "
+    "classified the same gene for a disease outside it, and that record is not shown, so "
+    "a gene page may not be every classification the gene has.</p>"
+)
+
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
@@ -107,6 +144,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         '<h2 id="scope">Which genes are here, and what a classification means</h2>'
         + SCOPE_RULE
         + grade_key()
+        + _VALIDITY
     )
     emitter.write_text(
         METHODS_PAGE,
