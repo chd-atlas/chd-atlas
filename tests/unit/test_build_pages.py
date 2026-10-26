@@ -22,6 +22,7 @@ from chd_atlas.build.pages import (
     _EM_DASH,
     _SCOPE_RULE,
     _analysis_label,
+    _count,
     _date,
     _forest_text,
     _inheritance,
@@ -212,8 +213,9 @@ def _page(root: Path, name: str) -> str:
 def _validity_table(page: str) -> str:
     """The mirrored-validity section alone: both authority groups.
 
-    Ends at the first of the next `<h2>` and the uncurated notice (`<p>The atlas
-    has`) after the start. The Orphanet notes are inside the section, above the
+    Ends at the next `<h2>` after the start. It also ended at the uncurated
+    notice (`<p>The atlas has`) until D55 moved that notice from under this
+    section into the card. The Orphanet notes are inside the section, above the
     first group, so they are not an end marker.
 
     Scoped rather than checked page-wide because the rail's "this gene as JSON"
@@ -223,28 +225,28 @@ def _validity_table(page: str) -> str:
     own rank rather than at the first `</table>`.
     """
     start = page.index("<h2>Mirrored gene&ndash;disease validity</h2>")
-    ends = [
-        found
-        for marker in ("<h2>", "<p>The atlas has")
-        if (found := page.find(marker, start + 1)) != -1
-    ]
-    return page[start : min(ends) if ends else len(page)]
+    end = page.find("<h2>", start + 1)
+    return page[start : end if end != -1 else len(page)]
 
 
 def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
-    """22 of the 23 genes published today. The page must state it.
+    """118 of the 119 genes published today (measured 2026-10-26). The page must state it.
 
     An absent section is indistinguishable from "the atlas looked and found
     nothing", and a reader deciding what a gene means clinically must not have
     to infer which. The mirrored validity table is still present -- that is the
     content the page exists to show.
 
-    Measured: deleting the `_NOT_CURATED` paragraph from `build_gene_pages`
-    fails this test and no other in the suite. The rail's `atlas curation` row
-    does not rescue it -- that renders `AtlasCuration.NOT_YET_CURATED.value`,
-    which is `not_yet_curated` and matches no spelling asserted here.
+    **Re-pointed at the card (D55).** This asserted the main-column paragraph
+    "The atlas has not yet curated a lesion assertion for this gene" until
+    2026-10-26, when the card's curation sentence replaced it; the sentence is
+    now asserted in the card's own element, and the old paragraph is asserted
+    *absent*, so it cannot come back beside the card as a second copy.
+    `test_the_card_says_in_plain_words_what_the_atlas_itself_curated` pins all
+    four branches of the sentence; this one pins that a whole uncurated page
+    carries it once, with the validity table it qualifies.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -259,11 +261,13 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert (
-        "<p>The atlas has <strong>not yet curated</strong> a lesion assertion for this gene. "
-        in page
-    )
-    assert "Holt-Oram syndrome" in page
+    assert re.findall(r'<p class="card-curation">(.*?)</p>', page) == [
+        "Not yet curated by the atlas: every classification on this page is a ClinGen expert "
+        "panel's or a named curator's."
+    ]
+    assert page.index('<p class="card-curation">') < page.index("</aside>")
+    assert "The atlas has <strong>not yet curated</strong> a lesion assertion" not in page
+    assert "Holt-Oram syndrome" in _validity_table(page)
     assert "GATA4" in page
 
 
@@ -310,14 +314,20 @@ def test_a_curated_gene_page_carries_its_evidence_quote_and_pmid(
     assert 'href="https://pubmed.ncbi.nlm.nih.gov/8988165/"' in page
     assert "A nonsense TBX5 mutation was found in affected members." in page
     assert "Mutations in human TBX5 cause limb and cardiac malformation." in page
-    # Scoped to the lesion-assertion axis, like line 399's own check, rather
-    # than the bare phrase: this gene carries no profiles data either (the
-    # call above passes no `profiles=`), so its page also carries the
-    # unrelated "not yet curated a developmental expression profile" notice
-    # -- a second, independent axis legitimately reusing the same template
-    # `_NOT_CURATED` established. A bare page-wide check cannot tell the two
-    # apart; CLAUDE.md section 4.19 is this exact failure shape.
+    # Scoped to the lesion-assertion axis rather than the bare phrase: this
+    # gene carries no profiles data either (the call above passes no
+    # `profiles=`), so its page also carries the unrelated "not yet curated a
+    # developmental expression profile" notice -- a second, independent axis
+    # legitimately reusing the template the lesion-assertion notice
+    # established. A bare page-wide check cannot tell the two apart; CLAUDE.md
+    # section 4.19 is this exact failure shape. The old main-column notice is
+    # refused, and so are the card's two uncurated sentences (D55): a curated
+    # gene's card says what was curated instead.
     assert "not yet curated</strong> a lesion assertion" not in page
+    assert "Not yet curated by the atlas" not in page
+    assert "No lesion assertion yet curated by the atlas" not in page
+    assert "Not curated by the atlas" not in page
+    assert "No lesion assertion curated by the atlas" not in page
     assert 'href="../genes/HGNC_11604.json"' in page
 
 
@@ -402,23 +412,28 @@ def test_a_non_http_report_url_never_becomes_a_link(
 def test_an_uncurated_notice_never_denies_functional_records_the_rail_counts(
     tmp_path: Path,
 ) -> None:
-    """The page must not contradict the column beside it.
+    """The card must not deny the atlas's own work in the sentence that counts it.
 
     `atlas_curation` is `curated` iff `assertion_count > 0` (`derive.gene_facts`),
-    but `_rail` counts `functional_count` from a population that needs no
-    assertion at all, so a gene can carry curated functional records and still be
-    `NOT_YET_CURATED`. The paragraph used to answer that with "not yet curated
-    evidence for this gene ... nothing on this page is the atlas's own
-    assessment", one column away from `functional records | 3`.
+    but functional records come from a population that needs no assertion at
+    all, so a gene can carry curated functional records and still be
+    `NOT_YET_CURATED`. The main-column notice used to answer that with "not yet
+    curated evidence for this gene ... nothing on this page is the atlas's own
+    assessment", one column away from a rail row reading `functional records |
+    3`.
+
+    **Re-pointed at the card (D55), 2026-10-26.** The rail no longer has a
+    `functional records` row and the notice is now the card's curation
+    sentence, so the count and the denial would sit in one sentence: "Not
+    curated by the atlas ... The atlas has curated 3 functional records." What
+    is pinned is the wording that avoids it -- the sentence names the *lesion
+    assertion* as what is absent and counts the records -- and the denials in
+    every form they could come back in, the new one included.
 
     `atlas_curation`'s meaning is deliberately unchanged -- it is tested,
-    documented and published -- so what is pinned here is the wording: the notice
-    names the *lesion assertion* as what is absent, narrows its denial to
-    classifications, and acknowledges the records rather than denying them.
-
-    Latent: the committed corpus has no `curation/functional/` directory, so
-    every published gene counts zero functional records (measured 2026-08-04).
-    Reachable only from this fixture.
+    documented and published. Latent: the committed corpus has no
+    `curation/functional/` directory, so every published gene counts zero
+    functional records (measured 2026-08-04). Reachable only from this fixture.
     """
     facts = {GATA4: _facts(GATA4, AtlasCuration.NOT_YET_CURATED, functional_count=3)}
     emitter = Emitter(root=tmp_path)
@@ -434,12 +449,16 @@ def test_an_uncurated_notice_never_denies_functional_records_the_rail_counts(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    # The rail is counting them; the prose must agree.
-    assert "<dt>functional records</dt><dd>3</dd>" in page
-    assert "not yet curated" in page.lower()
-    assert "not yet curated</strong> a lesion assertion" in page
-    assert "3 functional records" in page
-    # The two sentences that would deny it, in the forms they could come back in.
+    curation = _slice_between(_rail_of(page), '<p class="card-curation">', ("</p>",))
+    # The card counts them, and names the lesion assertion as what is absent.
+    assert curation.startswith("No lesion assertion yet curated by the atlas: ")
+    assert curation.endswith(
+        "The atlas has curated 3 functional records, published in this gene's JSON."
+    )
+    # The sentences that would deny it, in the forms they could come back in:
+    # the card's own unqualified openings, and the two the old notice used.
+    assert "Not yet curated by the atlas" not in page
+    assert "Not curated by the atlas" not in page
     assert "nothing on this page is the atlas's own assessment" not in page
     assert "not yet curated</strong> evidence for this gene" not in page
 
@@ -520,12 +539,24 @@ def test_a_contested_gene_is_never_chipped_as_settled(
             has_source_discordance=discordant,
         )
     }
+    # A flagged gene carries the contested record its flag was derived from:
+    # the card names it, and refuses a flag with no record behind it.
+    validity = _validity()
+    if conflicting:
+        refuted = replace(
+            validity.records[0],
+            classification=Classification.REFUTED,
+            classification_term="Refuted",
+            disease="MONDO:0009026",
+            disease_label="Costello syndrome",
+        )
+        validity = replace(validity, records=(*validity.records, refuted))
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
         facts,
         emitter,
         symbols={GATA4: "GATA4"},
-        validity={GATA4: _validity()},
+        validity={GATA4: validity},
         assertions={},
         publications={},
         burden={},
@@ -956,6 +987,10 @@ def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
     The order is asserted, not only the presence: the disease must come *after*
     the chip and before the rest of the rail's rows, so it is read as qualifying
     the chip rather than as one more fact three rows down.
+
+    **Re-pointed at the card (D55), 2026-10-26.** "The rest of the rail's rows"
+    was the `validity` row, which the card removed; it is now the card's first
+    row, ahead of the gloss and the curation sentence that follow it.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -970,9 +1005,13 @@ def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert "<dt>definitive for</dt><dd>CHARGE syndrome</dd>" in page
-    assert page.index('chip chip-definitive">definitive') < page.index("CHARGE syndrome")
-    assert page.index("CHARGE syndrome") < page.index("<dt>validity</dt>")
+    rail = _rail_of(page)
+    assert _slice_between(rail, "<dl>", ("</dl>",)).startswith(
+        "<dt>definitive for</dt><dd>CHARGE syndrome</dd>"
+    )
+    assert rail.index('chip chip-definitive">definitive') < rail.index("CHARGE syndrome")
+    assert rail.index("CHARGE syndrome") < rail.index('<p class="card-gloss">')
+    assert rail.index("CHARGE syndrome") < rail.index('<p class="card-curation">')
 
 
 def test_every_browse_row_links_to_a_page_that_was_written(
@@ -1733,27 +1772,36 @@ def test_the_browse_page_shows_how_much_burden_evidence_each_gene_has(
     assert 'data-burden="no"' in rows["hgnc:4173"]
 
 
-def test_the_rail_counts_burden_rows_and_names_the_publications_it_counts(
+def test_the_rail_states_rare_variant_evidence_and_no_bare_publication_count(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
-    """Two rail defects, both raised by review 2026-08-05.
+    """Two rail defects, both raised by review 2026-08-05, and what replaced the fixes.
 
     The rail read `publications | 0` on 22 of the 23 published genes while the
     burden section one column away cited a linked, PubMed-referenced study. The
     count was right -- `fact.publications` is what this atlas's *own* assertion
-    evidence cites -- and the label was wrong, so the label changed rather than
-    the number.
+    evidence cites -- and the label was wrong, so the label became `curated
+    publications`. And the rail carried no burden count at all, though
+    `burden_row_count` exists and is published in every browse row, so it
+    gained `rare-variant rows`.
 
-    And the rail carried no burden count at all, though `burden_row_count`
-    exists and is published in every browse row.
+    **Renamed and re-pointed at the card (D55), 2026-10-26** -- it was
+    `test_the_rail_counts_burden_rows_and_names_the_publications_it_counts`.
+    The card drops both rows: a zero count of curated publications says nothing
+    a clinician can act on, and a row count is replaced by the rare-variant
+    block, which says what the rows found. So the burden evidence is asserted
+    in words, and every row label this test ever refused stays refused.
     """
     page = _burden_page(
         tmp_path, facts_uncurated, [_burden_row(), _burden_row(cohort_stratum="all")]
     )
 
-    assert "<dt>curated publications</dt><dd>0</dd>" in page
     rail = _slice_between(page, '<aside class="rail">', ("</aside>",))
-    assert "<dt>rare-variant rows</dt><dd>2</dd>" in rail
+    card = _card_variants(rail)
+    assert "<p>Tested in 1 independent dataset.</p>" in card
+    assert '<p class="card-uncorrected"><a href="#study-42230622">' in card
+    assert "<dt>rare-variant rows</dt>" not in rail
+    assert "<dt>curated publications</dt>" not in rail
     assert "<dt>burden rows</dt>" not in rail
     assert "<dt>publications</dt>" not in page
 
@@ -3579,7 +3627,8 @@ def test_a_gene_with_no_expression_data_says_the_atlas_has_not_curated_it(
     profile for this gene" is the true claim: no dataset mentions this gene at
     all, so there is no specific dataset in view to say "does not cover it"
     about, and that alternative would invent a check this atlas never ran. The
-    section still renders -- never an absent one, the `_not_curated` reason:
+    section still renders -- never an absent one, the reason the uncurated
+    lesion-assertion notice existed (the card's curation sentence since D55):
     an absent section cannot be told apart from "the atlas looked and found
     nothing".
     """
@@ -5327,8 +5376,12 @@ def _combined(**overrides: object) -> CombinedRow:
 
 
 def _study_block(section: str, pmid_number: str) -> str:
-    """One study's block within the burden section: from its `<h3>` to the next."""
-    blocks = section.split("<h3>")[1:]
+    """One study's block within the burden section: from its `<h3>` to the next.
+
+    Split on the tag's opening, not on a bare `<h3>`: since the card links to
+    each study (D55) the heading carries an `id`.
+    """
+    blocks = re.split(r"<h3[ >]", section)[1:]
     matches = [block for block in blocks if pmid_number in block.split("</h3>", 1)[0]]
     assert len(matches) == 1, f"expected one block for {pmid_number}"
     return matches[0]
@@ -5976,7 +6029,8 @@ def _subtitles_by_study(section: str) -> dict[str, str]:
     study's heading, so a subtitle under the wrong study fails too."""
     return dict(
         re.findall(
-            r'<h3><a href="https://pubmed\.ncbi\.nlm\.nih\.gov/(\d+)/?">[^<]*</a></h3>'
+            r'<h3 id="study-\d+"><a href="https://pubmed\.ncbi\.nlm\.nih\.gov/(\d+)/?">[^<]*'
+            r"</a></h3>"
             r'<p class="study-analyses">([^<]+)</p>',
             section,
         )
@@ -6021,3 +6075,1099 @@ def test_the_analysis_label_names_what_nothing_has_taught_it_rather_than_nothing
 ) -> None:
     """Both raw fallbacks render the unknown token verbatim, as `_count` does."""
     assert _analysis_label(comparator, variant_class) == label
+
+
+# --- The clinician card (D55, D56) -------------------------------------------
+#
+# The rail, rebuilt as the summary a clinician reads first. Every assertion
+# below is sliced to the rail (CLAUDE.md section 4.19) and pinned against a
+# literal rather than the constant that produced it (section 4.38).
+
+_ALL_STUDIES: Final = {_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS, **_SIERANT_PUBLICATION}
+
+_CARD_CAVEAT: Final = (
+    "<p><strong>No enrichment at these cohort sizes is not evidence against a gene</strong> "
+    "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
+    "functional evidence.</p>"
+)
+
+
+def _rail_of(page: str) -> str:
+    return _slice_between(page, '<aside class="rail">', ("</aside>",))
+
+
+def _card_variants(rail: str) -> str:
+    return _slice_between(rail, '<div class="card-variants">', ("</div>",))
+
+
+def _sierant(**overrides: object) -> BurdenRow:
+    """PMID:40127276's case-control arm, counting alleles: NKX2-5's damaging row."""
+    payload: dict[str, object] = {
+        "study": "PMID:40127276",
+        "cohort_stratum": "all",
+        "consequence_class": "damaging",
+        "count_unit": "alleles",
+        "n_case_carriers": 24,
+        "n_cases": 20151,
+        "n_control_carriers": 123,
+        "n_controls": 237963,
+        "effect": 2.31,
+        "effect_bound": None,
+        "ci_low": None,
+        "pvalue": 4.58e-4,
+        "pvalue_adjusted": 9.44e-3,
+        "pvalue_adjustment": "benjamini_hochberg",
+        "case_cohorts": ("pcgc",),
+        "control_cohorts": (),
+        "source": "sierant2025",
+    }
+    payload.update(overrides)
+    return _burden_row(**payload)
+
+
+def _sierant_de_novo(**overrides: object) -> BurdenRow:
+    """PMID:40127276's de novo arm: KMT2D's damaging row, against a mutation model."""
+    payload: dict[str, object] = {
+        "comparator": "mutation_model",
+        "count_unit": "de_novo_mutations",
+        "n_case_carriers": 27,
+        "n_cases": 3887,
+        "n_control_carriers": None,
+        "n_controls": None,
+        "expected_count": 0.6071494,
+        "effect": 44.5,
+        "effect_measure": "enrichment_ratio",
+        "pvalue": 7.21e-35,
+        "pvalue_test": "poisson",
+        "pvalue_adjusted": 1.79e-32,
+    }
+    payload.update(overrides)
+    return _sierant(**payload)
+
+
+def _audain2021(**overrides: object) -> BurdenRow:
+    """PMID:34324492's CNV deletion test: no effect measure, a family-wise corrected p."""
+    payload: dict[str, object] = {
+        "study": "PMID:34324492",
+        "variant_class": "cnv_deletion",
+        "cohort_stratum": "all",
+        "n_case_carriers": 10,
+        "n_cases": 7107,
+        "n_control_carriers": 0,
+        "n_controls": 14040,
+        "effect": None,
+        "effect_measure": None,
+        "effect_bound": None,
+        "ci_low": None,
+        "pvalue": 9.999e-05,
+        "pvalue_test": "permutation",
+        "pvalue_adjusted": 0.0121,
+        "pvalue_adjustment": "familywise_permutation",
+        "source": "audain2021_s6",
+    }
+    payload.update(overrides)
+    return _burden_row(**payload)
+
+
+def test_the_card_names_each_study_and_test_by_its_first_surviving_row(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D56: one line per (study, analysis) with a surviving row, never a ranking.
+
+    The line shows the first surviving row in the table's own reading order
+    (`burden._sort_key`: stratum, then the `damaging` union before its parts),
+    never the most significant one -- the atlas authors no ranking -- then how
+    many more in that group survive. Counts in their own unit through `_count`,
+    and a de novo row against its expectation through `_controls`.
+
+    The fixture is built so each rule has something to get wrong. Rows arrive
+    in reverse study order and with the de novo arm before the case-control
+    arm, so the groups must be sorted, not iterated as met. Within each group
+    the later-ordered row arrives first (`lof` before `damaging`,
+    `nonsyndromic` before `syndromic`), so the first row must come from the
+    sort, and the CNV group's first survivor is a stratum other than `all`,
+    which the line must name. Two rows that do not survive sit in surviving
+    groups (corrected 0.536; corrected 0.2) and one study publishes no
+    correction at all, so a row that is merely nominal must never reach a line.
+
+    **Each line ends with a link to its study's block**, `#study-<PMID digits>`
+    on that study's `<h3>`, labelled `caveats` where any of the group's
+    *surviving* rows carries a `method_note` and `details` otherwise -- the
+    note is where a caveat about those counts reaches a reader (PMID:34324492's
+    cases include 777 thoracic aortic aneurysm probands). The CNV group's note
+    is on its second survivor, not its first, so the label reads the whole
+    group; the case-control group's note is on its one row that does not
+    survive, so the label reads only survivors; and its first survivor's note
+    is whitespace, which is no note. Every study block carries exactly one
+    anchor, including the study with no line.
+
+    **The rest of a group's survivors are named, not counted** ("also
+    surviving: loss-of-function; missense (damaging)"), in the same reading
+    order: "2 more survive" beside the `damaging` union counted its own two
+    components as further findings. Each label carries its stratum and lesion
+    group where they are not the whole cohort, so a per-lesion row is never
+    shown unlabelled. A line from a study by an atlas author says so, as the
+    study's block does; each link's accessible name names its study (WCAG
+    2.4.9). And PMID:42230622, which publishes no corrected p for this gene,
+    gets its own line saying so, with the scan size its block judges it by --
+    never a threshold the atlas computed (D12/D33).
+    """
+    rows = [
+        _burden_row(),  # PMID:42230622: p 3.13e-08, no correction published.
+        _sierant_de_novo(
+            consequence_class="missense_damaging",
+            n_case_carriers=6,
+            expected_count=0.44,
+            pvalue_adjusted=5.84e-4,
+        ),
+        _sierant_de_novo(
+            consequence_class="lof",
+            n_case_carriers=21,
+            expected_count=0.166,
+            pvalue_adjusted=1.65e-34,
+        ),
+        _sierant_de_novo(),
+        _sierant(
+            consequence_class="missense_damaging",
+            pvalue=0.0925,
+            pvalue_adjusted=0.536,
+            method_note="A note on a row that does not survive.",
+        ),
+        _sierant(
+            consequence_class="lof",
+            n_case_carriers=11,
+            n_control_carriers=25,
+            n_controls=222440,
+            pvalue_adjusted=3.01e-3,
+        ),
+        _sierant(method_note="   "),
+        _audain2021(pvalue_adjusted=0.2),
+        _audain2021(
+            cohort_stratum="nonsyndromic",
+            lesion_group="conotruncal",
+            n_case_carriers=6,
+            n_cases=2405,
+            method_note="Cases include 777 thoracic aortic aneurysm probands.",
+        ),
+        _audain2021(cohort_stratum="syndromic", n_case_carriers=4, n_cases=1471),
+    ]
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES)
+    rail = _rail_of(page)
+    card = _card_variants(rail)
+
+    assert card.startswith(
+        "<p><strong>Rare variants</strong> surviving their own study's correction</p><ul>"
+    )
+    assert re.findall(r"<li>(.*?)</li>", card) == [
+        "Audain E et al. 2021 · CNV burden (case-control) — loss-of-function, syndromic: "
+        "4 carriers / 1,471 vs 0 carriers / 14,040 · also surviving: loss-of-function, "
+        "non-syndromic, lesion group conotruncal · study by an atlas author · "
+        '<a href="#study-34324492" aria-label="Caveats for Audain E et al. 2021">caveats</a>',
+        "Sierant MC et al. 2025 · case-control burden test — damaging (LOF + missense): "
+        "24 alleles / 20,151 vs 123 alleles / 237,963 · also surviving: loss-of-function · "
+        '<a href="#study-40127276" aria-label="Details for Sierant MC et al. 2025">details</a>',
+        "Sierant MC et al. 2025 · de novo enrichment (trios vs mutation model) — damaging "
+        "(LOF + missense): 27 de novo / 3,887 trios vs 0.607 expected · also surviving: "
+        "loss-of-function; missense (damaging) · "
+        '<a href="#study-40127276" aria-label="Details for Sierant MC et al. 2025">details</a>',
+    ]
+    assert "more survive" not in card
+    after = card[card.index("</ul>") + len("</ul>") :]
+    assert after == (
+        '<p class="card-uncorrected"><a href="#study-42230622">Audain E et al. 2026</a> '
+        "publishes no corrected p for this gene; judge its results against its scan of "
+        f"138,609 tests (see its block) · study by an atlas author</p>{_CARD_CAVEAT}"
+    )
+
+    # One anchor per study block, on that study's own heading, and nowhere else.
+    section = _burden_section_text(page)
+    anchors = re.findall(
+        r'<h3 id="([^"]+)"><a href="https://pubmed\.ncbi\.nlm\.nih\.gov/(\d+)/">', section
+    )
+    assert anchors == [
+        ("study-34324492", "34324492"),
+        ("study-40127276", "40127276"),
+        ("study-42230622", "42230622"),
+    ]
+    for anchor, _ in anchors:
+        assert page.count(f'id="{anchor}"') == 1, anchor
+
+
+def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The same rows through both renderers (CLAUDE.md section 4.28).
+
+    PMID:40127276's row clears its own Benjamini-Hochberg correction and the
+    matrix fills its cell `corrected`; PMID:42230622's is nominally significant
+    and its study publishes no correction, so the matrix draws it `nominal`. The
+    card must list the first and not the second -- a card reading `_supports`
+    alone would list both, and would then disagree with the matrix on the same
+    page.
+    """
+    rows = [_burden_row(cohort_stratum="all", effect=3.1, effect_bound=None), _sierant()]
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES)
+    matrix = _slice_between(_burden_section_text(page), '<table class="matrix">', ("</table>",))
+    by_family = dict(re.findall(r'<th scope="row">([^<]+)</th>.*?class="cell (\w[\w-]*)"', matrix))
+    assert by_family == {"Audain E et al. 2026": "nominal", "Sierant MC et al. 2025": "corrected"}
+
+    lines = re.findall(r"<li>(.*?)</li>", _card_variants(_rail_of(page)))
+    assert [line.split(" · ")[0] for line in lines] == ["Sierant MC et al. 2025"]
+
+
+_NO_TESTS_REPORTED: Final = {
+    **_ALL_STUDIES,
+    "PMID:34324492": _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(
+        update={"tests_reported": None}
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    ("rows", "publications", "closing", "uncorrected"),
+    [
+        pytest.param(
+            [
+                _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None),
+                _audain2021(case_cohorts=("ddd",), pvalue_adjusted=0.2),
+                _sierant(pvalue_adjusted=0.2),
+                _sierant(consequence_class="synonymous", pvalue=1e-6, pvalue_adjusted=0.001),
+            ],
+            _ALL_STUDIES,
+            "Tested in 2 independent datasets; none survives a correction its study published.",
+            [
+                '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
+                "for this gene; judge its results against its scan of 138,609 tests (see its "
+                "block) · study by an "
+                "atlas author"
+            ],
+            id="three studies in two families",
+        ),
+        pytest.param(
+            [
+                _sierant(pvalue=0.0934, pvalue_adjusted=0.256),
+                _burden_row(
+                    cohort_stratum="all",
+                    consequence_class="missense_damaging",
+                    effect=10.2,
+                    effect_bound=None,
+                    pvalue=1.6e-08,
+                ),
+                _burden_row(
+                    consequence_class="missense_damaging",
+                    effect=21.2,
+                    effect_bound=None,
+                    pvalue=2.47e-10,
+                ),
+            ],
+            _ALL_STUDIES,
+            "Tested in 2 independent datasets; none survives a correction its study published.",
+            [
+                '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
+                "for this gene; judge its results against its scan of 138,609 tests (see its "
+                "block) · study by an "
+                "atlas author"
+            ],
+            id="SMAD4: p 2.5e-10 in a study that publishes no correction",
+        ),
+        pytest.param(
+            [_burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)],
+            _ALL_STUDIES,
+            "Tested in 1 independent dataset.",
+            [
+                '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
+                "for this gene; judge its results against its scan of 138,609 tests (see its "
+                "block) · study by an "
+                "atlas author"
+            ],
+            id="one study",
+        ),
+        pytest.param(
+            [_audain2021(case_cohorts=("ddd",), pvalue_adjusted=None)],
+            _NO_TESTS_REPORTED,
+            "Tested in 1 independent dataset.",
+            [
+                '<a href="#study-34324492">Audain E et al. 2021</a> publishes no corrected p '
+                "for this gene; see its block · study by an atlas author"
+            ],
+            id="no scan size recorded: no number invented",
+        ),
+    ],
+)
+def test_a_card_with_no_surviving_result_counts_the_datasets_that_tested_the_gene(
+    tmp_path: Path,
+    facts_uncurated: dict[str, GeneFacts],
+    rows: list[BurdenRow],
+    publications: dict[str, Publication],
+    closing: str,
+    uncorrected: list[str],
+) -> None:
+    """Counted in cohort families, never in studies, and only those that tested it.
+
+    PMID:42230622 and PMID:34324492 share a sample collection here (`ddd`), so
+    three studies are two independent datasets; a third family that tested
+    nothing for this gene is passed in and must not be counted. No row
+    survives: one is nominal in a study publishing no correction, one fails its
+    correction (0.2), and one is the synonymous negative control clearing a
+    correction (0.001), which is not support. The power caveat stays: it is the
+    sentence that stops "none survives" reading as evidence against the gene.
+
+    **"None survives" may only speak of corrections a study published.**
+    PMID:42230622 publishes no corrected p on any row, and the card read "none
+    survives its own study's correction" for SMAD4 -- whose block tells the
+    reader to judge raw p against the study's scan of 138,609 tests, which two
+    SMAD4 rows (p 1.6e-08, 2.47e-10) would clear. Measured 2026-10-26: 24
+    published genes are tested by that study alone. So the closing sentence
+    says "a correction its study published", and each study that published
+    none for this gene gets a line saying so, naming its scan size where
+    `Publication.tests_reported` records it and inventing none where it does
+    not. Whether a study published a correction is decided per gene, from its
+    rows: any `pvalue_adjusted`. Where no study that tested the gene published
+    one, the closing sentence says only how many tested it: "none survives a
+    correction its study published" would be vacuously true there, and read as
+    a correction applied and failed.
+    """
+    families = (
+        frozenset({"PMID:34324492", "PMID:42230622"}),
+        frozenset({"PMID:40127276"}),
+        frozenset({"PMID:99999999"}),
+    )
+    page = _burden_page(
+        tmp_path, facts_uncurated, rows, publications=publications, families=families
+    )
+    card = _card_variants(_rail_of(page))
+
+    assert card == (
+        f"<p><strong>Rare variants</strong></p><p>{closing}</p>"
+        + "".join(f'<p class="card-uncorrected">{line}</p>' for line in uncorrected)
+        + _CARD_CAVEAT
+    )
+    assert "<li>" not in card
+    assert "none survives its own study" not in page
+
+
+def test_a_card_with_no_rare_variant_row_says_so_and_claims_no_test(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """CRIPTO's case: no study in this atlas publishes a row for the gene.
+
+    Says what is known -- no study here reports a result -- and not "no study
+    tested it", which a study whose supplement simply omits the gene cannot be
+    said not to have done. No power caveat: there is no result for it to
+    qualify, and no rare-variant section in the main column either.
+    """
+    page = _burden_page(tmp_path, facts_uncurated, [])
+    card = _card_variants(_rail_of(page))
+
+    assert card == (
+        "<p><strong>Rare variants</strong></p>"
+        "<p>No rare-variant study in this atlas reports a result for this gene.</p>"
+    )
+    assert "not evidence against a gene" not in _rail_of(page)
+    assert _RARE_VARIANT_HEADING not in page
+
+
+def _clingen(
+    classification: Classification, disease: str, label: str, moi: str = "AD"
+) -> ValidityRecord:
+    return ValidityRecord(
+        source=ValiditySource.CLINGEN,
+        classification=classification,
+        classification_term=classification.value.capitalize(),
+        disease=disease,
+        disease_label=label,
+        moi=moi,
+        report_url=None,
+        sop="SOP11",
+        gcep="Congenital Heart Disease Gene Curation Expert Panel",
+    )
+
+
+def _gencc(
+    submitter: str,
+    classification: Classification | None,
+    moi: str = "Autosomal dominant",
+    disease: str = "MONDO:0007173",
+    label: str = "atrial septal defect 7",
+) -> ValidityRecord:
+    return ValidityRecord(
+        source=ValiditySource.GENCC,
+        classification=classification,
+        classification_term=classification.value if classification else "Supportive",
+        disease=disease,
+        disease_label=label,
+        moi=moi,
+        report_url=None,
+        submitter=submitter,
+        submitted_on="2020-08-20 13:02:04",
+    )
+
+
+def _card_page(
+    tmp_path: Path,
+    fact: GeneFacts,
+    validity: GeneValidity,
+    warrants: dict[str, Warrant] | None = None,
+) -> str:
+    """One gene page, rendered with no burden rows; returns its rail."""
+    build_gene_pages(
+        {GATA4: fact},
+        Emitter(root=tmp_path),
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: validity},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+        scope_warrants=warrants,
+    )
+    return _rail_of(_page(tmp_path, "HGNC_4173.html"))
+
+
+def _graded(grade: Classification, *records: ValidityRecord) -> tuple[GeneFacts, GeneValidity]:
+    """A ClinGen-admitted gene headlined `grade`, carrying `records`."""
+    return (
+        replace(
+            _facts(GATA4, AtlasCuration.NOT_YET_CURATED),
+            headline_confidence=grade,
+            confidence_by_lesion_group={},
+        ),
+        GeneValidity(
+            records=records, state=ValidityState.EXPERT_CURATED, has_source_discordance=False
+        ),
+    )
+
+
+def _agreed(*records: ValidityRecord) -> tuple[GeneFacts, GeneValidity]:
+    """A gene no panel graded, admitted on GenCC submitters' agreement."""
+    return (
+        replace(
+            _facts(GATA4, AtlasCuration.NOT_YET_CURATED),
+            headline_confidence=None,
+            validity_state=ValidityState.SUBMITTER_CURATED,
+            confidence_by_lesion_group={},
+        ),
+        GeneValidity(
+            records=records, state=ValidityState.SUBMITTER_CURATED, has_source_discordance=False
+        ),
+    )
+
+
+_NKX2_5_DISEASE: Final = "NKX2.5-related congenital, conduction and myopathic heart disease"
+
+
+@pytest.mark.parametrize(
+    ("gene", "rows"),
+    [
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0800441", _NKX2_5_DISEASE),
+                # Below the headline: neither its disease nor its mode is the chip's.
+                _clingen(Classification.LIMITED, "MONDO:0007173", "atrial septal defect 7", "XL"),
+                _gencc("ClinGen", Classification.DEFINITIVE),
+                _gencc("Ambry Genetics", Classification.STRONG),
+                _gencc("G2P", Classification.DEFINITIVE),
+                _gencc("Genomics England PanelApp", Classification.STRONG),
+                _gencc("Labcorp Genetics (formerly Invitae)", Classification.STRONG),
+                _gencc("Laboratory for Molecular Medicine", Classification.MODERATE),
+                _gencc("Orphanet", None),
+                _gencc("PanelApp Australia", Classification.STRONG, "Autosomal recessive"),
+                _gencc("Illumina", Classification.NO_KNOWN_ASSOCIATION, "Unknown"),
+            ),
+            (
+                ("definitive for", _NKX2_5_DISEASE),
+                ("also listed by", "7 other curators (GenCC)"),
+                ("inheritance", "Autosomal dominant"),
+            ),
+            id="NKX2-5: ClinGen and a dissent are not other curators",
+        ),
+        pytest.param(
+            _graded(
+                Classification.LIMITED,
+                *(
+                    _clingen(Classification.LIMITED, "MONDO:0005453", "congenital heart disease", m)
+                    for m in ("XL", "AR", "SD", "UD", "AD", "MT")
+                ),
+            ),
+            (
+                ("limited for", "congenital heart disease"),
+                (
+                    "inheritance",
+                    "Autosomal dominant / Autosomal recessive / Mitochondrial / Semidominant "
+                    "/ Unknown / X-linked",
+                ),
+            ),
+            id="ROBO1: one grade under several modes names every one",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("G2P", Classification.MODERATE, "Autosomal recessive"),
+                _gencc("Ambry Genetics", Classification.LIMITED),
+                _gencc("Orphanet", None, "X-linked"),
+                _gencc("Illumina", Classification.NO_KNOWN_ASSOCIATION, "Unknown"),
+            ),
+            (
+                ("admitted by", "Ambry Genetics; G2P"),
+                ("also listed by", "1 other curator (GenCC)"),
+                ("inheritance", "Autosomal dominant / Autosomal recessive"),
+            ),
+            id="GenCC-admitted: the modes the admitting records carry",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("Ambry Genetics", Classification.LIMITED),
+                _gencc("Labcorp Genetics (formerly Invitae)", Classification.STRONG),
+            ),
+            (
+                ("admitted by", "Ambry Genetics; Labcorp Genetics (formerly Invitae)"),
+                ("inheritance", "Autosomal dominant"),
+            ),
+            id="TBX1: nobody else lists it, so no row says so",
+        ),
+    ],
+)
+def test_the_cards_rows_say_who_else_lists_the_gene_and_under_what_inheritance(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], rows: tuple[tuple[str, str], ...]
+) -> None:
+    """D55: the warrant row, then who else lists the gene, then its inheritance.
+
+    **"Also listed by" counts `asserted_by.institutions` -- the list the bundle
+    publishes -- minus ClinGen and minus the submitters that admitted the
+    gene.** ClinGen is excluded under both names it appears as (its panel's own
+    record, its GenCC copy), and a dissent is not a listing: Illumina's `No
+    Known Disease Relationship` counts for nobody. `Supportive` does count --
+    Orphanet asserts without grading.
+
+    **Inheritance is the mode of the records that carry the warrant**: the
+    ClinGen records at the headline grade, or the admitting submitters' records
+    at or above the floor. Not every record's: the NKX2-5 fixture holds an
+    `X-linked` record below its headline and an `Autosomal recessive` GenCC one,
+    and neither is the mode of the classification the chip shows.
+
+    **Every mode at the headline, not the first.** ROBO1, PRKD1 and LZTR1 each
+    carry two ClinGen records at their headline grade for one disease, one
+    `AD` and one `AR` (measured 2026-10-26), so the admitting record alone
+    would state half of what the panel graded. All six of ClinGen's codes here,
+    sorted by the words a reader sees. Six, not five, because the modes are
+    de-duplicated through a `set`: probed as the six labels under
+    `PYTHONHASHSEED` 0..499, one process each, the set iterated in sorted order
+    on 0 of 500 seeds; the same five without `Unknown` did so on 2 of 300, a
+    dropped sort surviving about one run in 150 (CLAUDE.md section 4.42).
+    """
+    fact, validity = gene
+    rail = _card_page(tmp_path, fact, validity)
+    listed = _slice_between(rail, "<dl>", ("</dl>",))
+    assert listed == "".join(f"<dt>{dt}</dt><dd>{dd}</dd>" for dt, dd in rows)
+
+
+@pytest.mark.parametrize(
+    ("gene", "gloss"),
+    [
+        pytest.param(
+            _graded(
+                Classification.LIMITED,
+                _clingen(Classification.LIMITED, "MONDO:0005453", "congenital heart disease"),
+            ),
+            '<p class="card-gloss"><em>Limited</em>: few probands, or evidence that is '
+            "suggestive but not compelling. <strong>Limited is not a weak yes</strong> &mdash; "
+            "it is a panel saying the case is not yet made.</p>",
+            id="limited",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0800441", _NKX2_5_DISEASE),
+            ),
+            '<p class="card-gloss"><em>Definitive</em>: repeatedly demonstrated in research and '
+            "clinical settings and upheld over time, with no convincing evidence to the "
+            "contrary.</p>",
+            id="definitive",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("Ambry Genetics", Classification.LIMITED),
+                _gencc("G2P", Classification.DEFINITIVE),
+            ),
+            None,
+            id="ungraded: no grade, so no gloss",
+        ),
+    ],
+)
+def test_the_card_glosses_the_headline_grade_in_the_grade_keys_own_words(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], gloss: str | None
+) -> None:
+    """One line under the chip saying what the panel's rung means (D55).
+
+    `limited` is the plurality (45 of 119, measured 2026-10-26) and the rung a
+    reader is likeliest to misread as a weak yes, so it is pinned in full. The
+    words are the grade key's, so the card and the key cannot come to gloss one
+    rung two ways; a gene no panel graded has no rung to gloss, and its card
+    says why it is published in the curation line instead.
+    """
+    fact, validity = gene
+    rail = _card_page(tmp_path, fact, validity)
+    if gloss is None:
+        assert "card-gloss" not in rail
+    else:
+        assert gloss in rail
+        assert rail.count("card-gloss") == 1
+
+
+_RASOPATHY: Final = "RASopathy Gene Curation Expert Panel"
+
+
+def _rasopathy(classification: Classification, disease: str, label: str) -> ValidityRecord:
+    """A RASopathy-panel record, dated so ClinGen's own GenCC copy of it can fold."""
+    return replace(
+        _clingen(classification, disease, label),
+        gcep=_RASOPATHY,
+        classification_date="2024-11-07T17:00:00.000Z",
+    )
+
+
+@pytest.mark.parametrize(
+    ("gene", "line"),
+    [
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _rasopathy(Classification.DEFINITIVE, "MONDO:0018997", "Noonan syndrome"),
+                _rasopathy(
+                    Classification.DISPUTED, "MONDO:0015280", "cardiofaciocutaneous syndrome"
+                ),
+                _rasopathy(Classification.DISPUTED, "MONDO:0009026", "Costello syndrome"),
+                # ClinGen's own GenCC copy of the Costello record: the table folds
+                # it into the panel's row, so the card must not name it twice.
+                replace(
+                    _gencc(
+                        "ClinGen",
+                        Classification.DISPUTED,
+                        disease="MONDO:0009026",
+                        label="Costello syndrome",
+                    ),
+                    classification_term="Disputed Evidence",
+                    submitted_on="2024-11-07 00:00:00",
+                ),
+                replace(
+                    _gencc(
+                        "Illumina",
+                        Classification.DISPUTED,
+                        disease="MONDO:0018997",
+                        label="Noonan syndrome",
+                    ),
+                    classification_term="Disputed Evidence",
+                ),
+            ),
+            "Disputed for Costello syndrome and cardiofaciocutaneous syndrome by the RASopathy "
+            "Gene Curation Expert Panel; Disputed Evidence for Noonan syndrome by Illumina; see "
+            "the validity table.",
+            id="PTPN11: Definitive for Noonan, Disputed for Costello and CFC",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _rasopathy(Classification.DEFINITIVE, "MONDO:0018997", "Noonan syndrome"),
+            ),
+            None,
+            id="graded, nothing disputed",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("Ambry Genetics", Classification.LIMITED),
+                _gencc("G2P", Classification.DEFINITIVE),
+                replace(
+                    _gencc("Illumina", Classification.DISPUTED), classification_term="Disputed"
+                ),
+                replace(
+                    _gencc(
+                        "Ambry Genetics",
+                        Classification.REFUTED,
+                        disease="MONDO:0004933",
+                        label="hypoplastic left heart syndrome",
+                    ),
+                    classification_term="Refuted Evidence",
+                ),
+            ),
+            "Refuted Evidence for hypoplastic left heart syndrome by Ambry Genetics; Disputed for "
+            "atrial septal defect 7 by Illumina; see the validity table.",
+            id="no grade to gloss: the line takes the gloss's place",
+        ),
+    ],
+)
+def test_the_card_names_who_disputes_the_gene_and_for_what_beside_the_grade(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], line: str | None
+) -> None:
+    """`has_conflicting_evidence` on the card, in words, under the gloss (D55).
+
+    The flag means exactly this (`vocab.has_conflicting_evidence`, over every
+    in-scope record `derive.gene_facts` mirrors): some record is `Disputed` or
+    `Refuted` *and* some record supports the gene. A line saying only that
+    "an authority" disputes the gene told a reader neither who nor for what;
+    PTPN11 is Definitive for Noonan syndrome and Disputed by the same panel for
+    Costello and cardiofaciocutaneous syndrome, beside a Definitive gloss
+    reading "no convincing evidence to the contrary". So the line names them:
+    each authority's own term, verbatim, the diseases it applies it to, and
+    the authority -- the panel for a ClinGen record, the submitter for a GenCC
+    one. Panels first, then submitters, each by name. It names exactly the
+    contested records the validity table lists: ClinGen's own GenCC copy of a
+    panel record folds there (`_repeats_the_panel`) and is not named twice.
+    The fixture lists cardiofaciocutaneous before Costello, so "Costello
+    syndrome and cardiofaciocutaneous syndrome" can only come from the sort;
+    the diseases are de-duplicated in record order, not through a `set`, so a
+    dropped sort fails on every seed rather than on half of them.
+
+    Renamed 2026-10-26 from
+    `test_the_card_says_when_an_authority_disputes_the_gene_beside_the_grade`,
+    when the line began naming its authorities.
+    """
+    fact, validity = gene
+    rail = _card_page(tmp_path, replace(fact, has_conflicting_evidence=line is not None), validity)
+    if line is None:
+        assert "card-dispute" not in rail
+        assert "Disputed" not in rail
+        return
+    expected = f'<p class="card-dispute">{line}</p>'
+    assert rail.count('<p class="card-dispute">') == 1
+    # Directly after the gloss, or where the gloss would sit.
+    after = rail[rail.index("</dl>") + len("</dl>") :]
+    if 'class="card-gloss"' in after:
+        after = after[after.index("</p>") + len("</p>") :]
+    assert after.startswith(expected)
+
+
+def test_a_dispute_flag_with_no_contested_record_to_name_is_refused(tmp_path: Path) -> None:
+    """The flag and the records come from one derivation; disagreeing, they are a bug.
+
+    A card naming no authority would be the vague line this replaced, and one
+    naming an authority the table does not list would be false, so the page is
+    refused rather than published.
+    """
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _rasopathy(Classification.DEFINITIVE, "MONDO:0018997", "Noonan syndrome"),
+    )
+    with pytest.raises(ValueError, match="no contested record"):
+        _card_page(tmp_path, replace(fact, has_conflicting_evidence=True), validity)
+
+
+_NOONAN: Final = "MONDO:0018997"
+_NSML: Final = "MONDO:0007893"
+_HOLT_ORAM: Final = "MONDO:0007732"
+_AOS4: Final = "MONDO:0014124"
+_ORPHANET_WARRANTS: Final = {
+    _NOONAN: Warrant("ORPHA:648", "Noonan syndrome", "direct", None, (_PULMONIC,)),
+    _NSML: Warrant("ORPHA:500", "Noonan syndrome with multiple lentigines", "direct", None, ()),
+    _AOS4: Warrant("ORPHA:974", "Adams-Oliver syndrome", "subtype", "OMIM:615297", ()),
+}
+_IN_SCOPE_BY_ORPHANET: Final = (
+    "in scope because Orphanet records a structural heart malformation in at least 30% of cases"
+)
+
+
+@pytest.mark.parametrize(
+    ("gene", "line"),
+    [
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
+            ),
+            f"Graded for Noonan syndrome as a whole syndrome; {_IN_SCOPE_BY_ORPHANET}.",
+            id="Noonan",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE, _NSML, "Noonan syndrome with multiple lentigines"
+                ),
+                _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
+            ),
+            "Graded for Noonan syndrome and Noonan syndrome with multiple lentigines as "
+            f"whole syndromes; {_IN_SCOPE_BY_ORPHANET}.",
+            id="PTPN11: two Orphanet-scoped syndromes at the headline, both named",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _AOS4, "Adams-Oliver syndrome 4"),
+            ),
+            f"Graded for Adams-Oliver syndrome 4 as a whole syndrome; {_IN_SCOPE_BY_ORPHANET} of "
+            "Adams-Oliver syndrome.",
+            id="EOGT: a subtype is in scope on the syndrome it belongs to",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
+            ),
+            None,
+            id="also graded for a disease scoped as CHD: the line would be false",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.LIMITED, _NOONAN, "Noonan syndrome"),
+            ),
+            None,
+            id="Orphanet-scoped only below the headline",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("Ambry Genetics", Classification.LIMITED, disease=_NOONAN, label="Noonan"),
+                _gencc("G2P", Classification.DEFINITIVE, disease=_NOONAN, label="Noonan"),
+            ),
+            None,
+            id="no panel graded it, so nothing was graded for anything",
+        ),
+    ],
+)
+def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_disease(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], line: str | None
+) -> None:
+    """PTPN11 is Definitive for Noonan syndrome, in a CHD atlas (D55).
+
+    Since 2026-10-25 a syndrome can be in scope because Orphanet records a
+    structural heart malformation in at least 30% of its cases. The validity
+    section's notes say so at length; the card says it in one line beside the
+    chip, because the chip is what a reader reads first -- and says *why* it
+    is in scope, which "Graded for Noonan syndrome, not for heart disease"
+    (the wording until 2026-10-26) left a reader to guess. Several diseases
+    join with "and", never "; ", which the warrant row above already uses
+    between diseases.
+
+    **A subtype's warrant is its syndrome's.** Orphanet records the heart
+    malformation for Adams-Oliver syndrome, and Adams-Oliver syndrome 4 (EOGT's
+    headline disease, the one subtype among the 21 Orphanet lines measured
+    2026-10-26) is in scope as its subtype; "in at least 30% of cases" alone
+    would read as a frequency recorded for the subtype itself.
+
+    **Rendered only when every disease the headline grade is for is
+    Orphanet-scoped**, and naming all of them. A gene graded at its headline
+    for a syndrome *and* for a disease an authority curated as CHD would read
+    "not for heart disease" while it is -- latent today (0 of 98 graded genes,
+    measured 2026-10-26), and pinned so it stays a sentence nobody can publish.
+    PTPN11 is graded Definitive for two Orphanet-scoped syndromes, and a line
+    naming one would state half of what the warrant row above it names.
+    """
+    fact, validity = gene
+    rail = _card_page(tmp_path, fact, validity, warrants=_ORPHANET_WARRANTS)
+    if line is None:
+        assert "card-scope" not in rail
+        assert "in scope because Orphanet" not in rail
+        assert "not for heart disease" not in rail
+    else:
+        assert f'<p class="card-scope">{line}</p>' in rail
+
+
+_NOT_CURATED_BY_PANEL: Final = (
+    "Not yet curated by the atlas: every classification on this page is a ClinGen expert "
+    "panel's or a named curator's."
+)
+
+
+@pytest.mark.parametrize(
+    ("gene", "sentence"),
+    [
+        pytest.param(
+            (
+                _facts(GATA4, AtlasCuration.CURATED, groups=(LesionGroup.SEPTAL,)),
+                _validity(),
+            ),
+            "Curated by the atlas: 1 lesion assertion for the septal lesion group.",
+            id="curated",
+        ),
+        pytest.param(
+            (
+                _facts(
+                    GATA4,
+                    AtlasCuration.CURATED,
+                    groups=(LesionGroup.CONOTRUNCAL, LesionGroup.SEPTAL),
+                    functional_count=2,
+                ),
+                _validity(),
+            ),
+            "Curated by the atlas: 1 lesion assertion for the conotruncal, septal lesion "
+            "groups; 2 functional records.",
+            id="curated, with functional records",
+        ),
+        pytest.param(
+            (
+                _facts(
+                    GATA4, AtlasCuration.CURATED, groups=(LesionGroup.SEPTAL,), functional_count=1
+                ),
+                _validity(),
+            ),
+            "Curated by the atlas: 1 lesion assertion for the septal lesion group; 1 functional "
+            "record.",
+            id="curated, with one functional record",
+        ),
+        pytest.param(
+            (_facts(GATA4, AtlasCuration.NOT_YET_CURATED), _validity()),
+            _NOT_CURATED_BY_PANEL,
+            id="not curated, a panel graded it",
+        ),
+        pytest.param(
+            _agreed(
+                _gencc("Ambry Genetics", Classification.LIMITED),
+                _gencc("G2P", Classification.DEFINITIVE),
+            ),
+            "Not yet curated by the atlas, and no ClinGen expert panel has graded this gene for "
+            "a disease an external authority treats as congenital heart disease, or in which "
+            "Orphanet records a structural heart malformation in at least 30% of cases: it is "
+            "published because the Gene Curation Coalition submitters named above "
+            "independently assert it.",
+            id="not curated, admitted on agreement",
+        ),
+        pytest.param(
+            (_facts(GATA4, AtlasCuration.NOT_YET_CURATED, functional_count=1), _validity()),
+            "No lesion assertion yet curated by the atlas: every classification on this page is "
+            "a ClinGen expert panel's or a named curator's. The atlas has curated 1 functional "
+            "record, published in this gene's JSON.",
+            id="not curated, with a functional record",
+        ),
+    ],
+)
+def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], sentence: str
+) -> None:
+    """D55: one sentence, on the card, in place of a token and a main-column notice.
+
+    Four branches, each pinned against its literal (CLAUDE.md section 4.38):
+
+    * curated -- what the atlas curated, with the counts only where non-zero;
+    * not curated, panel-graded -- every classification shown is someone
+      else's;
+    * not curated, admitted on agreement -- no panel graded it, and the
+      submitters named in the card's own `admitted by` row are why it is here.
+      **Scoped to diseases an external authority treats as CHD**, because
+      unscoped it is false: ClinGen grades ACTC1 Definitive for hypertrophic
+      cardiomyopathy and ELN Definitive for cutis laxa, both admitted here on
+      agreement (measured 2026-10-26 against the ClinGen mirror). Its scope
+      clause is the grade key's `ungraded` gloss's, word for word, Orphanet
+      path included, so the two cannot describe the gate differently on one
+      page;
+    * not curated with functional records (latent: 0 genes today) -- the
+      sentence names the lesion assertion as what is absent, because "not
+      curated by the atlas" beside "the atlas has curated 1 functional record"
+      denies the atlas's own work in the sentence that counts it.
+
+    "Not *yet* curated", because the state is `not_yet_curated`: the atlas has
+    not decided against curating these genes.
+
+    The discriminator between the two uncurated sentences is `validity_state`,
+    not the headline: a gene admitted on agreement that ClinGen recorded `No
+    Known Disease Relationship` for in scope has a panel record, and the first
+    sentence stays true of it where the second would not.
+
+    Exactly one curation paragraph per card, and none in the main column: the
+    sentence moved here, and a page stating it twice is a page whose two copies
+    can come to disagree.
+    """
+    fact, validity = gene
+    emitter = Emitter(root=tmp_path)
+    build_gene_pages(
+        {GATA4: fact},
+        emitter,
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: validity},
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+    page = _page(tmp_path, "HGNC_4173.html")
+    rail = _rail_of(page)
+
+    assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    main = page[page.index("</aside>") :]
+    assert "curated by the atlas" not in main.lower()
+    assert "not yet curated</strong> a lesion assertion" not in page
+
+
+def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
+    """Disease labels and author names are mirrored or curated text, not page copy.
+
+    Each card helper escapes what it interpolates, and each escape had no test
+    until review measured that dropping it survived the suite: the Orphanet
+    line's disease label, the dispute line's disease label, and the study
+    label on a rare-variant line, its link's accessible name and the
+    no-correction line.
+    """
+    marked = "<i>Noonan</i>"
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _rasopathy(Classification.DEFINITIVE, _NOONAN, marked),
+        _rasopathy(Classification.DISPUTED, "MONDO:0009026", "<b>Costello</b>"),
+    )
+    publications = {
+        **_ALL_STUDIES,
+        "PMID:40127276": _SIERANT_PUBLICATION["PMID:40127276"].model_copy(
+            update={"authors": ["<s>Sierant</s>"]}
+        ),
+        "PMID:42230622": _PUBLICATION.model_copy(update={"authors": ["<u>Audain</u>"]}),
+    }
+    rows = [_sierant(), _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)]
+    build_gene_pages(
+        {GATA4: replace(fact, has_conflicting_evidence=True)},
+        Emitter(root=tmp_path),
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: validity},
+        assertions={},
+        publications=publications,
+        burden={GATA4: rows},
+        cohorts=_COHORTS,
+        families=cohort_families(rows),
+        axes=evidence_axes(rows),
+        scope_warrants=_ORPHANET_WARRANTS,
+    )
+    rail = _rail_of(_page(tmp_path, "HGNC_4173.html"))
+
+    scope = _slice_between(rail, '<p class="card-scope">', ("</p>",))
+    assert scope.startswith("Graded for &lt;i&gt;Noonan&lt;/i&gt; as a whole syndrome;")
+    dispute = _slice_between(rail, '<p class="card-dispute">', ("</p>",))
+    assert dispute.startswith("Disputed for &lt;b&gt;Costello&lt;/b&gt; by the RASopathy")
+    line = _slice_between(_card_variants(rail), "<li>", ("</li>",))
+    assert line.startswith("&lt;s&gt;Sierant&lt;/s&gt; et al. 2025 · ")
+    assert 'aria-label="Details for &lt;s&gt;Sierant&lt;/s&gt; et al. 2025"' in line
+    assert '">&lt;u&gt;Audain&lt;/u&gt; et al. 2026</a> publishes no corrected p' in rail
+    for raw in ("<i>", "<b>", "<s>", "<u>"):
+        assert raw not in rail, raw
+
+
+def test_two_studies_that_would_share_one_anchor_are_refused(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """`PMID:123` and `123` both slug to `study-123`; one card link would land on
+    the wrong study's caveats. Distinct PMIDs cannot collide, so this is a guard
+    on a bypassed gate, and it raises rather than publishing."""
+    rows = [_burden_row(study="PMID:123"), _burden_row(study="123")]
+    with pytest.raises(ValueError, match="share a page anchor"):
+        _burden_page(tmp_path, facts_uncurated, rows)
+
+
+def test_a_study_no_cohort_family_holds_is_refused_rather_than_miscounted(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """ "Tested in N independent datasets" counts corpus families; a study absent
+    from all of them means the families were derived over another corpus."""
+    with pytest.raises(ValueError, match="no cohort family holds PMID:42230622"):
+        _burden_page(tmp_path, facts_uncurated, [_burden_row()], families=(frozenset({"PMID:1"}),))
+
+
+@pytest.mark.parametrize(
+    ("carriers", "total", "unit", "shown"),
+    [
+        (1, 14040, "individuals", "1 carrier / 14,040"),
+        (1, 20151, "alleles", "1 allele / 20,151"),
+        (1, 3887, "de_novo_mutations", "1 de novo / 3,887 trios"),
+        (0, 45082, "individuals", "0 carriers / 45,082"),
+        (2, 237963, "alleles", "2 alleles / 237,963"),
+    ],
+)
+def test_a_count_of_one_names_one_carrier(carriers: int, total: int, unit: str, shown: str) -> None:
+    """ "1 carriers / 14,040" rendered in tables and on the card until 2026-10-26."""
+    assert _count(carriers, total, unit) == shown

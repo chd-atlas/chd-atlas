@@ -795,3 +795,112 @@ def test_every_gene_page_links_gnomad_and_clinvar_from_its_registry_ids(site: Pa
         clinvar = f"https://www.ncbi.nlm.nih.gov/clinvar/?term={row['ncbi_gene']}%5Bgeneid%5D"
         assert f'href="{gnomad}"' in xrefs, entry["gene"]
         assert f'href="{clinvar}"' in xrefs, entry["gene"]
+
+
+def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_corrected_dataset(
+    site: Path,
+) -> None:
+    """D55/D56 against every real page: the card and the bundle cannot disagree.
+
+    A gene's card lists a surviving rare-variant result iff its bundle's
+    `independent_datasets.corrected` is above zero -- both read
+    `concordance.survives_own_correction`, and this is what fails if a runner
+    or a renderer stops agreeing with it on real data rather than on a
+    fixture. Lines are counted inside the card's rare-variant block only, not
+    the whole rail. A card listing none says why: the none-survives sentence
+    where the bundle has burden rows, the no-study sentence where it has none.
+
+    **No card may say a result failed a correction its study never made.**
+    PMID:42230622 publishes no corrected p on any row, and SMAD4's card read
+    "none survives its own study's correction" of it, while its block judged
+    two of its rows against a scan that they clear. So every study that tested
+    the gene and published no correction for it is named on its own line, and
+    exactly those; the old sentence appears on no card. A study by an atlas
+    author carries the declaration on every card line that names it.
+
+    And every card states once what the atlas itself curated, nothing in the
+    main column repeats it, and a card names who disputes the gene exactly
+    where the bundle's `has_conflicting_evidence` is true.
+
+    Counts derived, never pinned. Both sides of each "iff" must be exercised,
+    or the test is measuring one population twice (CLAUDE.md section 4.30).
+    """
+    entries = _read(site, "genes/index.json")["genes"]
+    assert len(entries) > 1, "the build published no genes; the fixture is broken"
+    own_lab = {
+        publication["id"]: publication["own_lab"]
+        for publication in _read(site, "publications.json")["publications"]
+    }
+    listed = flagged = uncorrected_cards = 0
+    for entry in entries:
+        bundle = _read(site, entry["bundle"])
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        card = ""
+        if '<div class="card-variants">' in rail:
+            card = rail[rail.index('<div class="card-variants">') :]
+            card = card[: card.index("</div>")]
+        lines = card.count("<li>")
+        corrected = bundle["independent_datasets"]["corrected"]
+        assert (lines > 0) is (corrected > 0), (entry["gene"], lines, corrected)
+        tested = {row["study"] for row in bundle["burden"]}
+        published = {row["study"] for row in bundle["burden"] if row["pvalue_adjusted"] is not None}
+        none_survives = "none survives a correction its study published." in card
+        if lines:
+            listed += 1
+        elif bundle["burden"]:
+            # "None survives" only where some study published a correction.
+            assert none_survives is bool(published), entry["gene"]
+            assert "<p>Tested in " in card, entry["gene"]
+        else:
+            assert "No rare-variant study in this atlas reports a result" in card, entry["gene"]
+        assert "none survives its own study" not in page, entry["gene"]
+
+        named = re.findall(r'<p class="card-uncorrected"><a href="#study-(\d+)">', card)
+        assert sorted(f"PMID:{digits}" for digits in named) == sorted(tested - published), entry[
+            "gene"
+        ]
+        uncorrected_cards += bool(named)
+        for item in re.findall(r"<li>(.*?)</li>|<p class=\"card-uncorrected\">(.*?)</p>", card):
+            text = item[0] or item[1]
+            digits = re.search(r'href="#study-(\d+)"', text)
+            assert digits, (entry["gene"], text)
+            marked = "· study by an atlas author" in text
+            assert marked is own_lab[f"PMID:{digits.group(1)}"], (entry["gene"], text)
+
+        assert rail.count('<p class="card-curation">') == 1, entry["gene"]
+        main = page[page.index("</aside>") :]
+        assert "curated by the atlas" not in main.lower(), entry["gene"]
+        disputed = rail.count('<p class="card-dispute">')
+        assert disputed == int(bundle["has_conflicting_evidence"]), entry["gene"]
+        flagged += disputed
+    assert 0 < listed < len(entries), f"{listed} of {len(entries)} cards list a result"
+    assert 0 < flagged < len(entries), f"{flagged} of {len(entries)} cards flag a dispute"
+    assert 0 < uncorrected_cards < len(entries), (
+        f"{uncorrected_cards} of {len(entries)} cards name a study with no correction"
+    )
+
+
+def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
+    site: Path,
+) -> None:
+    """The card's links into its own page (D55), which the link sweep skips.
+
+    `test_every_link_on_every_page_resolves_to_a_file_the_build_wrote`
+    deliberately ignores pure fragments, so a card line pointing at
+    `#study-34324492` on a page whose study heading carried no such id would
+    pass it -- a link that scrolls nowhere, beside the counts it was added to
+    qualify. Every `href="#..."` on a gene page must name exactly one `id` on
+    that page, and no `id` may repeat on a page at all. Counted, not pinned;
+    the sweep must find at least one fragment link or it measures nothing.
+    """
+    fragments = 0
+    for page_path in sorted((site / "genes").glob("HGNC_*.html")):
+        page = page_path.read_text(encoding="utf-8")
+        ids = re.findall(r' id="([^"]+)"', page)
+        repeated = sorted({value for value in ids if ids.count(value) > 1})
+        assert not repeated, f"{page_path.name} repeats ids {repeated}"
+        for target in re.findall(r'href="#([^"]+)"', page):
+            fragments += 1
+            assert target in ids, f"{page_path.name} links #{target}, which no element carries"
+    assert fragments, "no gene page carries a fragment link; the sweep would pass vacuously"

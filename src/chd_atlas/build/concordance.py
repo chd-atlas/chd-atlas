@@ -145,6 +145,18 @@ def _supports(row: BurdenRow) -> bool:
     return is_upward(row)
 
 
+def survives_own_correction(row: BurdenRow) -> bool:
+    """Whether a row is support for the gene that clears its own study's correction.
+
+    The `CORRECTED` tier's rule, as one predicate, because two renderers decide
+    by it -- the evidence matrix and the gene page's card (D56) -- and two
+    copies of a rule are two rules (CLAUDE.md section 4.28). Never a correction
+    this atlas computed: `pvalue_adjusted` is the study's own, and a row whose
+    study published none does not survive one.
+    """
+    return _supports(row) and row.pvalue_adjusted is not None and row.pvalue_adjusted < ALPHA
+
+
 def family_state(rows: Iterable[BurdenRow]) -> FamilyState:
     """The strongest thing one family says about one gene.
 
@@ -171,7 +183,7 @@ def family_state(rows: Iterable[BurdenRow]) -> FamilyState:
     supporting = [row for row in materialised if _supports(row)]
     if not supporting:
         return FamilyState.NO_ENRICHMENT
-    if any(row.pvalue_adjusted is not None and row.pvalue_adjusted < ALPHA for row in supporting):
+    if any(survives_own_correction(row) for row in supporting):
         return FamilyState.CORRECTED
     return FamilyState.NOMINAL
 
