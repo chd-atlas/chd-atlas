@@ -443,7 +443,7 @@ _SWATCH_GLYPHS: Final[dict[str, tuple[str, str]]] = {
 # tested it.
 EVIDENCE_POWER_CAVEAT: Final = (
     "<strong>No enrichment at these cohort sizes is not evidence against a gene</strong> "
-    "&mdash; burden tests routinely detect nothing for genes with overwhelming family and "
+    "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
     "functional evidence."
 )
 

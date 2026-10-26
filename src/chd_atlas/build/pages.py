@@ -342,6 +342,26 @@ _COMPARATOR_LABEL: Final[dict[str, str]] = {
     "none": "case series",
 }
 
+
+# What kind of analysis each arm of a study ran, named as the literature names it
+# (D49): a case-control burden test, a CNV burden test, or a de novo enrichment
+# against a mutation model -- which is not a burden test at all. A combination
+# nothing has taught this table names itself rather than nothing, the rule
+# `_count` applies to an unknown unit.
+def _analysis_label(comparator: str, variant_class: str) -> str:
+    if comparator == "mutation_model":
+        return "de novo enrichment (trios vs mutation model)"
+    if comparator == "control_cohort":
+        if variant_class.startswith("cnv_"):
+            return "CNV burden (case-control)"
+        if variant_class == "snv_indel":
+            return "case-control burden test"
+        return f"case-control burden test ({variant_class})"
+    if comparator == "none":
+        return "case series (no comparison group)"
+    return f"{comparator} ({variant_class})"
+
+
 # How a combination method is named on the page, what its second statistic is
 # called, and the caveat that must sit beside it. An unknown method renders its
 # raw token and no caveat rather than nothing -- the rule `_count` applies to an
@@ -430,7 +450,8 @@ _NULL_LINE_GLOSS: Final[dict[str, str]] = {
 _NULL_LINE_DEFAULT: Final = "no difference between the arms"
 
 # The partition columns that reached no page until 2026-08-05. Without them a
-# section headed "Rare variant burden" never says what *rare* means and a
+# section headed "Rare variant burden" (now "Rare-variant association", D49)
+# never says what *rare* means and a
 # case-control count of rare inherited variants reads exactly like a trio's de
 # novo count.
 #
@@ -472,7 +493,8 @@ _TEST_LABEL: Final[dict[str, str]] = {
 }
 
 # Attribution, in the voice `_validity_section` and `landing.py` already use for
-# republished content. The `<h2>` alone said "Rare variant burden" while its
+# republished content. The `<h2>` alone said "Rare variant burden" (now
+# "Rare-variant association", D49) while its
 # sibling says "Mirrored gene-disease validity", and the `_not_curated` notice
 # above it scopes itself to *classifications* -- so nothing between the heading
 # and the table said whose numbers these are.
@@ -560,10 +582,10 @@ _BROWSE_HEADERS: Final = (
     # verdict-shaped header beside a mirrored ClinGen `definitive` invites being
     # read as a competing one. This names the evidence type and the axis and
     # leaves the reading to the reader.
-    "burden across studies",
+    "rare variants across studies",
     "validity",
     "atlas curation",
-    "burden rows",
+    "rare-variant rows",
     "lesion groups",
 )
 
@@ -663,15 +685,27 @@ def _not_curated(fact: GeneFacts) -> str:
     Measured 2026-08-04 by restoring the old paragraph and returning it
     unconditionally: 1 failed, 621 passed --
     `test_an_uncurated_notice_never_denies_functional_records_the_rail_counts`
-    is its unique killer, and
-    `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it` does not
+    was its unique killer then, and
+    `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it` did not
     notice, because "not yet curated" is true of both wordings.
 
     Two further mutants, measured the same day, because the two branches are
     guarded separately: returning `""` for the `functional_count == 0` case
-    fails only `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`
-    (1 failed, 621 passed), and returning `""` unconditionally fails both tests
-    (2 failed, 620 passed). Neither branch rests on the other's guard.
+    failed only `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`
+    (1 failed, 621 passed), and returning `""` unconditionally failed both tests
+    (2 failed, 620 passed).
+
+    **Remeasured 2026-10-26, and the first sentence above no longer describes
+    who guards what.** The page test's old `"not yet curated" in page.lower()`
+    was also answered by the expression section's own "not yet curated"
+    notice, so it did not guard this paragraph at all; it now asserts this
+    notice's own opening literal. Replacing `_NOT_CURATED` with `"<p></p>"` and
+    running `tests/unit/test_build_pages.py` and
+    `tests/test_docs_match_the_build.py` (164 tests) gives 3 failed, 161
+    passed: `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`,
+    `test_an_uncurated_notice_never_denies_functional_records_the_rail_counts`
+    and `test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows`.
+    So no single test is the unique killer of this paragraph.
     """
     notice = (
         _NOT_CURATED
@@ -861,7 +895,7 @@ def _rail(
         # citing a linked, PubMed-referenced study. The count was right and the
         # label was wrong. Raised by review 2026-08-05.
         ("curated publications", str(len(fact.publications))),
-        ("burden rows", str(burden_rows)),
+        ("rare-variant rows", str(burden_rows)),
     ]
     identity_block = ""
     if identity is not None:
@@ -1309,10 +1343,14 @@ def _burden_section(
             if forests
             else table
         )
+        analyses = html.escape(
+            " · ".join(sorted({_analysis_label(r.comparator, r.variant_class) for r in study_rows}))
+        )
         blocks.append(
             f"<h3>"
             f'<a href="{html.escape(_pubmed(study))}">'
             f"{html.escape(_study_label(study, publications))}</a></h3>"
+            f'<p class="study-analyses">{analyses}</p>'
             f"{_disclosure(study, publications)}"
             f"{warning}"
             f"{counted}"
@@ -1369,7 +1407,7 @@ def _burden_section(
     )
 
     return (
-        "<h2>Rare variant burden</h2>"
+        '<h2 id="rare-variants">Rare-variant association</h2>'
         + _MIRRORED_NOTICE
         + matrix
         # RELOCATED, not folded. A summary that counts datasets is adjacent to
@@ -1447,7 +1485,8 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
 
     **Three of the eight partition columns reached no page.** `variant_class`,
     `origin` and `maf_max` were populated and appeared nowhere, so a section
-    headed "Rare variant burden" never said what *rare* meant, and a
+    headed "Rare variant burden" (now "Rare-variant association", D49) never said
+    what *rare* meant, and a
     case-control count of rare-inherited variants was indistinguishable from a
     trio's de novo count. `tables.py` states the case against exactly this: the
     partition "exists to stop two incomparable rows from *looking* comparable".
@@ -4407,8 +4446,8 @@ def build_gene_index_page(
             # range filter would need the script to change as well.
             (
                 "burden",
-                "any burden",
-                "whether burden evidence exists",
+                "any rare-variant result",
+                "whether rare-variant evidence exists",
                 {"yes" if burden_counts.get(gene) else "no" for gene in facts},
             ),
         )

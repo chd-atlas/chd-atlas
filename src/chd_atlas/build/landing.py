@@ -252,12 +252,12 @@ def _render(
     stats = "".join(
         (
             _stat("Genes published", _number(published_gene_count)),
-            _stat("Burden statistics", _number(census.rows)),
+            _stat("Rare-variant statistics", _number(census.rows)),
             # Directly under the statistics it combines. "Within-study" is in
             # the label because "combined burden results" alone, on the front
             # page of an atlas that refuses to pool studies (D33), reads as
             # exactly the pooling it refuses.
-            _stat("Within-study combined burden results", _number(combined_results)),
+            _stat("Within-study combined rare-variant results", _number(combined_results)),
             _stat("Independent datasets", _number(census.families)),
             # Beside "Independent datasets" rather than at the end, because the
             # two answer the same reader's question one level apart: how many
@@ -265,7 +265,7 @@ def _render(
             # sample collections those group. Both are published, and
             # `cohorts.json` is where the caveats on each live.
             _stat("Sample collections", _number(len(corpus.cohorts))),
-            _stat("Genes with burden evidence", _number(census.genes)),
+            _stat("Genes with rare-variant evidence", _number(census.genes)),
             # Immediately after the burden figures, for the reason this pair
             # exists at all: a whole developmental-expression layer landed
             # across Tasks 1-14 with nothing on this page naming it, which is
@@ -302,13 +302,13 @@ def _render(
       <div class="figure"><span class="figure-value">{_number(census.families)}</span>
         <span class="figure-label">independent datasets</span></div>
       <div class="figure"><span class="figure-value">{_number(census.rows)}</span>
-        <span class="figure-label">burden statistics</span></div>
+        <span class="figure-label">rare-variant statistics</span></div>
     </div>
     <p class="hero-note">Every gene here is published on an upstream authority's
       assessment, never one this atlas authored: {_number(panel_graded_count)} on a ClinGen
       expert panel's classification, {_number(published_gene_count - panel_graded_count)} on
       two or more Gene Curation Coalition submitters agreeing where no panel disputes it.
-      Rare-variant burden statistics are reported per independent cohort family, and none is
+      Rare-variant statistics are reported per independent cohort family, and none is
       pooled across them.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
@@ -323,8 +323,11 @@ def _render(
   <h2>What's published</h2>
   <dl class="stats">{stats}</dl>
   <p>{_plural(assertion_count, "curated gene-disease assertion")} so far: {asserted}.</p>
-  <p>A <strong>burden statistic</strong> is one study's rare-variant test of one gene under
-    one design. An <strong>independent dataset</strong> is a cohort family rather than a
+  <p>A <strong>rare-variant statistic</strong> is one study's rare-variant test of one gene
+    under one design: a case-control burden test of rare SNVs and indels or of copy-number
+    variants, or a de novo enrichment test, which are different analyses and are named as
+    such on each gene's page. An
+    <strong>independent dataset</strong> is a cohort family rather than a
     paper: two studies drawing on the same sample collection describe the same people and
     count once. How many datasets agree about a gene is shown on every row of the browse
     page, and it is a count of evidence — never a verdict on the gene.</p>

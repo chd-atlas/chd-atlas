@@ -90,7 +90,7 @@ wrong by the next one.
 
   - `genes` is the published population — the number of gene bundles, and the
     length of `genes/index.json`'s `genes` array.
-  - `burden_rows` is the number of burden statistics reaching a bundle, which is
+  - `burden_rows` is the number of rare-variant statistics reaching a bundle, which is
     exactly the sum of every browse row's `burden_row_count`. It counts what a
     consumer can fetch, **not** what `mirrors/burden.tsv` holds: that file is
     deliberately wider than the publication gate, and today 59 of its 150 genes
@@ -227,7 +227,7 @@ point to the other 120. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
-carrying burden evidence, and the genes this atlas has itself curated. All are
+carrying rare-variant evidence, and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
 than written by hand. It links to
 `genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json` and the
@@ -464,7 +464,7 @@ table a person can read and filter. Each row carries the HGNC id — linked to
 that gene's page — the symbol, `headline_confidence`, `validity_state`,
 `atlas_curation` and the gene's lesion groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
-atlas curation, burden evidence), whose options are the values actually present
+atlas curation, rare-variant evidence), whose options are the values actually present
 in the build rather than every value the vocabulary allows. The confidence menu
 now includes genes with no headline at all: 21 of the 119 are admitted on
 submitter agreement and carry `null`, and the browse page renders those with a
@@ -728,7 +728,7 @@ warrant itself.
 
 ### The bundle's `burden` array: per study, never pooled
 
-Published rare-variant burden statistics for the gene, one object per
+Published rare-variant statistics for the gene, one object per
 (study, cohort stratum, variant class, consequence class, frequency threshold).
 **1210 rows reach the API**, across 118 of the 119 published genes, from
 3 studies (PMID:34324492, PMID:40127276, PMID:42230622), contributing
@@ -740,9 +740,17 @@ exactly what happened on 2026-08-06, when the gate widened from 23 genes to 92
 and 625 already-mirrored rows became fetchable with no change to the mirror.
 The same reason `mirrors/genes.tsv` registers 185 genes and 119 publish.
 
+**Terms.** A *burden test* compares how often cases and controls carry
+qualifying rare variants in a gene (case-control). A *CNV burden* test does the
+same for copy-number variants (deletions, today). A *de novo enrichment* test compares de novo
+mutations in affected trios with a mutation-rate model's expectation; it is not
+a burden test. The bundle keeps the historical key `burden` for every
+rare-variant analysis, case series included; the gene page heads them "Rare-variant association" and names each study's
+analysis.
+
 **One published gene carries no burden rows at all** and its `burden` array is
 `[]`. That is not a fetch failure: the publication gate is an authority's
-classification, not the presence of burden evidence, and a gene no burden study
+classification, not the presence of rare-variant evidence, and a gene no rare-variant study
 covered is exactly what a widened gate admits.
 `burden_row_count` on the browse row is this array's length.
 
@@ -1013,7 +1021,7 @@ the corpus has no burden data at all. That is deliberate: every gene shows the
 same slots, so a dataset that did not test this gene is visible as an absence
 rather than as a shorter list.
 
-**The browse page heads this column "burden across studies", not
+**The browse page heads this column "rare variants across studies", not
 `independent_datasets`.** The key names what is counted for a program; the
 header names what it is for a reader. Both avoid a verdict word on purpose —
 "replicated in" was the shorter candidate and was rejected, because for a gene
@@ -1702,7 +1710,7 @@ burden row that cites it — the column it appears in — not of the collection.
 
 `counts.cohorts` in `manifest.json` is the length of this array. It is **not**
 `counts.cohort_families`, which counts how many independent collections the
-burden evidence groups into (3 today) and is what
+rare-variant evidence groups into (3 today) and is what
 [`independent_datasets`](#independent_datasets-a-count-of-datasets-never-a-verdict)
 is derived from.
 

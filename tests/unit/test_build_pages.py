@@ -21,6 +21,7 @@ from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.pages import (
     _EM_DASH,
     _SCOPE_RULE,
+    _analysis_label,
     _date,
     _forest_text,
     _inheritance,
@@ -59,6 +60,12 @@ from chd_atlas.vocab import (
 
 TBX5 = "HGNC:11604"
 GATA4 = "HGNC:4173"
+
+# The rare-variant section's heading, as published (D49). One literal for every
+# slice below, so a rename edits one line and a vanished heading raises rather
+# than letting a slice fall through to the wrong section.
+_RARE_VARIANT_H2: Final = '<h2 id="rare-variants">Rare-variant association</h2>'
+_RARE_VARIANT_HEADING: Final = "Rare-variant association"
 
 
 def _validity(
@@ -252,7 +259,10 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert "not yet curated" in page.lower()
+    assert (
+        "<p>The atlas has <strong>not yet curated</strong> a lesion assertion for this gene. "
+        in page
+    )
     assert "Holt-Oram syndrome" in page
     assert "GATA4" in page
 
@@ -1104,8 +1114,11 @@ def test_every_browse_control_is_named_for_a_screen_reader(
         ("confidence", "Filter by mirrored confidence"),
         ("validity", "Filter by validity state"),
         ("curation", "Filter by atlas curation"),
-        ("burden", "Filter by whether burden evidence exists"),
+        ("burden", "Filter by whether rare-variant evidence exists"),
     ]
+    # The facet's neutral option reads "any rare-variant result" (D49), while the
+    # `burden` name and its yes/no values stay what the filter script reads.
+    assert '<option value="">any rare-variant result</option>' in page
 
 
 def _burden_row(**overrides: object) -> BurdenRow:
@@ -1231,7 +1244,7 @@ def _burden_page(
 
 
 def _burden_section_text(page: str) -> str:
-    """The `Rare variant burden` section alone, up to the next `<h2>`.
+    """The `Rare-variant association` section alone, up to the next `<h2>`.
 
     Sliced for the reason `_validity_table` and `_expression_section_text` are
     sliced (CLAUDE.md section 4.19). The developmental-expression section that
@@ -1239,7 +1252,7 @@ def _burden_section_text(page: str) -> str:
     page-wide `"<svg" not in page` can be satisfied -- or defeated -- by a
     picture the burden section did not draw.
     """
-    return _slice_between(page, "<h2>Rare variant burden</h2>", ("<h2>",))
+    return _slice_between(page, _RARE_VARIANT_H2, ("<h2",))
 
 
 def test_an_effect_size_is_never_rendered_without_the_measure_that_names_it(
@@ -1310,7 +1323,11 @@ def test_a_gene_with_no_burden_rows_gets_no_section_at_all(
     emptiness is itself an answer, an empty burden table would read as "this gene
     was studied and nothing was found" -- a claim no study made.
     """
-    assert "Rare variant burden" not in _burden_page(tmp_path, facts_uncurated, [])
+    page = _burden_page(tmp_path, facts_uncurated, [])
+    # The id, not the heading text: a heading renamed would make a text check
+    # pass vacuously (it did, until 2026-10-26).
+    assert 'id="rare-variants"' not in page
+    assert _RARE_VARIANT_HEADING not in page
 
 
 def test_two_studies_sharing_a_cohort_are_declared_not_independent(
@@ -1354,7 +1371,7 @@ def test_the_section_says_what_a_missing_row_means_without_asserting_why(
     found none.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
 
     assert "did not report" in section
     assert "does not always mean" in section
@@ -1449,7 +1466,8 @@ def test_the_page_says_what_was_counted_not_only_how_many(
 ) -> None:
     """Four partition columns reached no page while populated on all 187 rows.
 
-    A section headed "Rare variant burden" never said what *rare* meant, and
+    A section headed "Rare variant burden" (now "Rare-variant association", D49)
+    never said what *rare* meant, and
     `origin: any` -- a case-control count of variants regardless of inheritance
     -- was indistinguishable from a trio's de novo count. `vocab.VariantOrigin`
     warns about exactly that, and `tables.py` says the partition "exists to stop
@@ -1650,7 +1668,7 @@ def test_the_consequence_column_is_headed_for_the_column_it_renders(
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
     # Scoped to the burden section: `page.index("<thead>")` finds the mirrored
     # validity table, which is rendered first. Same trap as the provenance test.
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
 
     # Past the evidence matrix: it is now the first table in this section and
     # has its own `<thead>`. The comment above already records that
@@ -1701,7 +1719,7 @@ def test_the_browse_page_shows_how_much_burden_evidence_each_gene_has(
 
     page = _page(tmp_path, "index.html")
 
-    assert '<th scope="col">burden rows</th>' in page
+    assert '<th scope="col">rare-variant rows</th>' in page
     rows = {
         match.group(1): match.group(0)
         for match in re.finditer(r'<tr data-search="(hgnc:\d+)[^"]*".*?</tr>', page)
@@ -1734,7 +1752,9 @@ def test_the_rail_counts_burden_rows_and_names_the_publications_it_counts(
     )
 
     assert "<dt>curated publications</dt><dd>0</dd>" in page
-    assert "<dt>burden rows</dt><dd>2</dd>" in page
+    rail = _slice_between(page, '<aside class="rail">', ("</aside>",))
+    assert "<dt>rare-variant rows</dt><dd>2</dd>" in rail
+    assert "<dt>burden rows</dt>" not in rail
     assert "<dt>publications</dt>" not in page
 
 
@@ -1843,7 +1863,7 @@ def test_every_count_cell_names_what_it_counted(
         ),
     ]
     section = _burden_page(tmp_path, facts_uncurated, rows)
-    section = section[section.index("Rare variant burden") :]
+    section = section[section.index(_RARE_VARIANT_HEADING) :]
     # Past the evidence matrix, whose cells also carry counts.
     section = section[section.index("</table>") :]
     body = section[section.index("<tbody>") : section.index("</tbody>")]
@@ -1880,7 +1900,7 @@ def test_a_count_unit_nothing_has_taught_the_renderer_still_names_itself(
     is pinned here rather than left to be discovered.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row(count_unit="genomes")])
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
     # Past the evidence matrix, which is now the first table in this section and
     # has a `<tbody>` of its own. Slicing on the first one silently measured the
     # matrix instead -- the same trap this file records twice already.
@@ -2006,7 +2026,7 @@ def test_the_matrix_names_an_untested_design_rather_than_leaving_a_blank(
         families=(frozenset({"PMID:42230622"}), frozenset({"PMID:34324492"})),
         axes=(("snv_indel", "control_cohort"), ("cnv_deletion", "control_cohort")),
     )
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
     matrix = section[section.index('<table class="matrix">') : section.index("</table>")]
 
     # **The cell reads short and explains itself on hover.** The full sentence
@@ -2140,7 +2160,7 @@ def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
         _burden_row(consequence_class="missense_damaging"),  # the unbounded fixture
     ]
     page = _burden_page(tmp_path, facts_uncurated, rows)
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
     matrix = section[section.index('<table class="matrix">') : section.index("</table>")]
 
     # The measure travels with every number.
@@ -2164,7 +2184,8 @@ def test_the_browse_headers_and_cells_line_up(
     **`data_table` zips headers to cells by position and cannot detect a
     mismatch**, so inserting a header without moving its cell silently heads one
     column for a field two places away. That happened: "burden across studies"
-    went in after `definitive for` while the strip stayed after `atlas
+    (now headed "rare variants across studies", D49) went in after
+    `definitive for` while the strip stayed after `atlas
     curation`, and the whole suite passed -- 774 tests, none of which read a
     cell against its own header.
 
@@ -2203,10 +2224,10 @@ def test_the_browse_headers_and_cells_line_up(
     assert by_header["symbol"] == "TBX5"
     assert by_header["confidence"] == "definitive"
     # Only the strip renders a tally; only `validity` renders a validity state.
-    assert "tested" in by_header["burden across studies"]
+    assert "tested" in by_header["rare variants across studies"]
     assert by_header["validity"] == "expert_curated"
     assert by_header["atlas curation"] in {"curated", "not_yet_curated"}
-    assert by_header["burden rows"] == "4"
+    assert by_header["rare-variant rows"] == "4"
 
 
 def test_the_gene_page_matrix_carries_its_own_key_and_caption(
@@ -2226,10 +2247,12 @@ def test_the_gene_page_matrix_carries_its_own_key_and_caption(
     not have.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="lof")])
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
 
     # The caption that stops an empty matrix reading as a verdict.
     assert "not evidence against a gene" in section
+    assert "rare-variant tests routinely detect nothing" in section
+    assert "burden tests routinely" not in section
     # And a key, so the four states are nameable rather than only coloured.
     # Each swatch beside its own caption, not merely both strings present: a
     # membership check passes with the two swapped, and a swapped key on this
@@ -2246,6 +2269,10 @@ def test_the_gene_page_matrix_carries_its_own_key_and_caption(
         )
     # It sits with the matrix, not at the far end of the page.
     assert section.index("</table>") < section.index("not evidence against a gene")
+    # Cohort families, not studies: two papers on one sample collection are one
+    # row, never two replications. Literal, beside the matrix it qualifies.
+    assert "Rows are <strong>independent cohort families</strong>, not studies" in section
+    assert section.index("</table>") < section.index("independent cohort families")
 
 
 def test_a_family_wise_corrected_p_is_not_labelled_q(
@@ -2283,7 +2310,7 @@ def test_a_family_wise_corrected_p_is_not_labelled_q(
         [fdr, familywise],
         publications={_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS},
     )
-    section = page[page.index("Rare variant burden") :]
+    section = page[page.index(_RARE_VARIANT_HEADING) :]
     matrix = section[section.index('<table class="matrix">') : section.index("</table>")]
 
     assert "q 0.01" in matrix
@@ -3005,7 +3032,12 @@ def test_the_forest_carries_no_summary_diamond(
     # screen above, so the section-wide assertion above passes with or without
     # a word from this figure (CLAUDE.md section 4.19).
     figure = _forest_figures(section)[0]
-    assert "no pooled" in figure
+    # The caption alone: the `<title>` below makes the same claim and answered
+    # for the caption until 2026-10-26 (a deletion probe of the caption
+    # survived every test).
+    caption = re.sub(r"<title>.*?</title>", "", figure, flags=re.S)
+    assert "A forest plot usually ends in a summary diamond" in caption
+    assert "no pooled" in caption
     # And the same scoping again, one level in: the caption and the title are
     # two sentences and a check over the figure is answered by either.
     announced = re.search(r"<title>(.*?)</title>", figure, re.S)
@@ -3533,7 +3565,7 @@ def _expression_section_text(page: str) -> str:
     same words elsewhere on the page (CLAUDE.md section 4.19) -- the research
     notice, the scope rule and the burden section all sit on the same page.
     """
-    return _slice_between(page, "<h2>Developmental expression</h2>", ("<h2>",))
+    return _slice_between(page, "<h2>Developmental expression</h2>", ("<h2",))
 
 
 def test_a_gene_with_no_expression_data_says_the_atlas_has_not_curated_it(
@@ -4257,6 +4289,8 @@ def test_a_phase_the_source_never_ended_bands_nothing(tmp_path: Path) -> None:
     )
     assert section.count('class="chart-band"') == 1
     assert "Atrial septum morphogenesis" in section
+    caption = re.sub(r"<svg.*?</svg>", "", section, flags=re.S)
+    assert "Shaded: Atrial septum morphogenesis" in caption
     assert "Heart looping" not in section
 
     # And with nothing else to band, there is no admissible chart at all.
@@ -5433,7 +5467,7 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
         scope_labels={"MONDO:0018997": "Noonan syndrome", "MONDO:0012547": "Noonan syndrome 4"},
     )
     page = _page(tmp_path, "HGNC_4173.html")
-    section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2>",))
+    section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2",))
 
     direct = (
         "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
@@ -5624,7 +5658,7 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
     )
 
     others = _slice_between(
-        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2>",)
+        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2",)
     )
     assert others.count("<tr><td>") == (1 if listed else 0)
     assert ("listed here only where it differs" in others) is (
@@ -5666,7 +5700,7 @@ def test_a_copy_spelling_the_panels_rung_differently_is_still_folded(
     )
 
     others = _slice_between(
-        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2>",)
+        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2",)
     )
     assert others.count("<tr><td>") == 0
 
@@ -5725,6 +5759,13 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     )
     assert "<td>2024-11-07</td>" in section and "T17:00" not in section
     assert "<td>2018-05-31</td>" in section and "20:04:32" not in section
+    intro = (
+        "<p>Every classification below is an upstream panel's or submitter's, "
+        "republished with its provenance intact.</p>"
+    )
+    assert intro in section
+    # "below" is true only above both groups.
+    assert section.index(intro) < section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.count("<td>Autosomal dominant</td>") == 2
     assert "<td>AD</td>" not in section
     assert ">SOP11 report</a>" in section
@@ -5882,3 +5923,101 @@ def test_a_gene_page_that_cannot_carry_its_required_links_is_refused(
             burden={},
             cohorts={},
         )
+
+
+def test_each_study_names_the_analyses_it_ran_under_its_heading(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D49: a de novo enrichment is not a burden test, and a reader is told which.
+
+    One study running both arms (PMID:40127276 does) names both; a CNV study
+    says so. Derived from `comparator` x `variant_class`, never typed per study.
+    """
+    rows = [
+        _burden_row(),  # PMID:42230622, control_cohort, snv_indel
+        _burden_row(study="PMID:34324492", variant_class="cnv_deletion", source="audain2021"),
+        _burden_row(
+            study="PMID:40127276",
+            comparator="mutation_model",
+            count_unit="de_novo_mutations",
+            n_control_carriers=None,
+            n_controls=None,
+            expected_count=0.4,
+            effect=12.5,
+            effect_measure="enrichment_ratio",
+            effect_bound=None,
+            ci_low=None,
+            pvalue_test="poisson",
+            source="sierant2025",
+        ),
+        _burden_row(study="PMID:40127276", source="sierant2025"),
+    ]
+    section = _burden_section_text(
+        _burden_page(
+            tmp_path,
+            facts_uncurated,
+            rows,
+            publications={
+                _PUBLICATION.id: _PUBLICATION,
+                **_OTHER_PUBLICATIONS,
+                **_SIERANT_PUBLICATION,
+            },
+        )
+    )
+    assert _subtitles_by_study(section) == {
+        "42230622": "case-control burden test",
+        "34324492": "CNV burden (case-control)",
+        "40127276": "case-control burden test · de novo enrichment (trios vs mutation model)",
+    }
+
+
+def _subtitles_by_study(section: str) -> dict[str, str]:
+    """{pmid: subtitle}, matched only where the subtitle sits directly under that
+    study's heading, so a subtitle under the wrong study fails too."""
+    return dict(
+        re.findall(
+            r'<h3><a href="https://pubmed\.ncbi\.nlm\.nih\.gov/(\d+)/?">[^<]*</a></h3>'
+            r'<p class="study-analyses">([^<]+)</p>',
+            section,
+        )
+    )
+
+
+def test_a_study_running_many_analyses_lists_them_in_sorted_order(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The subtitle joins a `set`, so its order is only deterministic if sorted.
+
+    Eight synthetic comparators fall through `_analysis_label` to the raw
+    `"<token> (snv_indel)"` form, giving eight distinct labels. Probed over
+    `PYTHONHASHSEED` 0..299 in subprocesses: the set's own iteration order
+    equalled the sorted join in 0 of 300 runs (a two-label set manages about
+    half), so removing `sorted(` fails under essentially every seed.
+    """
+    tokens = ["zulu", "alpha", "mike", "echo", "kilo", "bravo", "tango", "delta"]
+    rows = [_burden_row(comparator=t, cohort_stratum=t) for t in tokens]
+    section = _burden_section_text(_burden_page(tmp_path, facts_uncurated, rows))
+    assert _subtitles_by_study(section) == {
+        "42230622": " · ".join(
+            f"{t} (snv_indel)"
+            for t in ["alpha", "bravo", "delta", "echo", "kilo", "mike", "tango", "zulu"]
+        )
+    }
+
+
+@pytest.mark.parametrize(
+    ("comparator", "variant_class", "label"),
+    [
+        ("mutation_model", "snv_indel", "de novo enrichment (trios vs mutation model)"),
+        ("control_cohort", "snv_indel", "case-control burden test"),
+        ("control_cohort", "cnv_deletion", "CNV burden (case-control)"),
+        ("control_cohort", "sv_other", "case-control burden test (sv_other)"),
+        ("none", "snv_indel", "case series (no comparison group)"),
+        ("a_future_comparator", "snv_indel", "a_future_comparator (snv_indel)"),
+    ],
+)
+def test_the_analysis_label_names_what_nothing_has_taught_it_rather_than_nothing(
+    comparator: str, variant_class: str, label: str
+) -> None:
+    """Both raw fallbacks render the unknown token verbatim, as `_count` does."""
+    assert _analysis_label(comparator, variant_class) == label
