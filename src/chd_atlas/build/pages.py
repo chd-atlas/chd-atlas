@@ -1341,8 +1341,10 @@ def _rail(
     gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); the Orphanet
     line (`_card_scope`); the rare-variant results that survive their own
     study's correction (`_card_rare_variants`, D56), each linking to its
-    study's block; the atlas-curation sentence (`_card_curation`); the JSON
-    link.
+    study's block; the atlas-curation sentence (`_card_curation`); and a last
+    line linking the top of `methods.html` as "How to read this page" (P1,
+    2026-10-26) beside the gene's JSON. The nav's link to the same file reads
+    "How to read this atlas"; from the card the question is about this page.
     Every row from data the page already has -- nothing computed.
 
     It replaced a definition list of raw tokens and zero counts -- `validity:
@@ -1430,7 +1432,8 @@ def _rail(
         f"{_card_scope(fact, gene_validity, warrants or {})}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
-        f'<p><a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
+        '<p><a href="../methods.html">How to read this page</a> &middot; '
+        f'<a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
     )
 
 
@@ -3492,38 +3495,30 @@ _NOT_CURATED_EXPRESSION: Final = (
 # needed more here: that layer leaves a gap as an absence, while this one turns
 # a low number into a sentence, which is the more persuasive -- and more
 # dangerous -- thing to get wrong.
-_BULK_DILUTION_NOTICE: Final = (
+#
+# The spec's short form since 2026-10-26 (D50, spec section 5), one of the ten
+# caveats it keeps visible: the claim a reader acts on -- bulk tissue, and a low
+# or absent figure is not evidence the gene is unimportant to heart development
+# -- and a link. The dilution argument, which lineages a whole heart averages
+# over, is on `methods.html#expression` in full (`methods._EXPRESSION`). The
+# short form drops "never a single cell type", which "whole, bulk tissue"
+# already says, and "bulk" before "figure", which the bold clause before it
+# already scopes. "below" stays true in this position: the notice opens the
+# section, above every dataset block.
+#
+# Named `_BULK_DILUTION_NOTICE` until review (2026-10-26): the one line it keeps
+# says nothing of dilution, so the name described text that had left it.
+_BULK_TISSUE_NOTICE: Final = (
     '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
-    "tissue, never a single cell type.</strong> A whole embryonic heart is "
-    "cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, cushion "
-    "mesenchyme and blood, and many congenital heart disease genes act in one rare "
-    "lineage &mdash; the cardiac neural crest and outflow tract, the second heart "
-    "field, the conduction system. A gene expressed intensely in one such lineage can "
-    "still read low, or fall below the detection floor, once diluted across the whole "
-    "organ: a low or absent bulk figure is not evidence that a gene is unimportant to "
-    "heart development.</p>"
+    "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
+    'heart development. <a href="../methods.html#expression">How to read these '
+    "figures</a>.</p>"
 )
 
-_EXPRESSION_READING_NOTES: Final = (
-    "<p>Each organ's median abundance is placed against that organ's own percentile "
-    "grid for that dataset and developmental stage, and the number of genes measured "
-    "travels with every percentile shown below. No percentile is published below a "
-    "dataset's own detection floor, because the rank of an unreliable measurement is "
-    "not itself a measurement.</p>"
-)
-
-# Conditional on the section actually showing more than one placement.
-# Rendered on a page with at most one, this would warn a reader against
-# comparing figures the page does not even lay out side by side -- the same
-# reason `_composite_note` is (and `_SYNONYMOUS_NOTICE` was) conditional on a row
-# that could earn them actually being on the page.
-_PERCENTILE_COMPARABILITY_NOTICE: Final = (
-    "<p>Percentiles on this page are <strong>not comparable across organs or across "
-    "developmental stages</strong>: each organ transcribes a different fraction of the "
-    "whole gene set, and the reference distribution itself changes shape as the heart "
-    "matures. A high percentile shown for one organ or stage says nothing about a "
-    "lower one shown elsewhere on this page.</p>"
-)
+# `_EXPRESSION_READING_NOTES` and `_PERCENTILE_COMPARABILITY_NOTICE` sat here
+# until 2026-10-26: the reading notes every gene page folded under "How to read
+# these figures". They moved, with their histories, to `methods._EXPRESSION`
+# (D50).
 
 
 def _phase_sentence(phase: PhaseInfo) -> str:
@@ -3620,16 +3615,25 @@ def _specificity_sentence(spec: Specificity, cardiac_tissues: frozenset[str]) ->
     return f'<p class="method">{base} {peak}</p>'
 
 
-def _specificity_gap_sentence(reason: str | None, floor: float | None) -> str:
+def _specificity_gap_sentence(reason: str | None, floor: float | None, unit: str) -> str:
     """Why tau is absent for a stage, in the same voice as `_specificity_sentence`.
 
     `peak_below_detection_floor` is kept out of `_SPECIFICITY_GAP_CLAUSE`
     because it is the one reason with a number to show: the floor value, named
     for the same reason rule 5 requires it beside a tissue's own placement gap
     -- a reader told a figure is missing because of a floor is owed the floor.
+
+    **And its unit (2026-10-26).** It read "(detection floor 1)" in 115 stage
+    blocks on 28 pages of a build of 0fc451a, directly above table cells
+    quoting the same floor as "(detection floor 1 tpm)" -- the `_count`/
+    `count_unit` defect in a new place. `unit` is the stage's own (`_stage_block`
+    reads it off the stage's measurements, as each cell reads its own); where
+    there is none to read, the number stands alone rather than beside a
+    dangling space.
     """
     if reason == ProfileGap.PEAK_BELOW_DETECTION_FLOOR.value:
-        qualifier = f" (detection floor {_fmt(floor)})" if floor is not None else ""
+        measured = f" {html.escape(unit)}" if unit else ""
+        qualifier = f" (detection floor {_fmt(floor)}{measured})" if floor is not None else ""
         return (
             "τ is not available: every organ sampled at this stage is below the "
             f"detection floor{qualifier}."
@@ -3683,8 +3687,9 @@ def _tissue_table(tissues: Sequence[TissueProfileEntry], floor: float | None) ->
 
     Rows, not columns: laying organs out side by side would itself be the
     layout rule 8 warns against, since a table invites a reader's eye to
-    compare adjacent cells. `_PERCENTILE_COMPARABILITY_NOTICE` is what a list
-    alone cannot say, and is rendered beside it where it applies.
+    compare adjacent cells. What a list alone cannot say -- that percentiles
+    are not comparable across organs or stages -- was rendered beside it until
+    2026-10-26 and is stated once on `methods.html#expression` since (D50).
     """
     rows = [
         Row(cells=(tissue["tissue"], _abundance(tissue), _percentile_cell(tissue, floor)))
@@ -3702,7 +3707,12 @@ def _stage_block(
     if spec is not None:
         specificity_html = _specificity_sentence(spec, cardiac_tissues)
     else:
-        gap = _specificity_gap_sentence(stage["specificity_unavailable_reason"], floor)
+        # The first unit the stage's own measurements carry. One dataset quotes
+        # every organ in one unit because validation makes it: PRF008 is an
+        # ERROR for a dataset whose `profiles.median_abundance` comes in more
+        # than one unit, and the build refuses a corpus with any error.
+        unit = next((cell["unit"] for cell in stage["tissues"] if cell["unit"]), "")
+        gap = _specificity_gap_sentence(stage["specificity_unavailable_reason"], floor, unit)
         specificity_html = f'<p class="method">{gap}</p>'
     return (
         f"<h4>{label}</h4>"
@@ -3995,7 +4005,8 @@ def _phase_bands(entry: DatasetProfileEntry, phases: CardiacPhaseFile | None, co
     concurrently at 6 wpc. Overlapping bands share one fill and merge into a
     single shaded region marking the morphogenetic window; the caption below
     the figure is what names each of them in text, which is also what a reader
-    who cannot hover gets.
+    who cannot hover gets -- inside its "How to read this chart" toggle since
+    2026-10-26 (D57, `_band_caption`).
     """
     edge = _half_step(count)
     rects = []
@@ -4049,6 +4060,26 @@ def _other_gap_clause(reasons: frozenset[str]) -> str:
     )
 
 
+def _chart_notes(notes: str) -> str:
+    """An expression chart's folded key, under "How to read this chart" (D57).
+
+    One implementation for the trajectory and the small multiples, so the two
+    toggles on one page cannot word their summary or their link two ways. The
+    link names its section, as the forest's toggle names `#rare-variants`: the
+    nav's "How to read this atlas" and the gene card's "How to read this page"
+    are the two texts that open the top of `methods.html`.
+    Both paragraphs are `method`, because unlike the forest's these sit outside
+    a `<figcaption>`, and a bare `<p>` would render at body size under the
+    caption line it continues.
+    """
+    return (
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+        f'<p class="method">{notes}</p>'
+        '<p class="method"><a href="../methods.html#expression">How to read expression '
+        "figures</a></p></details>"
+    )
+
+
 def _band_caption(
     entry: DatasetProfileEntry,
     phases: CardiacPhaseFile | None,
@@ -4099,6 +4130,24 @@ def _band_caption(
     MMP21 at 1 tpm, FOXH1 at 2), and "median abundance in whole heart, 0.316
     to 3.16 tpm" would attribute to their medians a spread neither end of
     which anyone measured.
+
+    **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
+    caption was one paragraph of four or five sentences, 108 to 151 words,
+    under the trajectory on 112 pages; the visible line is 61 on every one of
+    them (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 107 to 149 and 60. The two axis
+    sentences stay in sight: they say what every point on the figure is, and
+    the second is particular to this gene. The floor, tick and no-row clauses
+    and the shaded phases fold under "How to read this chart", which closes on
+    a link to `methods.html#expression`, where the axes are stated once in
+    general; the link reads "How to read expression figures", for the reason
+    the forest's names its section rather than the nav's "How to read this
+    atlas". **The fold changed no clause's condition**, and the no-row clause
+    stays after the floor clause in the same paragraph: its first spelling,
+    "different again", contrasts itself with the floor clause and points at
+    nothing without it in front.
     """
     named = ", ".join(html.escape(phase.label) for phase, _, _ in _banded_phases(entry, phases))
     attribution = html.escape(phases.attributed_to) if phases is not None else ""
@@ -4150,14 +4199,17 @@ def _band_caption(
         if stages
         else "this dataset's stages"
     )
-    return (
+    visible = (
         f'<p class="method">Left to right: {span} in curated developmental '
         "order, evenly spaced &mdash; the axis is <strong>order, not elapsed time</strong>. "
         f"Vertical: median abundance in whole {html.escape(tissue)}, {unit}, on a log scale; "
         f"the axis runs {_fmt(low)} to {_fmt(high)} and is fitted to <strong>this gene</strong>, "
-        "so a curve's height compares nothing to another gene's."
-        f"{floor_clause}{tick_clause}{gap_clause} Shaded: {named} ({attribution}).</p>"
+        "so a curve's height compares nothing to another gene's.</p>"
     )
+    # Never empty: `_trajectory` draws nothing without a band, so there is
+    # always a phase to name.
+    notes = f"{floor_clause}{tick_clause}{gap_clause} Shaded: {named} ({attribution}).".strip()
+    return visible + _chart_notes(notes)
 
 
 def _adjacent_runs(
@@ -4407,10 +4459,15 @@ def _no_trajectory_sentence(
     USP44, DAW1, FGF8, GDF1, NODAL. Their headline grades are `definitive`
     (ZIC3, NODAL), `moderate` (DAW1, FGF8), `limited` (USP44) and none at all
     (SEMA3E, GDF1). They are laterality and outflow-tract genes acting in rare
-    lineages, which is exactly the dilution `_BULK_DILUTION_NOTICE` describes.
-    An empty chart beside a definitive chip asserts the thing that caption
-    denies, so this tier states the fact and repeats the caveat rather than
-    showing a frame with nothing in it.
+    lineages, which is exactly the dilution `methods.html#expression` states
+    in full. `_BULK_TISSUE_NOTICE`, the line above every dataset block, has
+    said nothing of dilution since 2026-10-26 (bulk tissue, and a low figure
+    is not evidence the gene is unimportant, then the link), so on these
+    pages this sentence is the only statement of the mechanism: measured on a
+    build of 802d694, "diluted" appears on 7 gene pages, these seven, once
+    each, all in this sentence. An empty chart beside a definitive chip
+    asserts the thing that caveat denies, so this tier states the fact and
+    the mechanism rather than showing a frame with nothing in it.
 
     **Two branches, because "nothing placed" is not one fact.** All seven of
     those genes are below the floor, and that is what earns the dilution
@@ -4697,6 +4754,22 @@ def _spark_caption(
     because "this atlas calls heart the cardiac tissue and placed nothing
     there" is the fact, and dropping the sentence would leave a reader to
     conclude the atlas never declared one.
+
+    **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
+    caption was one paragraph of five or six sentences, 133 to 175 words,
+    under the grid on 118 pages; the visible line is 41 on every one of them
+    (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 131 to 174 and 40. What stays in sight
+    is what every panel is: one per organ with a placed measurement, in stage
+    order, all on one abundance axis whose range is printed. Why the axis is
+    shared, the highlight, the breaks and the organs with no panel fold under
+    "How to read this chart" (`_chart_notes`, the trajectory's toggle too).
+    The fold changed no clause's condition. The opening clause stays the one
+    the paragraph above explains: it is true of a grid that drops an organ, so
+    the folded sentence naming the dropped organ adds to it rather than
+    correcting it.
     """
     unit = html.escape(_dominant_unit(entry, set(drawn)))
     interrupted = [_line_breaks(wholes[tissue]) for tissue in drawn]
@@ -4748,15 +4821,19 @@ def _spark_caption(
         )
     else:
         missing = ""
-    return (
+    visible = (
         '<p class="method">One panel per organ with a placed measurement for this gene, each '
         "drawn left to right in curated developmental order &mdash; the horizontal axis is "
         "<strong>order, not elapsed time</strong>. <strong>Every panel shares one abundance "
-        f"axis</strong> ({_fmt(low)} to {_fmt(high)} {unit}, log scale), which is what makes "
-        "a gene concentrated in one organ look different from a broadly expressed one; a "
-        "per-organ axis would rescale every line to its own range and hide exactly that "
-        f"difference.{highlight}{breaks}{missing} Every figure is in the table below.</p>"
+        f"axis</strong> ({_fmt(low)} to {_fmt(high)} {unit}, log scale).</p>"
     )
+    notes = (
+        "A shared axis is what makes a gene concentrated in one organ look different from a "
+        "broadly expressed one; a per-organ axis would rescale every line to its own range "
+        f"and hide exactly that difference.{highlight}{breaks}{missing} Every figure is in "
+        "the table below."
+    )
+    return visible + _chart_notes(notes)
 
 
 def _dataset_block(
@@ -4850,21 +4927,6 @@ def _dataset_block(
     return heading + lede + sparks + folded
 
 
-def _placement_count(entries: Sequence[DatasetProfileEntry]) -> int:
-    """How many organ/stage/dataset cells actually carry a percentile.
-
-    What `_PERCENTILE_COMPARABILITY_NOTICE` is conditioned on: a page with at
-    most one placement has nothing side by side for a reader to compare.
-    """
-    return sum(
-        1
-        for entry in entries
-        for stage in entry["stages"]
-        for tissue in stage["tissues"]
-        if tissue["placement"] is not None
-    )
-
-
 def _expression_section(
     profile: ExpressionProfile,
     datasets: Mapping[str, Dataset],
@@ -4889,6 +4951,17 @@ def _expression_section(
     mapping is the caller's job to default to `EMPTY_EXPRESSION_PROFILE`,
     matching `bundles._expression_profile`'s own fallback, so the page and the
     bundle cannot disagree about which genes carry data.
+
+    **The reading notes left on 2026-10-26 (D50).** They were folded under
+    "How to read these figures" on all 119 gene pages -- how a median is
+    placed and why none is placed below the floor, and, where the section laid
+    out more than one placement (118 pages, measured on a build of 0fc451a),
+    that percentiles are not comparable across organs or stages. Both teach
+    how to read the figures and say nothing about this gene, so both are on
+    `methods.html#expression`, where the conditional went too: stated once in
+    general, the comparability sentence has no position to be false in. What
+    stays is `_BULK_TISSUE_NOTICE`'s short form, visible and unconditional,
+    which links there.
     """
     entries = profile["datasets"]
     if not entries:
@@ -4897,14 +4970,7 @@ def _expression_section(
     blocks = "".join(
         _dataset_block(entry, datasets.get(entry["dataset"]), phases) for entry in entries
     )
-    notes = _EXPRESSION_READING_NOTES
-    if _placement_count(entries) > 1:
-        notes += _PERCENTILE_COMPARABILITY_NOTICE
-    reading = (
-        '<details class="reading-notes"><summary>How to read these figures</summary>'
-        f"{notes}</details>"
-    )
-    return "<h2>Developmental expression</h2>" + _BULK_DILUTION_NOTICE + reading + blocks
+    return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
 
 
 def build_gene_pages(

@@ -4409,7 +4409,26 @@ def test_n_samples_travels_with_every_figure_and_distinguishes_a_single_observat
 def test_tau_undefined_at_one_organ_says_so_rather_than_a_number(tmp_path: Path) -> None:
     """`specificity: null` (one organ sampled) beside a stage with a real tau,
     on the same gene page -- the fixture pair CLAUDE.md section 4.14 asks for.
+
+    **And the floor's unit where the peak is below it (2026-10-26).** The
+    sentence read "(detection floor 1)" -- a number with no unit, in 115 stage
+    blocks on 28 pages of a build of 0fc451a, directly above table cells
+    quoting the same floor as "(detection floor 1 tpm)". It takes the
+    unit of the stage's own measurements, the way those cells take theirs. The
+    fixture's unit is `rpkm`, not the corpus's `tpm`, so a hard-coded unit
+    fails. Pinned as the whole sentence, because the stage's table cells carry
+    the same parenthesis and would answer a bare substring check. A stage with
+    no measurement to read a unit from renders the bare number rather than a
+    dangling space -- a payload the pipeline does not produce today, kept
+    honest rather than trusted.
     """
+    below = "peak_below_detection_floor"
+    unplaced = tuple(
+        _tissue_entry(
+            tissue=organ, median=0.3, placement=None, not_placed_reason="below_detection_floor"
+        )
+        for organ in ("Heart", "Liver")
+    )
     profile = _expression_profile(
         (
             _dataset_profile_entry(
@@ -4423,18 +4442,39 @@ def test_tau_undefined_at_one_organ_says_so_rather_than_a_number(tmp_path: Path)
                         stage="two_organs",
                         specificity=_specificity(tissues=("Heart", "Liver"), highest_in="Heart"),
                     ),
+                    _stage_entry(
+                        stage="peak_below",
+                        specificity_unavailable_reason=below,
+                        tissues=unplaced,
+                    ),
+                    _stage_entry(stage="no_unit", specificity_unavailable_reason=below),
                 )
             ),
         )
     )
-    section = _expression_section_text(_expression_page(tmp_path, {GATA4: profile}))
+    section = _expression_section_text(
+        _expression_page(
+            tmp_path, {GATA4: profile}, {"E-MTAB-6814": _profile_dataset(detection_floor=1.0)}
+        )
+    )
 
     one_organ = _slice_between(section, "<h4>one_organ</h4>", ("<h4>",))
     two_organs = _slice_between(section, "<h4>two_organs</h4>", ("<h4>",))
+    peak_below = _slice_between(section, "<h4>peak_below</h4>", ("<h4>",))
+    no_unit = _slice_between(section, "<h4>no_unit</h4>", ("<h4>",))
 
     assert "τ is not available: only one organ was sampled at this stage" in one_organ
     assert "τ =" not in one_organ
     assert "τ = 0.483" in two_organs
+    assert (
+        '<p class="method">τ is not available: every organ sampled at this stage is below the '
+        "detection floor (detection floor 1 rpkm).</p>"
+    ) in peak_below
+    assert "(detection floor 1)" not in peak_below
+    assert (
+        '<p class="method">τ is not available: every organ sampled at this stage is below the '
+        "detection floor (detection floor 1).</p>"
+    ) in no_unit
 
 
 def test_every_stage_outcome_reads_as_a_state_never_a_bug_or_blank(tmp_path: Path) -> None:
@@ -4525,6 +4565,14 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
     read false in the position that motivated the fix. A caveat present only
     beside a below-floor tissue would read as an excuse for that gene's own
     numbers rather than as the general fact it is.
+
+    **The short form since 2026-10-26 (D50, spec section 5).** The notice was
+    95 words on every gene page; the gene page keeps the claim a reader acts
+    on -- bulk tissue, and a low or absent figure is not evidence against the
+    gene -- and links `methods.html#expression`, which carries the dilution
+    argument in full. It is one of the ten caveats the spec keeps visible, so
+    it is pinned whole, as a literal, outside every fold, and it is still
+    unconditional.
     """
     all_detected = _expression_profile(
         (
@@ -4533,10 +4581,18 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
             ),
         )
     )
-    caveat = "Every measurement below is from whole, bulk tissue, never a single cell type."
+    caveat = (
+        '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
+        "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
+        'heart development. <a href="../methods.html#expression">How to read these '
+        "figures</a>.</p>"
+    )
+
+    def unfolded(section: str) -> str:
+        return re.sub(r"<details.*?</details>", "", section, flags=re.S)
 
     good_news_section = _expression_section_text(_expression_page(tmp_path, {GATA4: all_detected}))
-    assert caveat in good_news_section
+    assert caveat in unfolded(good_news_section)
 
     below_floor = _expression_profile(
         (
@@ -4562,33 +4618,35 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
             {"E-MTAB-6814": _profile_dataset(detection_floor=1.0)},
         )
     )
-    assert caveat in bad_news_section
+    assert caveat in unfolded(bad_news_section)
 
 
-def test_percentiles_are_captioned_as_not_comparable_only_when_more_than_one_is_shown(
+def test_the_expression_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     tmp_path: Path,
 ) -> None:
-    """Rule 8: not comparable across organs or stages -- and only said where
-    the page actually lays out more than one for a reader to compare.
+    """The section's reading notes left every gene page on 2026-10-26 (D50).
 
-    Two placements, from two different organs, so the count this gate reads is
-    proven to sum across tissues rather than merely check "is there a
-    placement at all".
+    They were folded under "How to read these figures" on all 119 gene pages:
+    how a median is placed and why none is placed below the floor, and -- on
+    the 118 pages laying out more than one placement, measured on a build of
+    0fc451a -- rule 8, that percentiles are not comparable across organs or
+    stages. Both teach how to read the figures rather than saying anything
+    about this gene, and both are now on `methods.html#expression`, where
+    `test_build_methods.py` pins them; the section's one-line bulk notice
+    links there.
+
+    This test was `test_percentiles_are_captioned_as_not_comparable_only_when_
+    more_than_one_is_shown` until then. Its gate -- say rule 8 only where two
+    placements sit side by side -- left with the sentence: stated once, in
+    general, on a page with no figures, there is no position for it to be
+    false in. The fixture is still the two-placement one the gate fired on,
+    so a reinstated conditional fails here, and the denominator still travels
+    with every percentile, which is the half of rule 8 that stays.
+
+    Asserted absent from the **whole** page, in both apostrophe spellings, by
+    a phrase unique to each moved paragraph (CLAUDE.md section 4.35), and the
+    bulk notice's own full form by the phrases its short form dropped.
     """
-    caveat = "not comparable across organs or across developmental stages"
-
-    one_placement = _expression_profile(
-        (
-            _dataset_profile_entry(
-                stages=(_stage_entry(tissues=(_tissue_entry(placement=_placement()),)),)
-            ),
-        )
-    )
-    lone_section = _expression_section_text(_expression_page(tmp_path, {GATA4: one_placement}))
-    assert caveat not in lone_section
-    # The denominator travels with the percentile even when the caveat does not.
-    assert "97 of 19,842 genes" in lone_section
-
     two_placements = _expression_profile(
         (
             _dataset_profile_entry(
@@ -4605,8 +4663,26 @@ def test_percentiles_are_captioned_as_not_comparable_only_when_more_than_one_is_
             ),
         )
     )
-    busy_section = _expression_section_text(_expression_page(tmp_path, {GATA4: two_placements}))
-    assert caveat in busy_section
+    page = _expression_page(tmp_path, {GATA4: two_placements})
+
+    assert "97 of 19,842 genes" in _expression_section_text(page)
+    for text in (page, html.unescape(page)):
+        for moved in (
+            "<summary>How to read these figures</summary>",
+            # The percentile notice; "on this page" was its deictic.
+            "not comparable across organs",
+            "elsewhere on this page",
+            # The reading notes.
+            "travels with every percentile",
+            "the rank of an unreliable measurement",
+            # The bulk notice in full: the short form keeps its claim and
+            # drops the argument. Not "once diluted across the whole organ":
+            # `_no_trajectory_sentence` says that of its own gene, rightly.
+            "never a single cell type",
+            "cardiac neural crest",
+            "cushion mesenchyme",
+        ):
+            assert moved not in text, f"{moved!r} is back on the gene page"
 
 
 def test_a_tissue_stage_and_dataset_token_carrying_markup_is_escaped(tmp_path: Path) -> None:
@@ -4713,12 +4789,35 @@ def _dataset_lede(section: str) -> str:
     """One dataset block's opening: its chart, or the sentence instead of one.
 
     Sliced off the stage tables the way `_validity_table` is sliced, and for
-    the same reason (CLAUDE.md section 4.19). `_BULK_DILUTION_NOTICE` sits
-    above every dataset block and itself contains "not evidence that", so a
-    section-wide assertion on that phrase passes whether or not the sentence
-    under test was rendered at all.
+    the same reason (CLAUDE.md section 4.19). `_BULK_TISSUE_NOTICE` sits
+    above every dataset block, and until 2026-10-26 it contained "not evidence
+    that", so a section-wide assertion on that phrase passed whether or not
+    the sentence under test was rendered at all. Its short form (D50) says
+    "not evidence a gene is unimportant", and the full notice, "not evidence
+    that" included, is on `methods.html#expression`. The slice still starts
+    below the notice, so a full notice pasted back onto the page cannot make
+    a lede assertion pass on its words.
+
+    It ends at the first `<details`. Every caller's fixture draws no chart, so
+    that is the stage-figures fold; where a chart is drawn, it is the chart's
+    own "How to read this chart" toggle (D57), and the lede is the chart and
+    its one visible caption line.
     """
     return _slice_between(section, "</h3>", ("<details",))
+
+
+def _band_caption_text(section: str) -> str:
+    """The trajectory's caption alone: its visible line and its toggle (D57).
+
+    From the visible line's first words to the toggle's `</details>`, which
+    comes before the stage-figures fold's. Scoped for the reason
+    `_spark_caption_text` is: `_percentile_cell` prints every gap clause the
+    caption can, from the same map, in the stage table below, so a
+    section-wide check on one is answered by the table. It ended at the first
+    `</p>` until the caption folded (2026-10-26), which now stops at the end
+    of the visible line, before every clause a gap can earn.
+    """
+    return _slice_between(section, "Left to right", ("</details>",))
 
 
 def test_every_chart_carries_an_atlas_specific_axis(tmp_path: Path) -> None:
@@ -5015,7 +5114,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # Scoped to the caption: `_percentile_cell` prints the same clause in the
     # stage table below, from the same map and deliberately so, and answers a
     # section-wide check on it whatever the caption said.
-    caption_only = _slice_between(grid, "Left to right", ("</p>",))
+    caption_only = _band_caption_text(grid)
     assert "Below this dataset's detection floor" not in caption_only
     assert "no complete percentile grid is published for this organ at this stage" in caption_only
     # And the mark is still accounted for rather than left on the axis with
@@ -5028,6 +5127,77 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # floor, so its 6 ticks sat where the axis reads 38.6 tpm; the words are
     # what stop a reader interpolating them.
     assert "below the foot of the scale, not at a value on it" in ticked
+
+
+def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> None:
+    """D57, for the trajectory: its axes stay in sight and its key folds.
+
+    The caption was one `<p class="method">` of four or five sentences under
+    the trajectory on 112 pages (measured on a build of 0fc451a). The two axis
+    sentences stay visible -- stage order rather than elapsed time, and a
+    vertical axis fitted to this gene, with its range -- because they say what
+    every point on the figure is. The floor, tick and no-row clauses and the
+    shaded phases fold under "How to read this chart", which ends on a link to
+    `methods.html#expression`, where the axes are stated once in general. The
+    link reads "How to read expression figures", not the nav's "How to read
+    this atlas", for the reason the forest's toggle names its section.
+    **Each clause keeps its condition**: the tests above that assert a clause
+    renders only beside its mark read the whole section, or the caption
+    through `_band_caption_text`, which takes the toggle, so they hold
+    unchanged; this one asserts where the clauses sit.
+
+    The fixture is the one that earns every clause the floor allows at once: a
+    below-floor stage between two placed ones (the floor clause) and a stage
+    with no heart row (the no-row clause). **The no-row clause is pinned after
+    the floor clause, in one paragraph**, because its first spelling --
+    "different again" -- contrasts itself with the floor clause, and split
+    from it, or set before it, the contrast points at nothing.
+
+    Pinned whole, both halves, as literals.
+    """
+    section = _expression_section_text(
+        _expression_page(
+            tmp_path,
+            {
+                GATA4: _heart_series(
+                    ("4wpc", 5.0),
+                    ("5wpc", 40.0),
+                    ("6wpc", None),
+                    ("7wpc", 275.0),
+                    ("8wpc", ...),
+                    ("9wpc", 12.0),
+                )
+            },
+            _HEART_DATASET,
+            phases=_cardiac_phases(),
+        )
+    )
+    figure = _trajectory_figure(section)
+    after = section[section.index(figure) + len(figure) :]
+    caption = after[: after.index("</details>") + len("</details>")]
+    visible, toggle, folded = caption.partition(
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+    )
+
+    assert toggle, "the trajectory's key is not folded behind a toggle"
+    assert visible == (
+        '<p class="method">Left to right: 4wpc to 9wpc, all 6 of this dataset\'s stages in '
+        "curated developmental order, evenly spaced &mdash; the axis is <strong>order, not "
+        "elapsed time</strong>. Vertical: median abundance in whole heart, tpm, on a log "
+        "scale; the axis runs 5 to 275 and is fitted to <strong>this gene</strong>, so a "
+        "curve's height compares nothing to another gene's.</p>"
+    )
+    assert folded == (
+        '<p class="method">Below this dataset\'s detection floor (1 tpm) no percentile is '
+        "published and the stage is ticked on the axis instead &mdash; below the foot of the "
+        "scale, not at a value on it. A break in the line with no tick under it is different "
+        "again: this dataset has <strong>no row for this organ at that stage</strong>, so "
+        "there is no measurement to place, low or otherwise. Shaded: Atrial septum "
+        "morphogenesis (Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)).</p>"
+        '<p class="method"><a href="../methods.html#expression">How to read expression '
+        "figures</a></p></details>"
+    )
+    assert folded.index("ticked on the axis") < folded.index("different again")
 
 
 def test_the_line_never_spans_a_stage_the_atlas_did_not_place(tmp_path: Path) -> None:
@@ -5232,8 +5402,9 @@ def test_nothing_placed_says_which_of_the_two_facts_it_is(
     and passes for any rewording.
 
     Sliced to the dataset block's own lede before asserting, because
-    `_BULK_DILUTION_NOTICE` carries "not evidence that" over every gene page
-    on this site, charted or not.
+    `_BULK_TISSUE_NOTICE` carried "not evidence that" over every gene page
+    on this site, charted or not, until its short form (2026-10-26); the slice
+    stays, so the full notice pasted back cannot answer for this sentence.
     """
     profile = _heart_series(("4wpc", None), ("5wpc", None), ("6wpc", None), unplaced_reason=reason)
     section = _dataset_lede(
@@ -5270,9 +5441,10 @@ def test_a_chart_never_replaces_the_figures_it_summarises(tmp_path: Path) -> Non
     assert "275 tpm (n=3 samples)" in folded.group(0)
     assert "97 of 19,842 genes" in folded.group(0)
     # And the section-wide `<details` assertion this replaces is not enough on
-    # its own: `_EXPRESSION_READING_NOTES` renders one a few lines above,
-    # so a renderer that dropped the wrapper entirely would still satisfy it
-    # (CLAUDE.md section 4.19).
+    # its own: the trajectory's "How to read this chart" toggle renders one
+    # a few lines above (D57; until 2026-10-26 it was the section's folded
+    # reading notes), so a renderer that dropped the wrapper entirely would
+    # still satisfy it (CLAUDE.md section 4.19).
     unfolded = re.sub(r"<details.*?</details>", "", section, flags=re.S)
     assert "<table" not in unfolded
 
@@ -5354,8 +5526,12 @@ def _spark_caption_text(section: str) -> str:
     a section-wide check on any of them is answered by the table whether or
     not the caption said anything at all. Measured 2026-08-20: deleting the
     caption's whole non-floor clause left a section-wide assertion green.
+
+    The visible line **and** its toggle (D57, 2026-10-26): it ended at the
+    first `</p>` until the caption folded, which now stops at the end of the
+    visible line, before every clause a gap can earn.
     """
-    return _slice_between(section, "One panel per organ with a placed measurement", ("</p>",))
+    return _slice_between(section, "One panel per organ with a placed measurement", ("</details>",))
 
 
 def _spark_panels(section: str) -> dict[str, str]:
@@ -5634,6 +5810,70 @@ def test_the_spark_caption_opens_with_a_claim_true_of_pages_that_drop_a_panel(
     # against a page that has one fewer panel than the dataset has organs.
     assert set(_spark_panels(complete)) == {"heart", "kidney", "liver"}
     assert set(_spark_panels(dropped)) == {"heart", "kidney"}
+
+
+def test_the_spark_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> None:
+    """D57, for the small multiples: the shared axis stays in sight, the key folds.
+
+    The caption was one `<p class="method">` of five or six sentences under
+    the grid on 118 pages (measured on a build of 0fc451a). What stays visible
+    is what every panel is: one per organ with a placed measurement, drawn in
+    stage order rather than elapsed time, all on one abundance axis whose
+    range is printed. Why a shared axis matters, which organ is drawn heavier,
+    why a line breaks and which organs have no panel fold under "How to read
+    this chart", which ends on the same link as the trajectory's toggle,
+    "How to read expression figures". **Each clause keeps its condition**:
+    the tests above read the whole section, or the caption through
+    `_spark_caption_text`, which takes the toggle, so they hold unchanged;
+    this one asserts where the clauses sit.
+
+    One fixture earns every conditional clause at once: heart, the declared
+    cardiac organ, is drawn and broken by a below-floor stage; liver is broken
+    by a stage with no row; kidney is sampled and placed nowhere, so it has no
+    panel. Pinned whole, both halves, as literals.
+    """
+    section = _expression_section_text(
+        _expression_page(
+            tmp_path,
+            {
+                GATA4: _organ_panel(
+                    ("heart", (50.0, None, 150.0, 275.0)),
+                    ("kidney", (None, None, None, None)),
+                    ("liver", (0.5, ..., 2.0, 2.4)),
+                    stages=("4wpc", "5wpc", "6wpc", "7wpc"),
+                )
+            },
+            _HEART_DATASET,
+        )
+    )
+    start = section.index('<p class="method">One panel per organ')
+    caption = section[start : section.index("</details>", start) + len("</details>")]
+    visible, toggle, folded = caption.partition(
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+    )
+
+    assert toggle, "the small multiples' key is not folded behind a toggle"
+    assert visible == (
+        '<p class="method">One panel per organ with a placed measurement for this gene, each '
+        "drawn left to right in curated developmental order &mdash; the horizontal axis is "
+        "<strong>order, not elapsed time</strong>. <strong>Every panel shares one abundance "
+        "axis</strong> (0.5 to 275 tpm, log scale).</p>"
+    )
+    assert folded == (
+        '<p class="method">A shared axis is what makes a gene concentrated in one organ look '
+        "different from a broadly expressed one; a per-organ axis would rescale every line to "
+        "its own range and hide exactly that difference. Drawn heavier: heart &mdash; this "
+        "atlas's own declaration of which organ is this dataset's cardiac tissue, not the "
+        "source's. Only medians this dataset placed against its percentile grid are drawn, so "
+        "a line breaks rather than running through a stage measured <strong>below this "
+        "dataset's detection floor</strong>, which this atlas does not place, and through a "
+        "stage where this dataset has <strong>no row for that organ</strong> and nothing was "
+        "measured to place. No panel is drawn for kidney: this dataset sampled that organ and "
+        "placed no measurement there against its percentile grid. Every figure is in the "
+        "table below.</p>"
+        '<p class="method"><a href="../methods.html#expression">How to read expression '
+        "figures</a></p></details>"
+    )
 
 
 def test_a_spark_line_never_spans_a_stage_the_atlas_did_not_place(tmp_path: Path) -> None:
@@ -7869,6 +8109,16 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     Exactly one curation paragraph per card, and none in the main column: the
     sentence moved here, and a page stating it twice is a page whose two copies
     can come to disagree.
+
+    **The card ends on two links, after this sentence (P1, 2026-10-26):** "How
+    to read this page", to the top of `methods.html`, and the gene's own JSON.
+    The nav links the same file as "How to read this atlas"; the card's text
+    differs on purpose, because from the card the reader's question is about
+    the page in front of them. Every section a gene page renders has a section
+    there, except the atlas's own curated evidence and its publications, which
+    render on 1 of 119 pages (measured 2026-10-26). The link is to the top, not
+    an anchor: the card abbreviates the scope, validity and rare-variant
+    sections at once.
     """
     fact, validity = gene
     emitter = Emitter(root=tmp_path)
@@ -7886,6 +8136,11 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     rail = _rail_of(page)
 
     assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    assert rail.endswith(
+        f'<p class="card-curation">{sentence}</p>'
+        '<p><a href="../methods.html">How to read this page</a> &middot; '
+        '<a href="../genes/HGNC_4173.json">this gene as JSON</a></p>'
+    )
     # Only where the card's own sentence says it, never on another line.
     denial = "no ClinGen expert panel has graded"
     assert (denial in page) is (denial in sentence)

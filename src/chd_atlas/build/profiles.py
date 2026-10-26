@@ -152,10 +152,15 @@ def placement(
 
     **Judgement call: the comparison is `median < floor`, strictly.** A
     median exactly equal to the declared floor counts as detected, not below
-    it. The floor is a source's own declared threshold for "present at all",
-    so the boundary value itself is a detected value under that source's own
-    convention; `<=` would exclude the one point the source chose to draw the
-    line at, which is stricter than the source's own rule. Task 10's
+    it. The floor is the dataset record's declared threshold for "present at
+    all" (`Dataset.detection_floor`): the source's own where it declares one,
+    and curated by this atlas where it declares none -- as for E-MTAB-6814,
+    whose `floor_source` reads "Curated, not mirrored: the Expression Atlas
+    declares no threshold for this experiment". Whoever drew it, the record
+    names that value as the line, so the boundary value itself is a detected
+    value under the record's own convention; `<=` would exclude the one point
+    the record chose to draw the line at, which is stricter than the rule it
+    states. Task 10's
     `specificity` gates tau's peak the same way (`peak_raw < floor`), so one
     gene cannot read "detected" under one figure and "below the floor" under
     the other from the same value. Pinned at the exact boundary by
@@ -314,10 +319,11 @@ def specificity(medians: Mapping[str, float], floor: float) -> Specificity | Non
        toward. Where two readings of an under-specified rule differ, this
        atlas takes the one that claims less.
 
-    "Below the detection floor" means the source does not vouch for the
-    value as a detection -- it does not mean the source measured zero, and
-    substituting zero for it is this atlas authoring a number the source did
-    not report (the act D12/D39 exist to forbid). Gating *publication* on
+    "Below the detection floor" means the dataset's record does not vouch
+    for the value as a detection -- a floor this atlas curated where the
+    source declares none (see `placement`) -- not that the source measured
+    zero, and substituting zero for it is this atlas authoring a number the
+    source did not report (the act D12/D39 exist to forbid). Gating *publication* on
     the floor and *rewriting a value* because of it are different acts; this
     function does the first and, deliberately, not the second.
 

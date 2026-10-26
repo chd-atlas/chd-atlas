@@ -107,9 +107,11 @@ def test_the_floor_gate_is_strict_less_than(
     would render as though it meant something.
 
     A median exactly equal to the declared floor counts as detected, not
-    below it: the floor is a source's own declared threshold for "present at
-    all", so it is itself a detected value, and `<=` would exclude the one
-    point the source chose as its own boundary. Task 10's `specificity` uses
+    below it: the floor is the dataset record's declared threshold for
+    "present at all" -- the source's own, or curated by this atlas where the
+    source declares none, as for E-MTAB-6814 -- so it is itself a detected
+    value, and `<=` would exclude the one point the record chose as its
+    boundary. Task 10's `specificity` uses
     the same comparison (`peak_raw < floor`) on a gene's peak across organs,
     so one gene cannot read "detected" under one figure and "below the floor"
     under the other from the same value.

@@ -277,8 +277,9 @@ output, so it is verifiable output.
 
 "How to read this atlas": the explanation every gene page assumes, written once
 at the site root rather than repeated on each page (design decision D50), and
-linked from the navigation bar on every page. Each section carries an `id`, so a
-page can link the paragraph it shortens.
+linked from the navigation bar on every page and from the foot of every gene
+page's card, as *How to read this page*. It has five sections, in this order,
+and each carries an `id`, so a page can link the paragraph it shortens.
 
 - `#scope` states in full the rule that admits a gene to this atlas and the rule
   that puts a disease in scope, and carries the grade key: what each rung means,
@@ -310,6 +311,19 @@ page can link the paragraph it shortens.
   own rows cite, folded at the end of its rare-variant section under *About
   these cohorts, and the caveats recorded for them*, and that fold ends with a
   link here.
+- `#expression` says how to read a gene page's developmental expression
+  section: that every developmental expression measurement here is from whole,
+  bulk tissue, so a low or absent figure is not evidence a gene is unimportant
+  to heart development; how a median is placed against its organ's percentile
+  grid, and that none is placed below its dataset's detection floor, a
+  threshold this atlas records per dataset and not necessarily one its source
+  declares (a profile dataset's record in [`datasets.json`](#datasetsjson)
+  gives the floor and its basis); that percentiles are not comparable across
+  organs or developmental stages; what τ measures and when none is published;
+  what a stage's developmental phases are, where their boundaries come from
+  and how a stage is matched to them; and what the charts' axes are. A gene
+  page keeps a one-line form of the first and links here, and each expression
+  chart's folded key ends with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1348,14 +1362,14 @@ never goes through that mechanism at all: it has no gene column, so
 comparable across developmental stages.** Each organ transcribes a different
 fraction of the whole gene universe, so "top 10% in liver" and "top 10% in
 heart" describe two different reference distributions, not one ranking read
-two ways. And a reference distribution's own shape changes as the heart
-matures, so a gene with flat, unchanging absolute abundance across
-development can still show a *moving* percentile from one stage to the next,
-purely because everything else in the transcriptome is moving around it. The
-cross-stage caveat matters more here, because this layer's headline
-question — is this gene's cardiac expression distinctive, and does that
-change over development — is asked *within* one organ, across its own
-stages: reading a percentile trend without this caveat can report
+two ways. And a reference distribution's own shape changes over
+development, in every organ, so a gene with flat, unchanging absolute
+abundance across development can still show a *moving* percentile from one
+stage to the next, purely because everything else in the transcriptome is
+moving around it. The cross-stage caveat matters more here, because this
+layer's headline question — is this gene's cardiac expression distinctive,
+and does that change over development — is asked *within* one organ, across
+its own stages: reading a percentile trend without this caveat can report
 development where none occurred, or miss it where it did.
 
 **Why the quantile grid is published at all, and exactly how far that goes.**
@@ -1447,7 +1461,8 @@ Top to bottom:
    all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
    evidence against a gene — follows whenever the gene has rows.
 7. One sentence saying what the atlas itself has curated (below).
-8. A link to the gene's own JSON.
+8. *How to read this page*, a link to the top of [`methods.html`](#methodshtml),
+   and a link to the gene's own JSON.
 
 The page no longer prints `validity_state`, `atlas_curation`, the lesion groups
 or the assertion, functional-record, curated-publication and burden-row counts
@@ -1476,8 +1491,11 @@ follows it with the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites.
 
 The rare-variant section opens with one line attributing every count and
-statistic in its study tables to the upstream study, linking
-[`methods.html#rare-variants`](#methodshtml). The line is scoped to the study
+statistic in its study tables to the upstream study — "Every count and statistic
+in the study tables below is an upstream study's, republished as published; the
+atlas computes none of them." — and a link to
+[`methods.html#rare-variants`](#methodshtml), *How to read these results*. The
+line is scoped to the study
 tables because the evidence matrix beneath it shows tallies the atlas derives
 (how many rows a cell summarises). A `corrected` or `nominal` matrix cell also
 names one row: the most significant of the rows that give the cell that state —
@@ -1492,10 +1510,14 @@ every fold:
 
 - under the matrix, its legend — rows are independent cohort families, and no
   enrichment at these cohort sizes is not evidence against a gene — and that
-  no statistic is pooled across studies;
+  no statistic is pooled across studies: "The atlas computes no pooled
+  statistic across studies: pooling two that share a sample collection would
+  count the same people twice.";
 - any sample collection the gene's studies share, as this atlas has recorded
   them;
-- on a block from a study by an author of this atlas, a one-line declaration;
+- on a block from a study by an author of this atlas, a one-line declaration:
+  "Declaration: this study is by an author of this atlas; republished as
+  published, no assessment added.";
 - the multiple-testing line. For a study with any row it published no
   corrected p for, the study's number of tests (`tests_reported` in
   `publications.json`, where one is recorded) and the Bonferroni threshold
@@ -1516,11 +1538,35 @@ caption: the axis, naming the effect measure, its range on a logarithmic scale
 and what the line at 1 means for that measure. The rest of its key is folded
 under *How to read this chart*: what each mark means — filled and hollow
 markers, hatched bars, arrows, muted and `union`-tagged rows — each only where
-the panel draws one, and why there is no summary diamond, ending with a link to
+the panel draws one, and why there is no summary diamond, ending with a link,
+*How to read rare-variant results*, to
 [`methods.html#rare-variants`](#methodshtml), which states the key in general.
 Where a `union`-tagged row contains a row the panel does not plot, the fold
 also says the panel is *not fully split*: what sits under that union on the
 panel is part of it, not all of it, and the table below carries every row.
+
+The developmental expression section, last on the page, opens with one visible
+line: "Every measurement below is from whole, bulk tissue: a low or absent
+figure is not evidence a gene is unimportant to heart development." It links
+[`methods.html#expression`](#methodshtml) as *How to read these figures*; that
+section states the argument in full with the reading notes this section folded
+before this release — how a median is placed against its organ's percentile
+grid, why none is placed below a dataset's detection floor, and why percentiles
+are not comparable across organs or developmental stages — and defines τ and
+the developmental phases each stage names. Each chart — a phase-banded
+trajectory per cardiac organ where one can be drawn, and the organ small
+multiples — shows one line of its caption: its axes, in stage order rather than
+elapsed time, and the range of its abundance axis. The rest of its key is
+folded under *How to read this chart*, ending with a link, *How to read
+expression figures*, to `methods.html#expression`. Under a trajectory the fold
+always names the shaded phases and their source; what a tick on the axis means,
+and why the line breaks where this dataset has no row for the organ, it adds
+only where the figure shows one. Under the small multiples it always says why
+the panels share one axis, which organ is drawn heavier as this atlas's
+declared cardiac tissue (or, where this dataset placed nothing there, that no
+panel is drawn heavier), that only medians placed against the percentile grid
+are drawn, and that every figure is in the table below; why a line breaks, and
+which sampled organs have no panel, it adds only where the panels show one.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:

@@ -23,8 +23,9 @@ from chd_atlas.build.burden import BurdenRow, cohort_registry, load_burden
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
-from chd_atlas.corpus import load_curation
+from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.vocab import Technology
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -69,10 +70,16 @@ def cohort_page(tmp_path_factory: pytest.TempPathFactory) -> str:
 
 
 @pytest.fixture(scope="module")
-def registry() -> dict[str, Cohort]:
-    """The committed registry, loaded the way `runner.build_site` loads it."""
-    corpus, issues = load_curation(REPO_ROOT)
+def corpus() -> Corpus:
+    """The committed curation, loaded the way `runner.build_site` loads it."""
+    loaded, issues = load_curation(REPO_ROOT)
     assert issues == [], issues
+    return loaded
+
+
+@pytest.fixture(scope="module")
+def registry(corpus: Corpus) -> dict[str, Cohort]:
+    """The committed registry, loaded the way `runner.build_site` loads it."""
     return cohort_registry(corpus.cohorts)
 
 
@@ -122,17 +129,28 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert "<h1>How to read this atlas</h1>" in page
     assert '<a href="genes/index.html">Genes</a>' in page
     assert '<a href="methods.html">How to read this atlas</a>' in page
-    assert '<h2 id="scope">' in page
+    # The sections in the order the introduction names them and a gene page
+    # renders them, and nothing else at that rank (written once all five
+    # existed, 2026-10-26).
+    assert re.findall(r'<h2 id="([^"]+)"', page) == [
+        "scope",
+        "validity",
+        "rare-variants",
+        "cohorts",
+        "expression",
+    ]
+    assert page.count("<h2") == 5
     # The page's own account of what it holds (CLAUDE.md section 4.29: a
     # summary that omits what the page publishes passes every other check).
     # The cohort list joined it on 2026-10-26, and the same day it stopped
     # claiming the list is every collection a study "draws on": it is what the
     # rows name (`test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`).
+    # The expression section joined it the same day, once the page held one.
     assert (
         "<p>What every gene page assumes, written once: which genes are here and what each "
         "classification means, how the validity records are listed, how to read the "
-        "rare-variant results, and every sample collection the "
-        "rare-variant results name.</p>"
+        "rare-variant results, every sample collection the rare-variant results name, and "
+        "how to read the developmental expression figures.</p>"
     ) in page
 
 
@@ -685,6 +703,188 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     assert (len(named), held) == (4, 4242)
 
 
+def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -> None:
+    """The expression reading notes, moved off every gene page (2026-10-26, D50).
+
+    Six paragraphs, pinned whole. The first is the bulk-dilution notice in
+    full: a gene page keeps one line of it (`pages._BULK_TISSUE_NOTICE`,
+    one of the ten caveats the spec keeps visible) and links here. The next
+    two were the page's folded "How to read these figures" notes. The next
+    two define tau and the developmental phases, which 118 and 119 gene pages
+    print and nothing on the site defined until review (2026-10-26; each
+    clause's source is recorded in `methods._EXPRESSION`). The last states in
+    general the axes each chart's visible caption line states of its own
+    figure (D57), and is where the charts' "How to read this chart" toggles
+    link.
+
+    Each was re-read for a page with no gene, dataset or figure on it, and
+    reworded where its words assumed one: "below", "shown below", "on this
+    page" and "elsewhere on this page" name nothing here. Read against the
+    code and a build of 0fc451a (`methods._EXPRESSION` records each):
+
+    * the bulk claim is scoped to *developmental* expression, the profile
+      datasets the gene page's section renders, and held to every curated
+      dataset by
+      `test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say`;
+    * "the number of genes measured" is the number the grid was built from
+      (`Placement.n_genes`: 58,735 in every cell of E-MTAB-6814's grid);
+    * "a dataset's own detection floor" read as the source's, and the only
+      floor in the corpus is this atlas's curated choice
+      (`floor_source: "Curated, not mirrored"`). "its dataset's" read the same
+      way, so since review (2026-10-26) the paragraph says whose a floor is
+      and where `datasets.json` gives its value and basis, and the bulk
+      paragraph says "the detection floor"; the dataset that sentence names is
+      held to its record by
+      `test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own`;
+    * the reference distribution changes shape "over development", not "as
+      the heart matures": every organ's grid moves -- liver's 90th percentile
+      is 24 tpm at 4 wpc and 5 at adolescence, heart's 28 and 6;
+    * the small multiples share one axis *within a dataset*
+      (`_small_multiples` fits one per dataset block), and a trajectory follows
+      one cardiac organ, its axis fitted to the gene's placed medians there;
+    * tau's 0 and 1 are the formula's bounds, and no value between is glossed:
+      D39(c) keeps every adjective about a tau off the site;
+    * the phases' source is named in the form the trajectory's key renders
+      `attributed_to`, and a stage matches a phase on `start <= wpc < end`.
+
+    Pinned whole rather than paragraph by paragraph, for the reason
+    `#rare-variants` is: a `findall` over `<p>` skips an appended `<p class=...>`
+    or `<details>`.
+    """
+    assert _section(page, "expression") == (
+        '<h2 id="expression">Developmental expression</h2>'
+        '<p class="notice-inline"><strong>Every developmental expression measurement in this '
+        "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
+        "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "
+        "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
+        "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
+        "the conduction system. A gene expressed intensely in one such lineage can still read "
+        "low, or fall below the detection floor, once diluted across the whole organ: "
+        "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
+        "development.</p>"
+        "<p>A gene's median abundance in an organ is placed against that organ's own "
+        "percentile grid for the same dataset and developmental stage, and the number of "
+        "genes that grid was built from travels with every percentile a gene page shows. No "
+        "percentile is published for a median below its dataset's detection floor, because "
+        "the rank of an unreliable measurement is not itself a measurement. A detection floor "
+        "is a threshold this atlas records per dataset, not necessarily one its source "
+        "declares: where a source declares none, as the Expression Atlas declares none for "
+        "E-MTAB-6814, the atlas chooses one, and every developmental dataset's record in "
+        '<a href="datasets.json"><code>datasets.json</code></a> gives its floor and where '
+        "that floor comes from.</p>"
+        "<p>Percentiles in this atlas are <strong>not comparable across organs or across "
+        "developmental stages</strong>: each organ transcribes a different fraction of the "
+        "whole gene set, and an organ's reference distribution itself changes shape over "
+        "development. A high percentile shown for one organ or stage says nothing about a "
+        "lower one shown for another.</p>"
+        "<p><strong>τ</strong> (tau; Yanai et al. 2005) measures how concentrated a gene's "
+        "expression is across the organs a dataset sampled at one stage, computed on "
+        "log2(median + 1): it is 0 when every organ's median is equal, and 1 when one organ's "
+        "median is above zero and every other's is zero. It says nothing about <em>which</em> "
+        "organ, so beside it a gene page names the organ with the highest median, or says the "
+        "peak is tied. Every organ's median counts, even one below the detection floor; the "
+        "floor decides only whether τ is published at all, and it is not when every organ "
+        "sampled is below it. Where a stage has no τ, the page says why in its place, and each "
+        "gene's JSON carries the formula and the medians beside every τ it publishes.</p>"
+        "<p>A stage's <strong>developmental phases</strong> are the phases of heart "
+        "morphogenesis under way at its age, from a vocabulary transcribed from Buijtendijk "
+        "MFJ, Barnett P, van den Hoff MJB (2020), PMID:32048790. A phase runs from the start "
+        "of one Carnegie stage the review names to the end of another. Each boundary is "
+        "converted to weeks post conception from the day ranges the Human Developmental "
+        "Stages ontology gives its Carnegie stage, not read off the review's prose, which "
+        "counts weeks ordinally: its &ldquo;sixth week&rdquo; is five to six weeks elapsed. "
+        "Where the review names no end, as for heart looping, the atlas derives one from the "
+        "phase's Gene Ontology definition. A stage names every phase under way at its age, "
+        "from the phase's start up to but not including its end, so one stage can name "
+        "several; a stage no phase covers names none and says why, for example that it is "
+        "post-natal or after the curated window. A chart following one cardiac organ shades "
+        "each phase from the first stage "
+        "that names it to the last, and its folded key names the phases and their "
+        "source.</p>"
+        "<p>Every expression chart lays its stages out left to right in curated developmental "
+        "order, evenly spaced: the axis is <strong>order, not elapsed time</strong>. Within a "
+        "dataset, a gene's small multiples &mdash; one panel per organ with a placed "
+        "measurement &mdash; share <strong>one abundance axis</strong>, which is what makes a "
+        "gene concentrated in one organ look different from a broadly expressed one; a "
+        "per-organ axis would rescale every line to its own range and hide exactly that "
+        "difference. A chart following one cardiac organ across a dataset's stages fits its "
+        "vertical axis to the gene's own placed medians in that organ, so a curve's height "
+        "compares nothing to another gene's.</p>"
+    )
+
+
+def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(
+    corpus: Corpus,
+) -> None:
+    """`#expression` opens "Every developmental expression measurement in this
+    atlas is from whole, bulk tissue", and so does every gene page's short form.
+
+    Both are unconditional by design -- a caveat beside only the bad news reads
+    as an excuse -- so neither reads the data it describes. This is what does:
+    a dataset of any other technology (single-cell, proteomics) can make both
+    sentences false, and fails here rather than on a reader. Measured
+    2026-10-26: one curated dataset, E-MTAB-6814, `bulk_rnaseq`.
+
+    **Every curated dataset, whatever its design** (review, 2026-10-26). It
+    checked profile datasets alone, while the sentence covers every
+    developmental measurement in the atlas, and a contrast dataset of
+    developmental tissue is one; nothing in a dataset's record says whether
+    its tissue is developmental, so the check takes them all. The error runs
+    the safe way: a bulk microarray, or an adult contrast dataset, fails here
+    though the sentence may still be true, and a person re-reads it; the
+    opposite error would publish a false sentence.
+    """
+    assert corpus.datasets, "no dataset curated; the check would pass vacuously"
+    other = sorted(
+        f"{dataset.id} ({dataset.technology.value}, {dataset.design.value})"
+        for dataset in corpus.datasets
+        if dataset.technology is not Technology.BULK_RNASEQ
+    )
+    assert not other, (
+        "re-read methods.html#expression's 'Every developmental expression measurement in "
+        "this atlas is from whole, bulk tissue' and the gene page's 'Every measurement below "
+        f"is from whole, bulk tissue' (pages._BULK_TISSUE_NOTICE) against: {other}"
+    )
+
+
+def test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own(
+    corpus: Corpus,
+) -> None:
+    """`#expression` says "the Expression Atlas declares none for E-MTAB-6814,
+    the atlas chooses one" (2026-10-26), and that is a fact about one record.
+
+    Unconditional, like the bulk claim, so it reads no data; this does. A
+    curator who found the Atlas's own threshold and recorded it would make the
+    sentence false, and the record's `floor_source` is where that would show.
+    """
+    record = next(dataset for dataset in corpus.datasets if dataset.id == "E-MTAB-6814")
+    assert record.detection_floor is not None
+    assert (record.floor_source or "").startswith(
+        "Curated, not mirrored: the Expression Atlas declares no threshold for this experiment."
+    ), record.floor_source
+
+
+def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_records(
+    corpus: Corpus,
+) -> None:
+    """`#expression` names the phases' source as the trajectory's key renders it
+    and says the review names every end but heart looping's (2026-10-26).
+
+    Both are facts about `curation/cardiac_phases.yaml`, which this page is
+    built without, so this holds the sentence to the file: a new source, or a
+    second phase whose end is derived or unstated, makes the paragraph false.
+    """
+    phases = corpus.cardiac_phases
+    assert phases is not None and phases.phases, "no phase vocabulary curated"
+    assert (phases.attributed_to, phases.citation) == (
+        "Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)",
+        "PMID:32048790",
+    )
+    assert {
+        phase.id: phase.end_basis for phase in phases.phases if phase.end_basis != "stated"
+    } == {"heart_looping": "derived"}
+
+
 @pytest.mark.parametrize("built", ["page", "real_page"])
 @pytest.mark.parametrize(
     "retired",
@@ -727,6 +927,15 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         # so its clauses are restated in general, never pasted (D57).
         "in this panel",
         "this study's",
+        # The expression notes' deictics (2026-10-26): the gene page's bulk
+        # notice, its reading notes and its percentile notice, and the band and
+        # spark captions' -- no figure, organ or gene is in sight here (D50,
+        # D57). "this dataset" is not among them: the inlined stylesheet says it.
+        "Every measurement below",
+        "shown below",
+        "on this page",
+        "this organ",
+        "for this gene",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(
