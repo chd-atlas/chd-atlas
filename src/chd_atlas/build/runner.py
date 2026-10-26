@@ -461,9 +461,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         pinned_structural_phenotypes(root, registry.ontology_files()),
     )
     build_scope(corpus.chd_scope, warrants, emitter)
-    # The site's reading notes (D50): the full scope rule and grade key the gene
-    # pages' short forms link to. Every page's nav links it, so a build that
-    # skipped this would publish a dead link on all of them.
+    # The site's reading notes (D50): the full forms of what the gene pages'
+    # short forms and chart toggles link to. Every page's nav links it, so a
+    # build that skipped this would publish a dead link on all of them.
     build_methods(emitter, cohorts=cohort_registry(corpus.cohorts))
     build_search(corpus, emitter, genes=genes, published=published)
     # One integer, handed to the front page here and to the manifest below, for

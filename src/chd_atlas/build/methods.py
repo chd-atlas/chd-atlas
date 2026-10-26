@@ -38,14 +38,19 @@ a page with no gene on it.
 * `#cohorts` is curated data under one written paragraph: every record of
   `curation/cohorts.yaml`, the same ones `cohorts.json` publishes. A gene page
   keeps the notes of its own cohorts, folded, and links here (P4).
+* `#expression` is both (2026-10-26): two paragraphs moved off every gene page
+  (the folded reading notes), one is the full form of the bulk-tissue notice
+  a gene page keeps in one line, and one states in general the chart axes
+  each chart's visible caption line states of its own figure (D57).
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
 unique to each, as one label-chip-gloss triple per rung; `#validity`,
-`#rare-variants` and, on a fixture registry, `#cohorts` whole, as literals; the
-cohort intro's figures against the mirror and the committed registry; and the
-phrases the move retired as absent from the whole page, built with no cohorts
-and with the committed registry.
+`#rare-variants`, `#expression` and, on a fixture registry, `#cohorts` whole, as
+literals; the cohort intro's figures against the mirror and the committed
+registry; the bulk-tissue claim against the curated datasets; and the phrases
+the move retired as absent from the whole page, built with no cohorts and with
+the committed registry.
 `tests/test_built_site_is_consumable.py` checks `#cohorts` against the
 `cohorts.json` of a real build.
 
@@ -414,19 +419,100 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     return f'{_COHORTS_INTRO}<dl class="cohort-list">{items}</dl>'
 
 
+# How to read a gene page's developmental expression section (2026-10-26, D50,
+# D57). The page keeps a one-line short form of the first paragraph
+# (`pages._BULK_DILUTION_NOTICE`, one of the ten caveats the spec keeps
+# visible) and links here; the next two were its folded "How to read these
+# figures" notes, and left it; the last states in general the axes each chart's
+# visible caption line states of its own figure, and is where every chart's "How
+# to read this chart" toggle links (`pages._chart_notes`).
+#
+# Each was re-read for a page with no gene, dataset or figure on it, and read
+# against the code and a build of 0fc451a that day. Narrower or different from
+# the text this was drafted from:
+#
+# * The bulk claim names *developmental* expression: the profile datasets the
+#   gene page's section renders, all `bulk_rnaseq` today (E-MTAB-6814 alone).
+#   Unconditional by design, it reads no data, so
+#   `test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say`
+#   holds it to the curation instead. "the detection floor" became "a
+#   dataset's": none is in view here.
+# * "Each organ's median abundance" had a gene in view; it is "a gene's median
+#   abundance in an organ". "the number of genes measured" is the number the
+#   grid was built from (`Placement.n_genes`, 58,735 in every cell of
+#   E-MTAB-6814's grid), and it travels with every percentile "a gene page
+#   shows" -- "shown below" named nothing here. Measured: all 11,331
+#   percentiles on the 119 pages are stage-table cells reading "N of 58,735
+#   genes".
+# * "a dataset's own detection floor" read as the source's, and the one floor
+#   in the corpus is this atlas's curated choice (E-MTAB-6814's `floor_source`:
+#   "Curated, not mirrored"), so it is "its dataset's". No percentile is
+#   published below it: `profiles.placement` returns `None` for a median under
+#   the floor, the bundle publishes that `null`, and `percentile_annotations`
+#   skips it for the omics preview.
+# * The comparability sentence was conditional on a page laying out more than
+#   one placement (118 of 119 did); stated once in general it has no position
+#   to be false in. "on this page" became "in this atlas" and "elsewhere on
+#   this page" "for another". "as the heart matures" became "over development",
+#   because every organ's grid moves, not the heart's alone: liver's 90th
+#   percentile is 24 tpm at 4 wpc and 5 at adolescence, heart's 28 and 6.
+# * The axes sentence was checked against `_even_x` (both charts space a
+#   dataset's stages evenly, in `Stage.order`), `_small_multiples` (one
+#   `LogScale` per dataset block, over every organ drawn) and `_trajectory`
+#   (one chart per declared cardiac organ, its axis `_axis_bounds` over that
+#   organ's placed medians). "share one abundance axis" is "within a dataset":
+#   a second dataset's grid would draw its own.
+_EXPRESSION: Final = (
+    '<h2 id="expression">Developmental expression</h2>'
+    # was pages._BULK_DILUTION_NOTICE in full; "below" -> "in this atlas"
+    '<p class="notice-inline"><strong>Every developmental expression measurement in this '
+    "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
+    "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "
+    "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
+    "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
+    "the conduction system. A gene expressed intensely in one such lineage can still read "
+    "low, or fall below a dataset's detection floor, once diluted across the whole organ: "
+    "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
+    "development.</p>"
+    # was pages._EXPRESSION_READING_NOTES
+    "<p>A gene's median abundance in an organ is placed against that organ's own "
+    "percentile grid for the same dataset and developmental stage, and the number of "
+    "genes that grid was built from travels with every percentile a gene page shows. No "
+    "percentile is published for a median below its dataset's detection floor, because "
+    "the rank of an unreliable measurement is not itself a measurement.</p>"
+    # was pages._PERCENTILE_COMPARABILITY_NOTICE
+    "<p>Percentiles in this atlas are <strong>not comparable across organs or across "
+    "developmental stages</strong>: each organ transcribes a different fraction of the "
+    "whole gene set, and an organ's reference distribution itself changes shape over "
+    "development. A high percentile shown for one organ or stage says nothing about a "
+    "lower one shown for another.</p>"
+    # The chart axes in general; each chart's own visible line states them of
+    # its figure (`pages._band_caption`, `pages._spark_caption`).
+    "<p>Every expression chart lays its stages out left to right in curated developmental "
+    "order, evenly spaced: the axis is <strong>order, not elapsed time</strong>. Within a "
+    "dataset, a gene's small multiples &mdash; one panel per organ with a placed "
+    "measurement &mdash; share <strong>one abundance axis</strong>, which is what makes a "
+    "gene concentrated in one organ look different from a broadly expressed one; a "
+    "per-organ axis would rescale every line to its own range and hide exactly that "
+    "difference. A chart following one cardiac organ across a dataset's stages fits its "
+    "vertical axis to the gene's own placed medians in that organ, so a curve's height "
+    "compares nothing to another gene's.</p>"
+)
+
+
 # The page's own account of what it holds (CLAUDE.md section 4.29); the cohort
-# list joined it on 2026-10-26. It names only sections the page renders: the
-# expression section is not on this page yet, and naming it here would promise
-# a reader something the page does not hold. "the rare-variant studies draw on"
-# became "the rare-variant results name" the same day, for the reason
-# `_COHORTS_INTRO` records: the list is what the rows name, not all a study
-# drew on.
+# list joined it on 2026-10-26. It names only sections the page renders, so the
+# expression clause joined it only with `#expression` (2026-10-26) -- it was
+# removed once for promising a section the page did not yet hold. "the
+# rare-variant studies draw on" became "the rare-variant results name" the same
+# day, for the reason `_COHORTS_INTRO` records: the list is what the rows name,
+# not all a study drew on.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
     "classification means, how the validity records are listed, how to read the "
-    "rare-variant results, and every sample collection the "
-    "rare-variant results name.</p>"
+    "rare-variant results, every sample collection the rare-variant results name, and "
+    "how to read the developmental expression figures.</p>"
 )
 
 
@@ -443,6 +529,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         + _VALIDITY
         + _RARE_VARIANTS
         + _cohorts(cohorts)
+        + _EXPRESSION
     )
     emitter.write_text(
         METHODS_PAGE,

@@ -310,6 +310,14 @@ page can link the paragraph it shortens.
   own rows cite, folded at the end of its rare-variant section under *About
   these cohorts, and the caveats recorded for them*, and that fold ends with a
   link here.
+- `#expression` says how to read a gene page's developmental expression
+  section: that every developmental expression measurement here is from whole,
+  bulk tissue, so a low or absent figure is not evidence against a gene; how a
+  median is placed against its organ's percentile grid, and that none is placed
+  below its dataset's detection floor; that percentiles are not comparable
+  across organs or developmental stages; and what the charts' axes are. A gene
+  page keeps a one-line form of the first and links here, and each expression
+  chart's folded key ends with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1521,6 +1529,21 @@ the panel draws one, and why there is no summary diamond, ending with a link to
 Where a `union`-tagged row contains a row the panel does not plot, the fold
 also says the panel is *not fully split*: what sits under that union on the
 panel is part of it, not all of it, and the table below carries every row.
+
+The developmental expression section, last on the page, opens with one visible
+line: every measurement below is from whole, bulk tissue, and a low or absent
+figure is not evidence a gene is unimportant to heart development. It links
+[`methods.html#expression`](#methodshtml), which states that argument in full
+with the reading notes this section folded before this release: how a median is
+placed against its organ's percentile grid, why none is placed below a dataset's
+detection floor, and why percentiles are not comparable across organs or
+developmental stages. Each chart — a phase-banded trajectory per cardiac organ
+where one can be drawn, and the organ small multiples — shows one line of its
+caption: its axes, in stage order rather than elapsed time, and the range of its
+abundance axis. The rest of its key is folded under *How to read this chart* —
+the detection floor and its ticks, why a line breaks, the shaded phases, which
+organ is drawn heavier and which organs have no panel, each only where the
+figure shows one — ending with a link to `methods.html#expression`.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:
