@@ -21,6 +21,7 @@ from chd_atlas.build.concordance import (
     family_state,
     gene_concordance,
     is_upward,
+    survives_own_correction,
 )
 
 
@@ -251,6 +252,44 @@ def test_a_corrected_p_above_alpha_does_not_promote_the_family() -> None:
     """
     row = _row(pvalue=0.0242, pvalue_adjusted=0.222, pvalue_adjustment="benjamini_hochberg")
     assert family_state([row]) is FamilyState.NOMINAL
+
+
+@pytest.mark.parametrize(
+    ("overrides", "survives"),
+    [
+        ({"pvalue": 0.001, "pvalue_adjusted": 0.01}, True),
+        ({"pvalue": 0.001, "pvalue_adjusted": None}, False),
+        ({"pvalue": 0.001, "pvalue_adjusted": 0.2}, False),
+        ({"pvalue": 0.001, "pvalue_adjusted": 0.001, "consequence_class": "synonymous"}, False),
+        ({"pvalue": 0.001, "pvalue_adjusted": 0.001, "effect": 0.5}, False),
+        ({"pvalue": 0.05, "pvalue_adjusted": 0.01}, False),
+    ],
+    ids=[
+        "supporting, corrected 0.01",
+        "supporting, no correction published",
+        "supporting, corrected 0.2",
+        "synonymous negative control",
+        "depleted, effect 0.5",
+        "p at alpha, corrected 0.01",
+    ],
+)
+def test_a_row_survives_its_own_correction_only_as_support_below_alpha_on_both(
+    overrides: dict[str, object], survives: bool
+) -> None:
+    """The one rule the evidence matrix and the gene page's card both read (D56).
+
+    Two renderers decide "survives its own study's correction", and two copies
+    of a rule are two rules (CLAUDE.md section 4.28): this is the predicate, so
+    a card that disagreed with its own matrix would have to stop calling it.
+    Each case fails one half -- support (`_supports`: not synonymous, p below
+    `ALPHA`, upward) or the study's own corrected p below `ALPHA` -- and the
+    last pins the boundary: a p exactly at 0.05 is not below it, whatever the
+    corrected value says.
+    """
+    row = _row(**overrides)
+    assert survives_own_correction(row) is survives
+    # And the matrix tier agrees row for row, which is the point of one predicate.
+    assert (family_state([row]) is FamilyState.CORRECTED) is survives
 
 
 def test_a_significant_synonymous_row_is_never_agreement() -> None:
