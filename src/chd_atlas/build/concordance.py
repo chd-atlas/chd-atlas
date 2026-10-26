@@ -148,13 +148,39 @@ def _supports(row: BurdenRow) -> bool:
 def survives_own_correction(row: BurdenRow) -> bool:
     """Whether a row is support for the gene that clears its own study's correction.
 
-    The `CORRECTED` tier's rule, as one predicate, because two renderers decide
-    by it -- the evidence matrix and the gene page's card (D56) -- and two
-    copies of a rule are two rules (CLAUDE.md section 4.28). Never a correction
-    this atlas computed: `pvalue_adjusted` is the study's own, and a row whose
-    study published none does not survive one.
+    The `CORRECTED` tier's rule, as one predicate, because three renderers
+    decide by it -- the evidence matrix (its tier and the row its cell names),
+    the gene page's card (D56) and the forest panels' fill for every row but a
+    synonymous one (`pages._survived_correction`) -- and two copies of a rule
+    are two rules (CLAUDE.md section 4.28). The forest drew its fill from the
+    study's corrected p alone until 2026-10-26, so a depleted row with q below
+    0.05 would have been drawn filled beside a card saying none survives. No
+    row was in that state, measured that day over the 1,805 mirrored rows: the
+    89 non-synonymous rows with a corrected p below 0.05 are the 89 this
+    predicate passes. Never a correction this atlas computed: `pvalue_adjusted`
+    is the study's own, and a row whose study published none does not survive
+    one.
     """
     return _supports(row) and row.pvalue_adjusted is not None and row.pvalue_adjusted < ALPHA
+
+
+def deciding_rows(rows: Iterable[BurdenRow]) -> list[BurdenRow]:
+    """The rows that give a family its `family_state`, in the order given.
+
+    Under `CORRECTED`, the rows that survive their own study's correction;
+    under `NOMINAL`, the supporting rows, none of which does; empty under
+    `NO_ENRICHMENT` and `NOT_TESTED`, where no row supports the gene.
+    `family_state` reads its tier from this list, so a renderer naming one row
+    for a state names a row that state is true of.
+
+    **Why it exists.** The evidence matrix headlined the most significant row
+    in a cell whatever that row's role, and GJA1's de novo cell in
+    PMID:40127276 was drawn `nominal` by its missense row (p 0.0468) while
+    naming the `damaging` union (p 0.0613, q 0.200), a row that is not
+    nominally significant at all.
+    """
+    supporting = [row for row in rows if _supports(row)]
+    return [row for row in supporting if survives_own_correction(row)] or supporting
 
 
 def family_state(rows: Iterable[BurdenRow]) -> FamilyState:
@@ -180,10 +206,10 @@ def family_state(rows: Iterable[BurdenRow]) -> FamilyState:
     if not materialised:
         return FamilyState.NOT_TESTED
 
-    supporting = [row for row in materialised if _supports(row)]
-    if not supporting:
+    deciding = deciding_rows(materialised)
+    if not deciding:
         return FamilyState.NO_ENRICHMENT
-    if any(survives_own_correction(row) for row in supporting):
+    if survives_own_correction(deciding[0]):
         return FamilyState.CORRECTED
     return FamilyState.NOMINAL
 

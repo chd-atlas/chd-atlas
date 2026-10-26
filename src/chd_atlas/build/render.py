@@ -74,7 +74,8 @@ STYLESHEET: Final = """
        are ordinal, so a ramp is what they mean; a second hue would invent an
        axis. `ungraded` is drawn as absence (outline, muted) rather than as the
        bottom of the ramp: no panel graded the gene, which is not a weaker grade
-       but a different question, and 16 of the 92 genes published are in it. */
+       but a different question, and every gene admitted on submitter
+       agreement is in it. */
     --grade-4: #1a7f37; --grade-4-fg: #ffffff;
     --grade-3: #4e9c66; --grade-3-fg: #ffffff;
     --grade-2: #a9d3b6; --grade-2-fg: #14301d;
@@ -246,7 +247,8 @@ STYLESHEET: Final = """
 
   .reading-notes { margin: 1rem 0; }
   .reading-notes summary { cursor: pointer; color: var(--muted); }
-  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible {
+  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible,
+  .forest summary:focus-visible {
     outline: 2px solid var(--evidence); outline-offset: 2px;
   }
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
@@ -325,7 +327,7 @@ STYLESHEET: Final = """
      reintroduced a phrase that
      `test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional`
      asserts is absent from a one-study page -- and naming the class here would
-     put the very token a page-wide check greps for onto all 94 pages. Reason
+     put the very token a page-wide check greps for onto every page. Reason
      and class name both live in the module that emits the geometry. */
   .sparks {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
@@ -338,6 +340,8 @@ STYLESHEET: Final = """
   .spark figcaption { font-size: 0.6rem; color: var(--muted); }
   .forest { margin: 0.6rem 0; }
   .forest figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+  .forest figcaption p { margin: 0.25rem 0; }
+  .forest summary { cursor: pointer; color: var(--muted); }
 """
 
 # The one piece of client-side behaviour on the site, and a literal so it does
@@ -514,10 +518,20 @@ GRADE_CHIP_KIND: Final[dict[str, str]] = {
 # statement of what a panel meant by it will supply their own meaning.
 #
 # `ungraded` is the state, not a rung: no expert panel has graded the gene for a
-# disease this atlas treats as CHD, and it is published on submitter agreement
-# instead. Drawn as an outline rather than as the bottom of the ramp, because
-# "nobody graded it" and "graded weakest" are different facts and the second is
-# not implied by the first.
+# disease in scope, and it is published on submitter agreement instead. Drawn as
+# an outline rather than as the bottom of the ramp, because "nobody graded it"
+# and "graded weakest" are different facts and the second is not implied by the
+# first.
+#
+# Its gloss said the gene was ungraded "for a disease an external authority
+# treats as congenital heart disease, or in which Orphanet records a structural
+# heart malformation in at least 30% of cases", and that two or more submitters
+# "independently assert it", until 2026-10-26. The first reads as a property
+# of a disease, and a disease is in scope only once a curator lists it
+# (`pages._CURATION_BY_AGREEMENT` records the gene it was false for); the
+# second is weaker than the gate, which counts a submitter only at `Limited` or
+# better (`validity.agreeing_records`) -- a `Supportive` submission asserts the
+# gene and counts for nothing.
 GRADE_GLOSS: Final[dict[str, str]] = {
     "definitive": (
         "repeatedly demonstrated in research and clinical settings and upheld over time, "
@@ -537,11 +551,9 @@ GRADE_GLOSS: Final[dict[str, str]] = {
         "a panel looked and found no evidence of a relationship to this disease"
     ),
     "ungraded": (
-        "no ClinGen expert panel has graded this gene for a disease an external authority "
-        "treats as congenital heart disease, or in which Orphanet records a structural "
-        "heart malformation in at least 30% of cases. It is published because two or more "
-        "Gene Curation "
-        "Coalition submitters independently assert it, and the gene page names them"
+        "no ClinGen expert panel has graded this gene for any of the diseases in scope here. "
+        "It is published because two or more Gene Curation Coalition submitters classify it "
+        "Limited or better, and the gene page names them"
     ),
 }
 
@@ -606,7 +618,10 @@ def grade_key() -> str:
     external authority treats as congenital heart disease". The Orphanet scope
     path brought Costello and cardiofaciocutaneous syndrome into scope, and
     ClinGen's RASopathy panel disputes six published genes for them -- BRAF,
-    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, every one Definitive for Noonan syndrome.
+    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, each Definitive for the syndrome it
+    is admitted on: Noonan syndrome or Noonan syndrome with multiple
+    lentigines, or cardiofaciocutaneous syndrome itself for BRAF and MAP2K1,
+    which the same panel disputes only for Costello syndrome.
     PTPN11's page carried the denial beside its own `conflicting evidence` chip
     and two `Disputed` rows. What stays true on every page is narrower and is
     what the sentence now says: no gene is *headlined* by a contested grade (the
@@ -667,10 +682,14 @@ class Markup:
     because escaping cannot make a name safe, and the same reasoning applies to
     a cell that carries markup.
 
-    One caller today: `pages._dot_strip`, whose HTML is a fixed set of `<span>`
-    elements with class names from a literal map and `title` text escaped where
-    it is built. Nothing it interpolates comes from a mirror or from curation
-    unescaped.
+    As a table cell, two callers today, both in `build_gene_index_page` (the
+    forest plot's SVG text uses the type for the same obligation, outside any
+    table): `pages._dot_strip`,
+    whose HTML is a fixed set of `<span>` elements with class names from a
+    literal map and `title` text escaped where it is built; and a contested
+    gene's confidence cell, the grade (a vocabulary member, escaped anyway)
+    followed by a `chip`, which escapes its own label. Nothing either
+    interpolates comes from a mirror or from curation unescaped.
     """
 
     html: str
@@ -702,10 +721,16 @@ def _cell(value: Cell) -> str:
     return html.escape(value)
 
 
-def chip(text: str, kind: str = "") -> str:
-    """A small labelled pill. `kind` selects a `.chip-*` modifier class."""
+def chip(text: str, kind: str = "", title: str = "") -> str:
+    """A small labelled pill. `kind` selects a `.chip-*` modifier class.
+
+    `title`, when given, is the pill's tooltip, escaped like the label. For a
+    label too short to say what it measures: `sources disagree` is the one
+    caller today (`pages._SOURCE_DISCORDANCE_TITLE`).
+    """
     suffix = f" chip-{html.escape(kind)}" if kind else ""
-    return f'<span class="chip{suffix}">{html.escape(text)}</span>'
+    tooltip = f' title="{html.escape(title)}"' if title else ""
+    return f'<span class="chip{suffix}"{tooltip}>{html.escape(text)}</span>'
 
 
 def definition_list(items: Sequence[tuple[str, str]]) -> str:

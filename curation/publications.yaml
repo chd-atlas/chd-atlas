@@ -236,8 +236,9 @@ publications:
     # The counts and the carrier definition are the study's own, from its rows'
     # method_note; that thoracic aortic aneurysm is outside scope is this
     # atlas's call (the taa_cases cohort). The 777 are named against the 7,958
-    # they were counted in, not the 7,107 the deletion test used, because
-    # nothing recorded here says all 777 are among the 7,107.
+    # they were counted in, not the 7,107 the study's rows publish (S1 Table's
+    # deletion column), because nothing recorded here says all 777 are among
+    # the 7,107 -- nor which case set the deletion test itself was run on.
     summary_caveat: >-
       Its cases were drawn from 7,958 individuals, 777 of them sporadic
       thoracic aortic aneurysm probands, outside this atlas's scope; a carrier

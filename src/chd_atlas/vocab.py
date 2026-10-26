@@ -149,12 +149,13 @@ class AtlasCuration(StrEnum):
     """Whether the atlas itself has curated evidence for a gene it publishes.
 
     D21 publishes a gene on an external authority's assessment, which is not the
-    atlas's own work. 91 of the 92 genes published today carry no
-    `LesionAssertion` at all, so a consumer that read `headline_confidence`
-    alone would take a mirrored ClinGen call for curated atlas content -- and
-    since the 2026-08-06 widening, 16 of those genes have no ClinGen record
-    either, so `headline_confidence` is `null` and the same consumer sees a gene
-    with no stated confidence from anyone. `admitted_by` in the bundle is what
+    atlas's own work. Nearly every published gene carries no
+    `LesionAssertion` at all (118 of 119, measured 2026-10-26), so a consumer
+    that read `headline_confidence` alone would take a mirrored ClinGen call for
+    curated atlas content -- and since the 2026-08-06 widening, some of those
+    genes have no ClinGen record either (16 that day, 21 on 2026-10-26), so
+    `headline_confidence` is `null` and the same consumer sees a gene with no
+    stated confidence from anyone. `admitted_by` in the bundle is what
     says who did admit it.
 
     Published as a field rather than left inferable from `assertion_count == 0`

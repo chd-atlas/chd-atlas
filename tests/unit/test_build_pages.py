@@ -488,11 +488,22 @@ def test_a_mirrored_disease_label_carrying_markup_is_escaped(
     assert "<img src=x" not in _page(tmp_path, "HGNC_4173.html")
 
 
+# The `sources disagree` chip as published: its title is the only place a
+# reader is told what the two words measure.
+_SOURCES_DISAGREE_CHIP: Final = (
+    '<span class="chip chip-warn" title="One source, ClinGen&#x27;s expert panels or the '
+    "submissions to the Gene Curation Coalition, disputes or refutes this gene for a disease "
+    "in scope while the other classifies it Limited or better for one, not necessarily the "
+    'same disease; see the validity table.">sources disagree</span>'
+)
+_CONFLICTING_EVIDENCE_CHIP: Final = '<span class="chip chip-warn">conflicting evidence</span>'
+
+
 @pytest.mark.parametrize(
     ("conflicting", "discordant", "shown", "hidden"),
     [
-        (True, False, "conflicting evidence", "sources disagree"),
-        (False, True, "sources disagree", "conflicting evidence"),
+        (True, False, _CONFLICTING_EVIDENCE_CHIP, "sources disagree"),
+        (False, True, _SOURCES_DISAGREE_CHIP, "conflicting evidence"),
     ],
 )
 def test_a_contested_gene_is_never_chipped_as_settled(
@@ -532,12 +543,25 @@ def test_a_contested_gene_is_never_chipped_as_settled(
         noticed either. The `hidden` assertion is what catches the two flags being
         read into the wrong chip.
 
-    Neither flag is set on any of the 92 genes published today (measured
-        2026-08-06 on a real build's `genes/index.json`), and no published gene
-        carries a contested headline -- the floor excludes those rungs and the
-        ClinGen veto excludes the rest -- so every branch this test exercises is
-        latent, reachable only from a fixture until the mirrors change and invisible
-        to any test that renders the committed corpus.
+    No published gene carries a contested headline -- the floor excludes those
+        rungs and the ClinGen veto excludes the rest -- so the refuted chip is
+        latent, reachable only from a fixture. The two flags are not: both are set
+        on six published genes since the Orphanet scope path (BRAF, KRAS, MAP2K1,
+        PTPN11, RAF1, SOS1; this read "neither flag is set on any of the 92
+        genes" until 2026-10-26).
+
+        **Each chip is asserted whole, title included (2026-10-26).** `sources
+        disagree` had no title and `methods.html` never mentioned it, while on
+        all six pages carrying it ClinGen and GenCC agree on every gene-disease
+        pair they both classify: the flag is per gene, and fires on a dispute for
+        one disease beside support for another. The title says so.
+
+        **The gene index carries the same `conflicting evidence` chip, keyed on
+        the same flag.** Its confidence column showed those six genes as a bare
+        `definitive` until 2026-10-26, the settled reading `docs/data-api.md`
+        forbids a client. Asserted on the gene's own row, beside the bare grade
+        the confidence facet still matches on; the second case is the row that
+        must not carry it.
     """
     facts = {
         GATA4: replace(
@@ -581,6 +605,40 @@ def test_a_contested_gene_is_never_chipped_as_settled(
     assert 'class="chip chip-warn">refuted</span>' in rail.group()
     assert shown in rail.group()
     assert hidden not in rail.group()
+
+    build_gene_index_page(
+        facts, emitter, symbols={GATA4: "GATA4"}, validity={GATA4: validity}, burden_counts={}
+    )
+    browse = _page(tmp_path, "index.html")
+    row = re.search(r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>", browse, re.S)
+    assert row is not None, "the gene index has no row for the gene"
+    assert 'data-confidence="refuted"' in row.group()
+    cells = re.findall(r"<td>(.*?)</td>", row.group(), re.S)
+    assert cells[2] == (f"refuted {_CONFLICTING_EVIDENCE_CHIP}" if conflicting else "refuted")
+
+    # **A contested gene no panel graded keeps its chip, beside the em dash**
+    # (review, 2026-10-26). A GenCC dispute is no veto, so a gene admitted on
+    # submitter agreement can carry the flag with a null headline; no published
+    # gene does today, and suppressing the chip wherever the headline is null
+    # survived the full suite. `data-confidence` stays empty: the facet has no
+    # grade to match.
+    ungraded = tmp_path / "ungraded"
+    build_gene_index_page(
+        {GATA4: replace(facts[GATA4], headline_confidence=None)},
+        Emitter(root=ungraded),
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: validity},
+        burden_counts={},
+    )
+    row = re.search(
+        r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>",
+        _page(ungraded, "index.html"),
+        re.S,
+    )
+    assert row is not None, "the gene index has no row for the ungraded gene"
+    assert 'data-confidence=""' in row.group()
+    cells = re.findall(r"<td>(.*?)</td>", row.group(), re.S)
+    assert cells[2] == (f"— {_CONFLICTING_EVIDENCE_CHIP}" if conflicting else "—")
 
 
 def test_every_gene_in_the_facts_gets_exactly_one_page(
@@ -1503,6 +1561,14 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     # the caveats printed anywhere at all.
     notes = _slice_between(page, '<details class="cohort-notes">', ("</details>",))
     assert "survivorship bias against severe CHD" in notes
+    # The title promises what the fold holds -- the collections, and the
+    # caveats recorded for them -- and no more. It read "and what qualifies
+    # every number above" until 2026-10-26, which several descriptions do not
+    # do: some say only what a collection is.
+    assert notes.startswith(
+        "<summary>About these cohorts, and the caveats recorded for them</summary><ul>"
+    )
+    assert "qualifies every number" not in page
     assert "enriched for syndromic CHD" in notes
     # The fold stays (P4: narrowing where a cohort caveat reaches is what this
     # test exists to stop) and ends on a link to the whole registry on
@@ -1621,14 +1687,22 @@ def test_a_method_note_is_rendered_as_the_footnote_the_schema_promises(
     The column exists for the CNV case, where "carrier" means different things
     in different papers, so the first curator to need it would have got a green
     build, a correct bundle and no page text.
+
+    A note of whitespace alone is no note: it rendered an empty `<li>` until
+    2026-10-26, while the card's `caveats` label already read it as none.
     """
     page = _burden_page(
         tmp_path,
         facts_uncurated,
-        [_burden_row(method_note="Carrier means any exonic overlap of the deletion.")],
+        [
+            _burden_row(method_note="Carrier means any exonic overlap of the deletion."),
+            _burden_row(cohort_stratum="all", method_note="   "),
+        ],
     )
 
-    assert "Carrier means any exonic overlap of the deletion." in page
+    assert re.findall(r'<ul class="footnotes">.*?</ul>', page) == [
+        '<ul class="footnotes"><li>Carrier means any exonic overlap of the deletion.</li></ul>'
+    ]
 
 
 def test_the_provenance_line_unions_every_row_rather_than_reading_the_first(
@@ -2237,10 +2311,10 @@ def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     assert '<details class="reading-notes"><summary>How to read these numbers' not in section
     figure = _forest_figures(section)[0]
     assert (
-        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-        "negative control, drawn apart from the results it calibrates.</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
-        in figure
+        "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+        "rows, its negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
+        "</details>" in figure
     )
     for text in (page, html.unescape(page)):
         for moved in (
@@ -2447,8 +2521,45 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
         )
 
 
+# One matrix cell's state, `title`, visible effect and statistic, in order.
+_MATRIX_CELL: Final = re.compile(
+    r'class="cell (corrected|nominal)" title="([^"]*)">(.*?)<br><span class="sub">([^<]*)</span>'
+)
+
+
+@pytest.mark.parametrize(
+    ("row", "shown"),
+    [
+        pytest.param(
+            _burden_row(effect=6.53, effect_bound=None, ci_low=2.1, ci_high=20.3),
+            "OR 6.53",
+            id="bounded: the interval is dropped",
+        ),
+        pytest.param(
+            _burden_row(ci_low=0.786, pvalue=0.0316),
+            "OR ∞ (CI 0.786–∞)",
+            id="TBX5: unbounded, the lower bound kept",
+        ),
+        pytest.param(
+            _burden_row(
+                cohort_stratum="nonsyndromic",
+                consequence_class="missense_damaging",
+                n_cases=2405,
+                ci_low=3.5212,
+                pvalue=0.0025639,
+            ),
+            "OR ∞ (CI 3.52–∞)",
+            id="ZFPM1: the lower bound at three significant figures",
+        ),
+        pytest.param(
+            _burden_row(ci_low=None),
+            "OR ∞",
+            id="unbounded with no lower bound to keep",
+        ),
+    ],
+)
 def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts], row: BurdenRow, shown: str
 ) -> None:
     """The one property `_effect_compact` trades width for, and the one it does not.
 
@@ -2463,27 +2574,30 @@ def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
     2026-08-05 found that dropping it from the compact form survived the entire
     suite, which is the only reason this test exists.
 
-    An unbounded effect still renders `∞` rather than a blank, for the reason
-    `_effect` does: it is the strongest result in the data, and the one
-    `allow_nan=False` refuses to publish as a number.
+    **An unbounded effect keeps its lower bound** (2026-10-26). It rendered a
+    bare `OR ∞`, and on TBX5's and ZEB2's cells "OR ∞" over "p 0.0316" stood for
+    an interval of 0.786–∞ that spans 1, visible only on hover -- the reading
+    `_effect` already refuses, "infinitely enriched" with the bound that
+    contradicts it out of sight. The bare form is left only where there is no
+    bound to keep. Asserted on the cell's visible text, sliced from its `title`,
+    which carries the interval wherever the row has one.
+
+    **The bound is formatted, and TBX5's cannot show it**: 0.786 prints the same
+    raw as at three significant figures, so printing `ci_low` unformatted
+    survived the full suite (review, 2026-10-26). ZFPM1's non-syndromic
+    missense row, 3.5212, is a real published bound whose two forms differ.
     """
-    rows = [
-        _burden_row(consequence_class="lof", effect=6.53, effect_bound=None, ci_low=2.1),
-        _burden_row(consequence_class="missense_damaging"),  # the unbounded fixture
-    ]
-    page = _burden_page(tmp_path, facts_uncurated, rows)
-    section = page[page.index(_RARE_VARIANT_HEADING) :]
-    matrix = section[section.index('<table class="matrix">') : section.index("</table>")]
+    page = _burden_page(tmp_path, facts_uncurated, [row])
+    section = _burden_section_text(page)
+    matrix = _slice_between(section, '<table class="matrix">', ("</table>",))
 
-    # The measure travels with every number.
-    assert "OR 6.53" in matrix or "OR ∞" in matrix
-    assert (
-        re.search(r'class="cell (corrected|nominal)"[^>]*>(?!OR|enrichment|rate)', matrix) is None
-    )
-
-    # The interval does not -- it is in the table below and on the cell's title.
-    assert "95% CI" not in matrix
-    assert "95% CI" in section[section.index("</table>") :]
+    [(_, title, visible, _)] = _MATRIX_CELL.findall(matrix)
+    assert visible == shown
+    # The interval is on hover, and spelled in full only there and in the table.
+    interval = row.ci_low is not None
+    assert ("95% CI" in title) is interval
+    assert "95% CI" not in re.sub(r'title="[^"]*"', "", matrix)
+    assert ("95% CI" in section[section.index("</table>") :]) is interval
 
 
 def test_the_browse_headers_and_cells_line_up(
@@ -3202,6 +3316,73 @@ def test_marker_fill_encodes_survival_of_the_studys_own_correction(
     assert ".chart-point-open { fill: var(--bg); stroke: var(--link); stroke-width: 1.6; }" in page
 
 
+def test_a_survivor_that_is_not_support_is_hollow_and_the_key_says_why(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The forest's fill reads the card's rule, and its key names no fill it does not draw.
+
+    **A depleted row that cleared its correction is hollow (2026-10-26).** The
+    fill read the corrected p alone, so this row would have been drawn filled
+    while the card beside it said none survives a correction its study
+    published: the card and the evidence matrix read
+    `concordance.survives_own_correction`, which counts only support. Now every
+    row but a synonymous one is filled by that rule. 0 published rows differed
+    between the two rules that day, so this fixture is the only place the
+    difference is drawn. The hollow clause, "did not survive", is false of
+    this row, so the key says what it is instead -- and only that, because it
+    is the panel's only hollow row.
+
+    **And no filled clause where only the negative control survived.** A
+    surviving synonymous row is drawn muted, never in the result colour, and a
+    key promising a filled marker would send a reader hunting for one. Keying
+    the clause on survival alone survived the release review's 634-test
+    mutation run until this case (2026-10-26).
+    """
+    corrected: dict[str, object] = {"pvalue_adjustment": "benjamini_hochberg"}
+    page = _burden_page(
+        tmp_path,
+        facts_uncurated,
+        [
+            _burden_row(
+                cohort_stratum="all",
+                effect=0.31,
+                effect_bound=None,
+                ci_low=0.12,
+                ci_high=0.74,
+                pvalue=0.001,
+                pvalue_adjusted=0.012,
+                **corrected,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="synonymous",
+                effect=2.0,
+                effect_bound=None,
+                ci_low=1.3,
+                ci_high=3.1,
+                pvalue=0.0004,
+                pvalue_adjusted=0.008,
+                **corrected,
+            ),
+        ],
+    )
+
+    [figure] = _forest_figures(_burden_section_text(page))
+    assert figure.count('class="chart-point-open"') == 1
+    assert figure.count('class="chart-control-point"') == 1
+    assert 'class="chart-point"' not in figure
+    assert (
+        "A row that <strong>survived</strong> its own study's correction without pointing to "
+        "enrichment in cases is drawn <strong>hollow</strong>: it is not evidence for this "
+        "gene." in figure
+    )
+    assert "<strong>did not survive</strong>" not in figure
+    assert "A <strong>filled</strong> marker" not in figure
+    assert "A <strong>muted</strong> row is one of this study's" in figure
+    # The card on the same page reads the same rule.
+    assert "none survives a correction its study published" in _card_variants(_rail_of(page))
+
+
 def test_a_gene_with_no_plottable_row_gets_a_sentence_and_no_chart(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
@@ -3375,14 +3556,16 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     """D57: a chart caption is one visible line plus a "How to read this chart" toggle.
 
     The key was one `<figcaption>` of up to twelve sentences under every panel
-    -- 185 panels on 114 pages, measured on a build of 9f24190. Only the axis
-    clause is particular to its panel (the measure, its range, and what 1
-    means for that measure), so it alone stays in sight; every other clause
-    describes a mark in words that are the same wherever that mark is drawn,
-    and folds. **Each clause keeps its condition**: the tests above that
-    assert a clause renders only beside its mark slice the figure, which
-    contains the toggle, so they hold unchanged; this one asserts where the
-    clauses sit.
+    -- 185 panels on 114 pages, measured on a build of 9f24190. The axis clause
+    (the measure, its range, and what 1 means for that measure) stays in sight
+    and every other clause folds. Most of them describe a mark in words that
+    are the same wherever that mark is drawn; the not-fully-split clause does
+    not -- it warns about this panel -- and folds too, as the D57 spec places
+    it (10 panels on 10 pages, measured 2026-10-26). This docstring said the
+    axis clause alone was particular to its panel until then. **Each clause
+    keeps its condition**: the tests above that assert a clause renders only
+    beside its mark slice the figure, which contains the toggle, so they hold
+    unchanged; this one asserts where the clauses sit.
 
     One panel that draws every mark, so every conditional clause renders: a
     surviving composite (filled), an arrow to the right (unbounded, its
@@ -3396,6 +3579,13 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     and the muted clause changed on the fold: it ended "How to read these
     results says why", a link to the same section the toggle now closes on,
     so it names the row's role itself ("its negative control").
+
+    **Two more changes after review (2026-10-26).** The muted clause was
+    singular -- "The muted row is this study's synonymous row" -- while each of
+    the 113 panels carrying it draws three, one per case group; it says "one
+    of this study's synonymous rows". And the toggle's link read "How to read
+    this atlas", the nav's text for the top of `methods.html`, while it led to
+    one section; it names the section.
     """
     survived = {"pvalue_adjusted": 0.0037, "pvalue_adjustment": "benjamini_hochberg"}
     placed: dict[str, object] = {"effect_bound": None}
@@ -3486,9 +3676,10 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         "contains is not itself plotted, so what sits under a union on this panel is part of "
         "it and not all of it. The table below carries every row this study published for "
         "this gene. "
-        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-        "negative control, drawn apart from the results it calibrates.</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+        "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+        "rows, its negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
+        "</details>"
     )
 
 
@@ -5843,9 +6034,14 @@ _PULMONIC = Annotation("HP:0001642", "Abnormal pulmonary valve morphology", "Fre
 def _noonan_validity() -> GeneValidity:
     """One ClinGen-path disease and two Orphanet-scoped ones, one of them a subtype.
 
-    Three because each kills a different mutant (CLAUDE.md section 4.36): a note
-    rendered for every disease shows up on Holt-Oram, a note that ignored `via`
-    reads the same for both Noonan terms, and an unsorted loop swaps them.
+    Three because each kills a different mutant (CLAUDE.md section 4.36): a
+    loop over every record's disease fails on Holt-Oram, which has no warrant; a
+    note that ignored `via` reads the same for both Noonan terms; and an
+    unsorted loop swaps them. A note for a warrant the gene holds no record for
+    is guarded by the test's own extra warrant, not by these records: until
+    2026-10-26 every warrant passed was one of them, and a loop over every
+    warrant survived all 1,297 tests (built, it put all 36 notes on all 119
+    pages).
     """
     base = _validity().records[0]
     return GeneValidity(
@@ -5881,6 +6077,21 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     `methods.html#scope` on 2026-10-26 (D50), and its Orphanet clause and
     `scope.json` parenthetical are pinned there, by `test_build_methods.py`.
     The page keeps a short form that names neither.
+
+    **Each note's last sentence names its disease (2026-10-26).** It read "The
+    classifications below are for the syndrome, not for heart disease" on all
+    74 notes over 27 pages, and on NOTCH1's page the classifications below
+    include an admitting record for NOTCH1-related AOS spectrum disorder, a term
+    a ClinGen expert panel scoped, and an Orphanet record for familial bicuspid
+    aortic valve. This fixture carries the same shape: a Holt-Oram record,
+    scoped by an authority, below two Noonan notes. The subtype's literal now
+    runs to the end of its note, so a note that names the wrong one of its two
+    diseases (the syndrome its warrant is inherited from) fails too.
+
+    **It ends on "that disease as a whole"**, not "the syndrome as a whole"
+    (review, 2026-10-26): in a subtype's note the sentence before names the
+    parent -- "of cases of Noonan syndrome, the syndrome it is a subtype of" --
+    so "the syndrome" had the parent as its nearest antecedent. Asserted absent.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5897,8 +6108,16 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
             "MONDO:0012547": Warrant(
                 "ORPHA:648", "Noonan syndrome", "subtype", "OMIM:610733", (_PULMONIC,)
             ),
+            # In scope, and not a disease this gene has a record for.
+            _NSML: Warrant(
+                "ORPHA:500", "Noonan syndrome with multiple lentigines", "direct", None, ()
+            ),
         },
-        scope_labels={"MONDO:0018997": "Noonan syndrome", "MONDO:0012547": "Noonan syndrome 4"},
+        scope_labels={
+            "MONDO:0018997": "Noonan syndrome",
+            "MONDO:0012547": "Noonan syndrome 4",
+            _NSML: "Noonan syndrome with multiple lentigines",
+        },
     )
     page = _page(tmp_path, "HGNC_4173.html")
     section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2",))
@@ -5907,22 +6126,33 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
         "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of its cases</strong>: Abnormal pulmonary valve "
         "morphology at <em>Frequent (79-30%)</em> (Orphanet, ORPHA:648). The classifications "
-        "below are for the syndrome, not for heart disease."
+        "below for Noonan syndrome are for that disease as a whole, not for heart disease."
     )
     subtype = (
         "<strong>Noonan syndrome 4 is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of cases of Noonan syndrome</strong>, the syndrome it "
         "is a subtype of (Orphanet maps OMIM:610733 under ORPHA:648): Abnormal pulmonary "
-        "valve morphology at <em>Frequent (79-30%)</em>."
+        "valve morphology at <em>Frequent (79-30%)</em>. The classifications below for "
+        "Noonan syndrome 4 are for that disease as a whole, not for heart disease."
     )
     assert direct in section and subtype in section
+    # Each note names its own disease, because the table below it is not only
+    # that syndrome's: Holt-Oram syndrome's record sits under both notes here,
+    # as NOTCH1-related AOS spectrum disorder's does under NOTCH1's.
+    assert "The classifications below are for the syndrome" not in section
+    # And it ends on "that disease": after a subtype's "the syndrome it is a
+    # subtype of", "the syndrome as a whole" reads as the parent's.
+    assert "for the syndrome as a whole" not in section
     # Sorted by disease id: MONDO:0012547 before MONDO:0018997.
     assert section.index(subtype) < section.index(direct)
     # Above both groups, not under either.
     first_group = section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.index(subtype) < first_group and section.index(direct) < first_group
-    # A disease an expert panel curated as CHD gets no Orphanet sentence.
+    # A disease an expert panel curated as CHD gets no Orphanet sentence, and a
+    # scope term the gene has no record for gets none at all: the page would
+    # explain a disease it never lists.
     assert "Holt-Oram syndrome is in scope because" not in section
+    assert "multiple lentigines" not in page
 
 
 # `test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays` sat
@@ -6753,6 +6983,93 @@ def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
     assert [line.split(" · ")[0] for line in lines] == ["Sierant MC et al. 2025"]
 
 
+@pytest.mark.parametrize(
+    ("rows", "cell"),
+    [
+        pytest.param(
+            [
+                _sierant_de_novo(effect=15.8, pvalue=0.0613, pvalue_adjusted=0.200),
+                _sierant_de_novo(
+                    consequence_class="missense_damaging",
+                    effect=20.8,
+                    pvalue=0.0468,
+                    pvalue_adjusted=0.270,
+                ),
+                _sierant_de_novo(
+                    consequence_class="lof", effect=0.0, pvalue=1.0, pvalue_adjusted=1.0
+                ),
+            ],
+            ("nominal", "enrichment 20.8; 0.27 (Benjamini-Hochberg)", "enrichment 20.8", "q 0.27"),
+            id="GJA1: nominal by its missense row, not by the lower-q damaging union",
+        ),
+        pytest.param(
+            [
+                _sierant(),
+                _sierant(
+                    consequence_class="lof",
+                    effect=4.2,
+                    pvalue=1.2e-5,
+                    pvalue_adjusted=None,
+                    pvalue_adjustment=None,
+                ),
+            ],
+            ("corrected", "OR 2.31; 0.00944 (Benjamini-Hochberg)", "OR 2.31", "q 0.00944"),
+            id="corrected by its survivor, not by a lower raw p no correction cleared",
+        ),
+        pytest.param(
+            [
+                _sierant_de_novo(effect=40.45, pvalue=3.68e-06, pvalue_adjusted=9.1264e-05),
+                _sierant_de_novo(
+                    consequence_class="missense_damaging",
+                    effect=54.1,
+                    pvalue=1.17e-06,
+                    pvalue_adjusted=0.00014508,
+                ),
+            ],
+            (
+                "corrected",
+                "enrichment 40.5; 9.13e-05 (Benjamini-Hochberg)",
+                "enrichment 40.5",
+                "q 9.13e-05",
+            ),
+            id="RAF1: two survivors, named by the lower q, not the lower raw p",
+        ),
+    ],
+)
+def test_the_matrix_cell_names_a_row_its_state_is_true_of(
+    tmp_path: Path,
+    facts_uncurated: dict[str, GeneFacts],
+    rows: list[BurdenRow],
+    cell: tuple[str, str, str, str],
+) -> None:
+    """The cell's glyph and the row it names come from one rule (2026-10-26).
+
+    The cell named the most significant row in it -- corrected p where
+    published, raw p otherwise -- whatever that row's role. GJA1's de novo cell
+    in PMID:40127276 is `nominal` because its missense row is (p 0.0468, q
+    0.270), and it named the `damaging` union (p 0.0613, q 0.200) under the
+    "enriched nominally" glyph: a row that is not nominally significant at all.
+    1 of 109 enriched cells on a real build. The fixture is GJA1's three rows.
+
+    The second case is the same defect under the `corrected` glyph: a
+    supporting row whose study published no correction sorts on its raw p, and
+    1.2e-5 sorts before the survivor's q of 0.00944. It names the survivor.
+    Both read `concordance.deciding_rows`, which `family_state` reads its tier
+    from, so the glyph and the named row cannot come apart again.
+
+    **Among rows that all decide, the corrected p ranks them, not the raw one.**
+    The third case is RAF1's de novo cell: its `damaging` row has the lower q
+    (9.13e-05 against 1.45e-04) and its missense row the lower raw p (1.17e-06
+    against 3.68e-06), so a sort on raw p alone names the other row. Measured
+    on a real build (review, 2026-10-26): that mutant changes the named row in
+    8 of 109 enriched cells, and survived the full suite until this case.
+    """
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES)
+    matrix = _slice_between(_burden_section_text(page), '<table class="matrix">', ("</table>",))
+
+    assert _MATRIX_CELL.findall(matrix) == [cell]
+
+
 _NO_TESTS_REPORTED: Final = {
     **_ALL_STUDIES,
     "PMID:34324492": _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(
@@ -7338,6 +7655,16 @@ _IN_SCOPE_BY_ORPHANET: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
+                _clingen(Classification.DEFINITIVE, _AOS4, "Adams-Oliver syndrome 4"),
+            ),
+            "Graded for Adams-Oliver syndrome 4 and Noonan syndrome as whole syndromes; "
+            f"{_IN_SCOPE_BY_ORPHANET} of Adams-Oliver syndrome and Noonan syndrome.",
+            id="one direct and one subtype: the subtype's syndrome is still named",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
                 _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
                 _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
             ),
@@ -7381,7 +7708,13 @@ def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_di
     malformation for Adams-Oliver syndrome, and Adams-Oliver syndrome 4 (EOGT's
     headline disease, the one subtype among the 21 Orphanet lines measured
     2026-10-26) is in scope as its subtype; "in at least 30% of cases" alone
-    would read as a frequency recorded for the subtype itself.
+    would read as a frequency recorded for the subtype itself. **And still
+    named beside a direct one**: a headline graded for Noonan syndrome and for
+    Adams-Oliver syndrome 4 names both syndromes. Attributing only when every
+    warrant is a subtype's would drop "of Adams-Oliver syndrome" there, and
+    that mutant survived the release review's 634-test mutation run until this
+    case was added (2026-10-26; latent, none of the 21 lines on a real build
+    that day).
 
     **Rendered only when every disease the headline grade is for is
     Orphanet-scoped**, and naming all of them. A gene graded at its headline
@@ -7449,15 +7782,36 @@ _NOT_CURATED_BY_PANEL: Final = (
             id="not curated, a panel graded it",
         ),
         pytest.param(
+            (
+                replace(
+                    _agreed()[0],
+                    validity_state=ValidityState.EXPERT_CURATED,
+                ),
+                GeneValidity(
+                    records=(
+                        _clingen(
+                            Classification.NO_KNOWN_ASSOCIATION,
+                            "MONDO:0007173",
+                            "atrial septal defect 7",
+                        ),
+                        _gencc("Ambry Genetics", Classification.LIMITED),
+                        _gencc("G2P", Classification.DEFINITIVE),
+                    ),
+                    state=ValidityState.EXPERT_CURATED,
+                    has_source_discordance=False,
+                ),
+            ),
+            _NOT_CURATED_BY_PANEL,
+            id="not curated, admitted on agreement over a panel's no known association",
+        ),
+        pytest.param(
             _agreed(
                 _gencc("Ambry Genetics", Classification.LIMITED),
                 _gencc("G2P", Classification.DEFINITIVE),
             ),
             "Not yet curated by the atlas, and no ClinGen expert panel has graded this gene for "
-            "a disease an external authority treats as congenital heart disease, or in which "
-            "Orphanet records a structural heart malformation in at least 30% of cases: it is "
-            "published because the Gene Curation Coalition submitters named above "
-            "independently assert it.",
+            "any of the diseases in scope here: it is published because the Gene Curation "
+            "Coalition submitters named above independently assert it.",
             id="not curated, admitted on agreement",
         ),
         pytest.param(
@@ -7485,9 +7839,16 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
       unscoped it is false: ClinGen grades ACTC1 Definitive for hypertrophic
       cardiomyopathy and ELN Definitive for cutis laxa, both admitted here on
       agreement (measured 2026-10-26 against the ClinGen mirror). Its scope
-      clause is the grade key's `ungraded` gloss's, word for word, Orphanet
-      path included, so the two cannot describe the gate differently on one
-      page;
+      clause is the grade key's `ungraded` gloss's and the gene index's,
+      word for word, so the three cannot describe the gate differently.
+      **Scoped to the list, not to a property of a disease**: it read "for a
+      disease an external authority treats as congenital heart disease, or
+      in which Orphanet records a structural heart malformation in at least
+      30% of cases" until 2026-10-26, false on FLNA's card -- ClinGen grades
+      FLNA Definitive for periventricular nodular heterotopia, which would
+      qualify through Orphanet and which no curator has nominated. That
+      clause is asserted absent from the whole page, so it cannot return on
+      another line of the card or in the validity section either;
     * not curated with functional records (latent: 0 genes today) -- the
       sentence names the lesion assertion as what is absent, because "not
       curated by the atlas" beside "the atlas has curated 1 functional record"
@@ -7499,7 +7860,11 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     The discriminator between the two uncurated sentences is `validity_state`,
     not the headline: a gene admitted on agreement that ClinGen recorded `No
     Known Disease Relationship` for in scope has a panel record, and the first
-    sentence stays true of it where the second would not.
+    sentence stays true of it where the second would not. That gene is a case
+    here, because it is the only one that tells the two apart: every other
+    fixture pairs a panel record with a headline, and keying the sentence on
+    the headline survived all 1,297 tests until it was added (2026-10-26). Its
+    page carries "no ClinGen expert panel has graded" nowhere.
 
     Exactly one curation paragraph per card, and none in the main column: the
     sentence moved here, and a page stating it twice is a page whose two copies
@@ -7521,6 +7886,10 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     rail = _rail_of(page)
 
     assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    # Only where the card's own sentence says it, never on another line.
+    denial = "no ClinGen expert panel has graded"
+    assert (denial in page) is (denial in sentence)
+    assert "in which Orphanet records" not in page
     main = page[page.index("</aside>") :]
     assert "curated by the atlas" not in main.lower()
     assert "not yet curated</strong> a lesion assertion" not in page

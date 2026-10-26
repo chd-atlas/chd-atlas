@@ -239,11 +239,20 @@ METHOD_NOTE: Final = (
     "rows, not an independent third result."
 )
 
+# Stamped on every combined row, so every sentence must be true of every gene it
+# sits under. The fourth read "The meta-analysis p does not reproduce as Fisher's
+# method on the two printed arm p-values" until 2026-10-26: a fact about the
+# panel stated as one about the gene. Measured on this workbook, the meta p is
+# within 10% of Fisher's (the larger of the two over the smaller) for
+# 116/133/144 of the 248 genes, and for all three of WDR5's rows (0.127 against
+# 0.137, 0.133 against 0.137, 1 against 1) -- a published gene whose page said
+# otherwise.
 COMBINED_NOTE: Final = (
     "The study's own meta-analysis of its de novo and case-control arms, by the "
     "joint local false discovery rate method (Jiang & Yu 2017, PMID:28011772). The "
     "local FDR is not a corrected p-value and can be smaller than the p beside it. "
-    "The meta-analysis p does not reproduce as Fisher's method on the two printed arm "
+    "The meta-analysis p is the study's own, transcribed as printed; for many of the "
+    "study's genes it does not reproduce as Fisher's method on the two printed arm "
     "p-values. The study's genome-wide threshold is p < 2.6e-6."
 )
 

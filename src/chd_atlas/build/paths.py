@@ -118,7 +118,7 @@ SOURCES: Final = "sources.json"
 # The sample collections every burden row names by bare id. Published because a
 # consumer reading `case_cohorts: ["taa_cases"]` out of a bundle otherwise gets
 # the numbers with none of the caveats that qualify them -- and `taa_cases` is
-# 777 probands who do not have congenital heart disease.
+# 777 thoracic aortic aneurysm probands, a condition outside this atlas's scope.
 COHORTS: Final = "cohorts.json"
 # The CHD scope registry, and for each term the authority it is attributed to.
 # Published because a bundle names a disease by bare MONDO id, and since the

@@ -329,7 +329,8 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     2026-08-06, `curation/cohorts.yaml` reached zero published bytes and
     `Cohort.url` reached none at all, so a consumer had 915 statistics and none
     of the sentences that say what they count -- including that `taa_cases` is
-    777 probands who do not have congenital heart disease.
+    777 thoracic aortic aneurysm probands, a condition outside this atlas's
+    scope.
 
     Four properties, one fixture, because they share it and each fails a
     different mutant:

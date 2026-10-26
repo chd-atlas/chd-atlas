@@ -63,6 +63,10 @@ def _advertised(site: Path) -> list[tuple[str, str]]:
         for modality in bundle["omics"].values():
             for shard in modality["shards"]:
                 references.append((entry["bundle"], shard))
+        for dataset in bundle["expression_profile"]["datasets"]:
+            # None on a corpus mid-curation, which advertises nothing.
+            if dataset["quantile_shard"] is not None:
+                references.append((entry["bundle"], dataset["quantile_shard"]))
 
     for shard in _read(site, "variants/index.json")["shards"]:
         references.append(("variants/index.json", shard))
@@ -91,10 +95,12 @@ def test_every_path_the_site_advertises_resolves(site: Path) -> None:
     The floors are asserted so the sweep cannot pass by finding nothing, which
     is how a loop over an empty collection reports success. They are floors
     rather than exact counts so that curating more data strengthens this test
-    instead of breaking it. Two of the five sources contribute nothing today —
+    instead of breaking it. Two of the six sources contribute nothing today —
     no gene carries omics summaries and no variant shard exists in the committed
     corpus — so those loops are currently unexercised, and the floors are
-    deliberately not raised to hide that.
+    deliberately not raised to hide that. The bundles' floor is met by their
+    `expression_profile` percentile grids alone, which reached no sweep of the
+    JSON until 2026-10-26, although the gene pages link them.
     """
     references = _advertised(site)
     by_source: dict[str, int] = {}
@@ -104,6 +110,8 @@ def test_every_path_the_site_advertises_resolves(site: Path) -> None:
     assert by_source.get("manifest.json", 0) >= 8
     assert by_source.get("genes/index.json", 0) >= 1
     assert by_source.get("search/index.json.gz", 0) >= 3
+    bundles = [source for source in by_source if source.startswith("genes/HGNC_")]
+    assert sum(by_source[source] for source in bundles) >= 1
 
     for source, relative in references:
         assert site.joinpath(*relative.split("/")).is_file(), (
@@ -434,7 +442,7 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
         assert name == html.escape(cohort["name"])
         expected = html.escape(cohort["description"])
         if cohort["url"] is not None:
-            expected += f' <a href="{html.escape(cohort["url"])}">source</a>'
+            expected += f' <a href="{html.escape(cohort["url"])}">website</a>'
         assert entry == expected, f"{cohort['id']} is not listed whole"
 
 
@@ -446,11 +454,19 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     instruction published as a caveat, beside rows whose case set is not
     7,958. The study's S1 Table counts 7,958 cases with a CNV of any type and
     7,107 with deletion data; S2 puts this series at 777 of the 7,958; every
-    row naming the cohort is a deletion analysis over 7,107 (121 mirror rows,
-    all PMID:34324492). So the description now gives both figures, and this
-    asserts the second against every published row that cites the cohort: a
-    re-curated mirror with another denominator fails here rather than leaving
+    row naming the cohort is a deletion row publishing 7,107 cases (121 mirror
+    rows, all PMID:34324492). So the description now gives both figures, and
+    this asserts the second against every published row that cites the cohort:
+    a re-curated mirror with another denominator fails here rather than leaving
     the caveat contradicting the table beside it.
+
+    **What the rows publish, never what the statistic was computed on.** The
+    description said "a row naming this cohort is computed on the 7,107" until
+    later on 2026-10-26, when the article's methods were read: its permutation
+    test ran on a filtered set of 6,746 cases and 14,024 controls, which is
+    neither S1 pair. Which set PLINK counted is open, so the sentence now says
+    only what the rows publish, and "computed on" is asserted absent beside the
+    retired phrases.
 
     The retired phrases are asserted absent from every published byte that
     carries the description -- `cohorts.json`, `methods.html` and each gene
@@ -469,7 +485,7 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     }
     assert denominators, "no published row cites taa_cases; this measures nothing"
     for denominator in sorted(denominators):
-        assert f"the {denominator:,} of them" in description, (
+        assert f"publishes the {denominator:,} cases" in description, (
             f"rows citing taa_cases publish {denominator:,} cases; the caveat does not say so"
         )
     assert "777 of its 7,958 cases" in description
@@ -477,7 +493,12 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     published = [site / "cohorts.json", site / "methods.html", *sorted(site.glob("genes/*.html"))]
     for path in published:
         text = path.read_text(encoding="utf-8")
-        for retired in ("must say so", "explicitly out of", "puts aortopathy outside"):
+        for retired in (
+            "must say so",
+            "explicitly out of",
+            "puts aortopathy outside",
+            "is computed on the",
+        ):
             assert retired not in text and retired not in html.unescape(text), (
                 f"{retired!r} is published in {path.name}"
             )
@@ -1029,6 +1050,146 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     for study, caveat in caveats.items():
         if caveat:
             assert browse.count(html.escape(caveat)) == int(study in on_strips), study
+
+
+def test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is(site: Path) -> None:
+    """The gene index never shows a contested gene as settled (2026-10-26).
+
+    `docs/data-api.md`'s one consumer obligation is that a gene flagged
+    `has_conflicting_evidence` is never displayed as settled, and the front page
+    says the same. The site's own gene index broke it: its confidence column
+    rendered BRAF, KRAS, MAP2K1, PTPN11, RAF1 and SOS1 as a bare `definitive`,
+    while the `genes/index.json` behind the page flagged every one.
+
+    The flagged set is read from that JSON, never written here, so this keeps
+    testing the right genes as the population moves; it must be non-empty, or
+    the positive half measures nothing. Every published gene must have exactly
+    one row, so a gene the page dropped cannot pass as "unflagged". The cell is
+    compared whole -- the bare grade (or the em dash a gene no panel graded
+    shows) and the card's own chip -- and `data-confidence` must stay the bare
+    grade, which is what the confidence facet matches on.
+    """
+    entries = _read(site, "genes/index.json")["genes"]
+    flagged = {entry["gene"] for entry in entries if entry["has_conflicting_evidence"]}
+    assert flagged, "no published gene is flagged has_conflicting_evidence; this measures nothing"
+    browse = (site / "genes" / "index.html").read_text(encoding="utf-8")
+    chip = '<span class="chip chip-warn">conflicting evidence</span>'
+    for entry in entries:
+        page = entry["gene"].replace(":", "_")
+        rows = re.findall(
+            rf"<tr[^>]*>(?:(?!</tr>).)*{page}\.html(?:(?!</tr>).)*</tr>", browse, re.S
+        )
+        assert len(rows) == 1, f"{entry['gene']} has {len(rows)} rows on the gene index"
+        confidence = entry["headline_confidence"] or ""
+        assert f'data-confidence="{confidence}"' in rows[0], entry["gene"]
+        cell = re.findall(r"<td>(.*?)</td>", rows[0], re.S)[2]
+        bare = confidence or "—"
+        assert cell == (f"{bare} {chip}" if entry["gene"] in flagged else bare), entry["gene"]
+
+
+def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list_its_disease(
+    site: Path,
+) -> None:
+    """The Orphanet warrants reach the gene pages, not only `scope.json` (D55, issue #8).
+
+    `build_site` derives the warrants once and hands them to `build_scope` and
+    to `build_gene_pages`. The unit suites hand `build_gene_pages` warrants of
+    their own or none, so a runner that stopped threading them left them green:
+    measured 2026-10-26, `scope_warrants={}` in `build_site` passed all 1,297
+    tests while the pages carrying "is in scope because Orphanet records" went
+    from 27 to 0 and the card's scope line from 21 to 0, and `scope.json` still
+    published all 36 warrants. PTPN11's Noonan grade then sits on a CHD atlas
+    with nothing saying why Noonan counts, and reads as a grade for heart
+    disease.
+
+    Read from `scope.json` and each bundle, never pinned:
+
+    * the validity section carries one note per distinct Orphanet-scoped
+      disease among the bundle's records, in disease-id order, and nothing
+      else on the page does -- a note for a disease the gene has no record
+      for is a warrant stated about nothing the page lists. Each names its
+      disease by the registry's label (the labels are threaded separately, and
+      without them the note names a bare MONDO id) and states the code, the
+      syndrome a subtype inherits from, and every phenotype at the band
+      `scope.json` publishes, so the page and the registry state one warrant;
+    * the card's scope line appears exactly where every disease the headline
+      grade is for is Orphanet-scoped, names those diseases, and names the
+      syndrome a subtype's frequency was recorded for.
+
+    Both sides of each "exactly where" must be exercised (CLAUDE.md section
+    4.30), and the subtype branch too, or it is measuring nothing.
+    """
+    orphanet = {term["id"]: term for term in _read(site, "scope.json")["terms"] if term["orphanet"]}
+    assert orphanet, "scope.json publishes no Orphanet warrant; this measures nothing"
+    entries = _read(site, "genes/index.json")["genes"]
+    noted = carded = subtype_notes = subtype_cards = 0
+    for entry in entries:
+        bundle = _read(site, entry["bundle"])
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        start = page.index("<h2>Mirrored gene&ndash;disease validity</h2>")
+        section = page[start : page.index("<h2", start + 1)]
+        records = bundle["validity"]["records"]
+
+        diseases = sorted({record["disease"] for record in records} & orphanet.keys())
+        notes = [
+            note
+            for note in re.findall(r'<p class="notice-inline">(.*?)</p>', section)
+            if "is in scope because Orphanet records" in note
+        ]
+        assert page.count("is in scope because Orphanet records") == len(notes), entry["gene"]
+        assert len(notes) == len(diseases), (entry["gene"], diseases)
+        for disease, note in zip(diseases, notes, strict=True):
+            term = orphanet[disease]
+            label = html.escape(term["label"])
+            assert note.startswith(f"<strong>{label} is in scope because"), (entry["gene"], note)
+            assert note.endswith(
+                f"The classifications below for {label} are for that disease as a whole, "
+                "not for heart disease."
+            ), (entry["gene"], note)
+            warrant = term["orphanet"]
+            assert warrant["code"] in note, (entry["gene"], disease)
+            if warrant["via"] == "subtype":
+                subtype_notes += 1
+                assert f"of {html.escape(warrant['name'])}</strong>" in note, entry["gene"]
+                assert warrant["omim"] in note, entry["gene"]
+            for phenotype in warrant["phenotypes"]:
+                stated = (
+                    f"{html.escape(phenotype['label'])} at "
+                    f"<em>{html.escape(phenotype['frequency'])}</em>"
+                )
+                assert stated in note, (entry["gene"], disease, phenotype["hpo"])
+        noted += bool(notes)
+
+        headline = bundle["headline_confidence"]
+        graded = [
+            record
+            for record in records
+            if headline is not None
+            and record["source"] == "clingen"
+            and record["classification"] == headline
+        ]
+        scoped = bool(graded) and all(record["disease"] in orphanet for record in graded)
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        lines = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
+        assert page.count('class="card-scope"') == len(lines), entry["gene"]
+        assert len(lines) == int(scoped), (entry["gene"], lines)
+        if scoped:
+            carded += 1
+            line = lines[0]
+            for record in graded:
+                assert html.escape(record["disease_label"]) in line, (entry["gene"], line)
+            recorded_for = line[line.index("30% of cases") :]
+            warrants = [orphanet[record["disease"]]["orphanet"] for record in graded]
+            if all(warrant["via"] == "direct" for warrant in warrants):
+                assert recorded_for == "30% of cases.", (entry["gene"], line)
+            for warrant in warrants:
+                if warrant["via"] == "subtype":
+                    subtype_cards += 1
+                    assert html.escape(warrant["name"]) in recorded_for, (entry["gene"], line)
+    assert 0 < noted < len(entries), f"{noted} of {len(entries)} pages carry an Orphanet note"
+    assert 0 < carded < len(entries), f"{carded} of {len(entries)} cards carry a scope line"
+    assert subtype_notes, "no page notes a subtype's warrant; that branch measures nothing"
+    assert subtype_cards, "no card names a subtype's syndrome; that branch measures nothing"
 
 
 def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(

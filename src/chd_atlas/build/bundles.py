@@ -236,8 +236,8 @@ def _headline(gene: str, symbol: str, fact: GeneFacts) -> dict[str, Json]:
         "validity_state": fact.validity_state.value,
         # Written inside `_headline` for the same reason `has_conflicting_evidence`
         # is: the browse row and the page it opens must not be able to disagree
-        # about whether the atlas has curated a gene, and 91 of the 92
-        # published genes have not.
+        # about whether the atlas has curated a gene, and nearly every published
+        # gene has not (118 of 119, measured 2026-10-26).
         "atlas_curation": fact.atlas_curation.value,
         "has_conflicting_evidence": fact.has_conflicting_evidence,
         "has_source_discordance": fact.has_source_discordance,
@@ -284,9 +284,9 @@ def build_genes(
     an in-scope disease, plus the genes two or more GenCC submitters agree on
     that no ClinGen panel contests. It is passed to `gene_facts`, which keys on
     it, so this function writes exactly one bundle per member and the index lists
-    exactly the same set. 91 of the 92 published today carry no curated assertion
-    at all; `atlas_curation` is what says so, in the index row and the bundle
-    alike.
+    exactly the same set. Nearly all carry no curated assertion at all
+    (118 of 119, measured 2026-10-26); `atlas_curation` is what says so, in the
+    index row and the bundle alike.
 
     `symbols` comes from `mirrors/genes.tsv`, keyed on HGNC id. A gene absent
     from it keeps its HGNC id as its display label: the browse row and the page

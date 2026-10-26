@@ -17,7 +17,10 @@ So this is not a style check. It is the same guarantee the dead-link sweep gives
 the payloads, applied to the document a consumer builds against.
 """
 
+import csv
+import gzip
 import html
+import inspect
 import json
 import re
 import shutil
@@ -26,12 +29,39 @@ from typing import Any
 
 import pytest
 
+from chd_atlas.build.manifest import write_manifest
 from chd_atlas.build.profiles import LOOKUP_RULE, TAU_METHOD, TAU_SCALE
 from chd_atlas.build.runner import build_site
+from chd_atlas.build.validity import GeneValidity, gene_validity
+from chd_atlas.corpus import load_curation
 from chd_atlas.models.dataset import Dataset, Stage
+from chd_atlas.tables import TABLE_SCHEMAS, read_table
+from chd_atlas.vocab import has_conflicting_evidence
 
 REPO = Path(__file__).parent.parent
 DOC = REPO / "docs" / "data-api.md"
+
+# The doc writes small counts as words ("Six obligations"); a pin reads the
+# number off the build and looks the word up here rather than hard-coding it.
+_WORDS: dict[int, str] = dict(
+    enumerate(
+        (
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+        )
+    )
+)
 
 # Each entry maps a documented example to the published object it claims to
 # describe. Only *exhaustive* examples are listed — blocks written with an
@@ -70,6 +100,38 @@ def site(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return out
 
 
+@pytest.fixture(scope="module")
+def mirrored() -> dict[str, GeneValidity]:
+    """Every gene the validity mirrors curate in scope, published or not.
+
+    The doc states figures about the mirrors as well as the build -- how many
+    genes set a flag, which genes carry only a `Supportive` record -- and the
+    build publishes only the gate's side of them, so they are read here the
+    way `build_site` reads them, before the gate.
+    """
+    corpus, _ = load_curation(REPO)
+    clingen, _ = read_table(
+        REPO / "mirrors" / "clingen_gene_validity.tsv", TABLE_SCHEMAS["clingen_validity"]
+    )
+    gencc, _ = read_table(
+        REPO / "mirrors" / "gencc_submissions.tsv", TABLE_SCHEMAS["gencc_submissions"]
+    )
+    assert clingen is not None and gencc is not None
+    return gene_validity(clingen, gencc, in_scope={str(entry.id) for entry in corpus.chd_scope})
+
+
+def _bundles(site: Path) -> list[dict[str, Any]]:
+    return [json.loads(path.read_text()) for path in sorted((site / "genes").glob("HGNC_*.json"))]
+
+
+def _section(heading: str, end: str = "\n## ") -> str:
+    """One section of the doc, whitespace collapsed: prose claims, not line breaks."""
+    doc = DOC.read_text()
+    start = doc.index(heading)
+    stop = doc.find(end, start + len(heading))
+    return " ".join(doc[start : stop if stop != -1 else len(doc)].split())
+
+
 def _text_of(page: str) -> str:
     """One HTML page as its visible text, whitespace collapsed.
 
@@ -104,8 +166,6 @@ def _example(heading: str) -> dict[str, Any]:
 
 
 def _published(site: Path, kind: str) -> dict[str, Any]:
-    import gzip
-
     def load(rel: str) -> Any:
         raw = (site / rel).read_bytes()
         return json.loads(gzip.decompress(raw) if rel.endswith(".gz") else raw)
@@ -218,6 +278,33 @@ def test_the_documented_manifest_census_is_the_census_the_build_publishes(site: 
         f"the build counts {manifest['counts']}; the documented example says {documented['counts']}"
     )
 
+    # **Which keys count a curated file and which the build computes**, and the
+    # number words in front of each list. The prose classified 9 of the 14 keys
+    # until 2026-10-26: three releases had added keys to the object and none to
+    # the sentence about it. The curated set is read off `write_manifest`'s own
+    # `len(corpus.…)` literal, so a key moved into the wrong list fails here,
+    # and a key the build adds without a sentence fails the partition.
+    curated = set(re.findall(r'"(\w+)": len\(corpus\.', inspect.getsource(write_manifest)))
+    computed = set(manifest["counts"]) - curated
+    prose = " ".join(section.split())
+    curated_clause = prose[prose.index("of its keys count a curated file") :]
+    curated_clause = curated_clause[: curated_clause.index("A gene the atlas has not curated")]
+    computed_block = section[section.index("keys are computed by the build") :]
+    computed_block = computed_block[: computed_block.index("`index.html` states these")]
+    # `(\w+)` cannot match the linked `cohorts.json`/`scope.json` file names.
+    assert set(re.findall(r"`(\w+)`", curated_clause)) == curated
+    assert set(re.findall(r"^  - `(\w+)`", computed_block, re.M)) == computed
+    assert f"{_WORDS[len(curated)].capitalize()} of its keys count a curated file" in prose
+    assert f"The other {_WORDS[len(computed)]} keys are computed by the build" in prose
+
+    # The mirror-wider-than-the-gate figure: genes the burden mirror holds that
+    # publish no page. It read "59 of its 150" for a mirror of 181 genes.
+    with (REPO / "mirrors" / "burden.tsv").open() as handle:
+        mirrored = {row["gene"] for row in csv.DictReader(handle, delimiter="\t")}
+    published = {path.stem.replace("_", ":") for path in (site / "genes").glob("HGNC_*.json")}
+    unpublished = len(mirrored - published)
+    assert f"today {unpublished} of its {len(mirrored)} genes publish no page" in prose
+
 
 def test_the_contested_example_is_labelled_with_the_payload_it_comes_from(site: Path) -> None:
     """`confidence_by_lesion_group` and its flag are browse-row fields only.
@@ -279,9 +366,9 @@ def test_the_documented_uncurated_sentences_are_the_ones_the_card_actually_shows
     sentences are narrower than the obvious wording, deliberately -- "every
     *classification* on this page" rather than "nothing on this page", which
     would deny functional records the atlas curated for a gene with no lesion
-    assertion; and "no ClinGen expert panel has graded this gene *for a disease
-    an external authority treats as congenital heart disease*", because
-    unscoped it is false for five of the genes admitted on agreement. The doc was
+    assertion; and "no ClinGen expert panel has graded this gene *for any of the
+    diseases in scope here*", because unscoped it is false for five of the genes
+    admitted on agreement. The doc was
     once written against the earlier, wider wording of the notice and kept it
     through the fix, reintroducing in prose the ambiguity the code had just
     removed. `EXHAUSTIVE` above pins documented *JSON* examples against the
@@ -372,8 +459,6 @@ def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Pa
     the whole point of the paragraph is the gap between them -- the mirror is
     deliberately wider than the publication gate.
     """
-    import csv
-
     doc = DOC.read_text()
     start = doc.index("### The bundle's `burden` array")
     # Whitespace collapsed: these are claims in prose, and where a sentence
@@ -438,6 +523,50 @@ def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Pa
     # And the claim that the composite is a union rather than a partition, which
     # is what stops a consumer double-counting when it aggregates.
     assert "double-counts" in section
+
+    # **An infinite odds ratio is a bound, not a strength.** Obligation 2 called
+    # it "the strongest result in the data" until 2026-10-26, when 14 of the 29
+    # published unbounded rows had a lower bound below 1. The count is pinned and
+    # the retired phrase is asserted absent, for the reason section 4.35 gives.
+    spans_one = sum(
+        1 for r in published if r["effect_bound"] is not None and (r["ci_low"] or 0) < 1
+    )
+    assert f"{spans_one} of those {unbounded} rows have a `ci_low` below 1" in section
+    assert "is the strongest result in the data" not in section
+
+    # The obligations are counted, not announced: "Five obligations" sat over
+    # six numbered items for a release.
+    raw = doc[start : doc.index("\n## ", start)]
+    block = raw[raw.index("obligations, each of which") : raw.index("`n_cases` and `n_controls`")]
+    items = re.findall(r"^\d+\. \*\*", block, re.M)
+    assert f"{_WORDS[len(items)].capitalize()} obligations, each of which" in section
+
+    # Obligation 3's per-study rule, against the mirror it describes: no
+    # PMID:42230622 row is empty on both sides, and the one row that is comes
+    # from a study the doc names, for a gene the doc names.
+    empty = [r for r in mirror if r["n_case_carriers"] == "0" and r["n_control_carriers"] == "0"]
+    rows_42230622 = sum(1 for r in mirror if r["study"] == "PMID:42230622")
+    assert not [r for r in empty if r["study"] == "PMID:42230622"]
+    assert f"zero of its {rows_42230622:,} mirror rows have no case carrier" in section
+    with (REPO / "mirrors" / "genes.tsv").open() as handle:
+        symbols = {g["hgnc_id"]: g["symbol"] for g in csv.DictReader(handle, delimiter="\t")}
+    assert len(empty) == 1, f"{len(empty)} rows are empty on both sides; the doc names one"
+    assert f"`{empty[0]['study']}` does publish a row with zeros on both sides" in section
+    # The row named whole: its gene, class and design (review, 2026-10-26).
+    named = {"lof": "loss-of-function"}[empty[0]["consequence_class"]]
+    design = {"control_cohort": "case-control"}[empty[0]["comparator"]]
+    assert f"{symbols[empty[0]['gene']]}'s {named} {design} row" in section
+
+    # PMID:34324492's denominators, which the doc sets against the filtered set
+    # its article's methods describe. Every row of that study carries the same
+    # two, so the doc can state them once.
+    cnv = [r for r in mirror if r["study"] == "PMID:34324492"]
+    [n_cases] = {int(r["n_cases"]) for r in cnv}
+    [n_controls] = {int(r["n_controls"]) for r in cnv}
+    assert (
+        f"For `PMID:34324492` that last step is open. Its rows publish the {n_cases:,} cases "
+        f"and {n_controls:,} controls the study's S1 Table gives" in section
+    )
 
 
 def test_the_independent_datasets_section_states_the_shape_the_build_publishes(
@@ -700,12 +829,10 @@ def test_the_doc_states_the_stage_order_datasets_json_actually_publishes(site: P
 def test_the_combined_census_in_the_doc_is_the_census_the_build_publishes(site: Path) -> None:
     """Every count in the `burden_combined` section, against a real build (§4.24).
 
-    The published figure (75) and the mirrored one (90) differ on the committed
-    corpus, so this distinguishes the two (§4.30): a section that quoted the
-    mirror as what reaches the API would fail here.
+    The published figure and the mirrored one differ on the committed corpus
+    (108 and 123, measured 2026-10-26), so this distinguishes the two (§4.30): a
+    section that quoted the mirror as what reaches the API would fail here.
     """
-    import csv
-
     doc = DOC.read_text()
     start = doc.index("### The bundle's `burden_combined` array")
     section = re.sub(r"\s+", " ", doc[start : doc.index("\n### ", start + 1)])
@@ -720,6 +847,17 @@ def test_the_combined_census_in_the_doc_is_the_census_the_build_publishes(site: 
     assert f"holds {len(mirror)} rows for {len({r['gene'] for r in mirror})} genes" in section
     assert "is not a corrected p" in section
 
+    # The example abbreviates the row's note with "…", so what it quotes must
+    # still be the start of the note the build publishes -- batch D reworded
+    # that note's Fisher sentence on 2026-10-26. And the prose beside it must not
+    # keep the every-gene claim the note dropped: the meta p reproduces as
+    # Fisher's method within 10% for 116, 133 and 144 of the 248 genes.
+    quoted = _example("### The bundle's `burden_combined` array")["method_note"]
+    note = _published(site, "combined_row")["method_note"]
+    assert note.startswith(quoted.removesuffix("…").rstrip(" ,"))
+    assert "It does not reproduce as Fisher's method" not in section
+    assert "For many of the study's genes it does not reproduce as Fisher's method" in section
+
 
 def test_the_scope_census_in_the_doc_is_the_registry_the_build_publishes(site: Path) -> None:
     """`scope.json`'s counts, and the Orphanet warrant's shape, against a real build."""
@@ -733,6 +871,36 @@ def test_the_scope_census_in_the_doc_is_the_registry_the_build_publishes(site: P
     assert f"{len(terms) - len(orphanet)} are attributed to an authority that curates" in section
     assert f"**{len(orphanet)}** are admitted on Orphanet's phenotype frequencies" in section
     assert [term["id"] for term in terms] == sorted(term["id"] for term in terms)
+
+    # The term-level vocabulary, which shipped in 2.15 with no table at all
+    # (2026-10-26): every token the build emits has a row, and the doc names no
+    # token the build cannot emit. The name it shares with the bundle's
+    # `admitted_by` -- an object, with different values -- is called out.
+    tokens = {term["admitted_by"] for term in terms}
+    # The header row is a row too, and names the column rather than a token.
+    rows = set(re.findall(r"\| `(\w+)` \| [^|]+ \| [^|]+ \|", section)) - {"admitted_by"}
+    assert rows == tokens, f"the build emits {sorted(tokens)}; the table lists {sorted(rows)}"
+    assert "is not a gene bundle's `admitted_by`" in section
+    # `omim` on a direct term: the doc says null, every time.
+    direct = [term for term in orphanet if term["orphanet"]["via"] == "direct"]
+    assert direct and all(term["orphanet"]["omim"] is None for term in direct)
+    assert '`omim` is `null` on every `"direct"` term' in section
+
+    # **The attribution `scope.json` owes.** It republishes Orphanet's codes,
+    # names and frequency bands, and `sources.json` records those as
+    # attribution-required; the redistribution note covered HPO, ClinGen and
+    # GenCC only until 2026-10-26. Every source the paragraph names must exist
+    # and carry the terms the paragraph says it does.
+    sources = {
+        source["id"]: source
+        for source in json.loads((site / "sources.json").read_text())["sources"]
+    }
+    note = _section("**`scope.json` republishes Orphanet content")
+    named = re.findall(r"`(orphanet_\w+|mondo_\w+)`", note)
+    assert {"orphanet_product1", "orphanet_product4", "mondo_sssom"} <= set(named)
+    for source in named:
+        assert sources[source]["licence"] == "CC-BY-4.0"
+        assert sources[source]["redistribution"] == "permitted_with_attribution"
 
 
 def test_the_doc_states_the_population_the_build_publishes(site: Path) -> None:
@@ -752,6 +920,47 @@ def test_the_doc_states_the_population_the_build_publishes(site: Path) -> None:
     assert f"behind this document publishes {pages} of them" in doc
     assert f"never the {genes} this atlas publishes" in doc
     assert f"this atlas publishes {genes} of them" in doc
+
+    # **Sub-populations, which went stale in the same widening and were caught
+    # by review rather than by this test** (2026-10-26). Each pair below is two
+    # figures that differ on the committed corpus, so neither can pass on the
+    # other's number (4.30): uncurated genes with a panel grade and without
+    # one; genes admitted by ClinGen and on agreement.
+    bundles = _bundles(site)
+    uncurated = [b for b in bundles if b["atlas_curation"] == "not_yet_curated"]
+    graded = sum(1 for b in uncurated if b["headline_confidence"] is not None)
+    ungraded = len(uncurated) - graded
+    assert graded != ungraded
+    # "presents 118 of the 119 ... as this atlas's assessment" sat beside "on
+    # 21 it is null": only a grade can be mistaken for an assessment.
+    assert f"presents {graded} of the {genes} published genes" in doc
+    assert f"On the other {ungraded} genes not yet curated here it is `null`" in doc
+    # The empty-map paragraph: the same figure twice, and it read 97 and 75.
+    rows = json.loads((site / "genes" / "index.json").read_text())["genes"]
+    empty = sum(
+        1
+        for r in rows
+        if r["headline_confidence"] is not None and not r["confidence_by_lesion_group"]
+    )
+    assert f"{empty} of the {genes} published rows carry a non-null `headline_confidence`" in doc
+    assert "understates 75" not in doc
+    authority = [b["admitted_by"]["authority"] for b in bundles]
+    listed = _section("**Which genes are listed.**", end="**No disease is in scope")
+    assert f"for a disease in scope here ({authority.count('clingen')} genes)" in listed
+    assert f"no ClinGen panel disputes it ({authority.count('gencc_agreement')} genes)" in listed
+    # Withdrawn symbols in search: genes in the index with a `prev_symbols` entry.
+    with (REPO / "mirrors" / "genes.tsv").open() as handle:
+        previous = {
+            g["hgnc_id"] for g in csv.DictReader(handle, delimiter="\t") if g["prev_symbols"]
+        }
+    indexed = {
+        record["id"]
+        for record in json.loads(gzip.decompress((site / "search" / "index.json.gz").read_bytes()))[
+            "records"
+        ]
+        if record["kind"] == "gene"
+    }
+    assert f"{len(indexed & previous)} of the {len(indexed)} indexed genes have one" in doc
 
 
 def test_the_report_url_census_in_the_doc_is_the_census_the_build_publishes(site: Path) -> None:
@@ -803,3 +1012,354 @@ def test_the_cohorts_example_quotes_the_record_the_build_publishes(site: Path) -
     quoted = documented["description"].removesuffix("…").rstrip()
     assert len(quoted) > 100, "the example quotes too little of the description to check"
     assert published["description"].startswith(quoted)
+
+
+def test_the_contested_section_names_each_contested_gene_and_what_its_headline_is(
+    site: Path, mirrored: dict[str, GeneValidity]
+) -> None:
+    """The closing section's census and its account of `headline_confidence`.
+
+    **Both were false on 2026-10-26, and internally consistent.** The section
+    said each of the six contested genes "is `Definitive` for Noonan syndrome
+    (or a Noonan subtype)"; BRAF and MAP2K1 are admitted on, and Definitive
+    for, cardiofaciocutaneous syndrome, and ClinGen grades them Moderate and
+    Limited for Noonan. And it opened by defining `headline_confidence` as "the
+    strongest classification the mirrored ClinGen and GenCC records assert",
+    which measured false for 31 of the 119 published genes -- TBX1's submitters
+    grade it Definitive and its headline is `null` -- and contradicted the
+    browse-row section's own definition.
+
+    So the table is derived here from the build rather than read: one row per
+    contested bundle, its diseases at the headline grade (which must include
+    the one `admitted_by` names) and its disputed ones, and no gene contested
+    for a disease it is graded on -- the claim the section's heading makes. The
+    mirror-wide figures come from the `mirrored` fixture, before the gate.
+    """
+    section = _section("## Contested genes")
+    raw = DOC.read_text()[DOC.read_text().index("## Contested genes") :]
+    bundles = _bundles(site)
+    published = {b["gene"] for b in bundles}
+    contested = [b for b in bundles if b["has_conflicting_evidence"]]
+    assert contested, "no published gene is contested; the table measures nothing"
+    assert {b["headline_confidence"] for b in contested} == {"definitive"}, (
+        "the table's column is headed `Definitive`"
+    )
+
+    expected: set[str] = set()
+    for bundle in contested:
+        clingen = [r for r in bundle["validity"]["records"] if r["source"] == "clingen"]
+        headline = bundle["headline_confidence"]
+        graded = sorted({r["disease_label"] for r in clingen if r["classification"] == headline})
+        against = [r for r in clingen if r["classification"] in ("disputed", "refuted")]
+        disputed = sorted({r["disease_label"] for r in against})
+        assert bundle["admitted_by"]["disease_label"] in graded
+        assert not set(graded) & set(disputed), f"{bundle['symbol']} is contested where graded"
+        for panel in {r["gcep"] for r in against}:
+            assert panel in section, f"{panel} disputes {bundle['symbol']}, unnamed"
+        expected.add(f"| {bundle['symbol']} | {'; '.join(graded)} | {'; '.join(disputed)} |")
+    table = raw[raw.index("| gene | `Definitive` for |") :]
+    table = table[: table.index("\n\n")]
+    assert set(table.splitlines()[2:]) == expected
+    assert "Each is `Definitive` for Noonan syndrome" not in section
+
+    # The mirror-wide census beside the table.
+    flagged = {
+        gene
+        for gene, entry in mirrored.items()
+        if has_conflicting_evidence(r.classification for r in entry.records if r.classification)
+    }
+    discordant = {gene for gene, entry in mirrored.items() if entry.has_source_discordance}
+    assert flagged == discordant, "the section says the same genes set both flags"
+    assert (
+        f"of the {len(mirrored)} mirrored genes, {len(flagged)} set `has_conflicting_evidence`, "
+        f"and the same {len(discordant)} set `has_source_discordance`. "
+        f"{len(flagged & published)} are published." in section
+    )
+    assert f"the {len(flagged)} genes that set one flag set both" in section
+    for gene in sorted(flagged - published):
+        assert f"({gene})" in section, f"{gene} is contested and unpublished; the doc names it not"
+
+    # What `headline_confidence` is: ClinGen's grade or `null`, never a max over
+    # GenCC submitters. Each clause the section states, measured.
+    agreement = {b["gene"] for b in bundles if b["admitted_by"]["authority"] == "gencc_agreement"}
+    assert {b["gene"] for b in bundles if b["headline_confidence"] is None} == agreement
+    assert "which today is exactly the genes admitted on submitter agreement" in section
+    tbx1 = json.loads((site / "genes" / "HGNC_11592.json").read_text())
+    terms = {r["classification_term"] for r in tbx1["validity"]["records"]}
+    assert tbx1["headline_confidence"] is None and {"Definitive", "Strong"} <= terms
+    assert "TBX1's submitters grade it `Definitive` and `Strong`, and its headline is" in section
+    assert "the strongest classification the mirrored ClinGen and GenCC records" not in section
+
+    # `admitted_by.classification` and the headline: equal on every gene, by
+    # measurement and not "by construction" -- they are two computations, and
+    # would part on an agreement gene carrying a ClinGen NKA record (none is
+    # published: every agreement gene has no ClinGen record in scope at all).
+    assert all(b["headline_confidence"] == b["admitted_by"]["classification"] for b in bundles)
+    assert {b["validity_state"] for b in bundles if b["gene"] in agreement} == {"submitter_curated"}
+    provenance = _section("### `admitted_by` and `asserted_by`", end="\n### ")
+    assert "by construction rather than by coincidence" not in provenance
+    assert "and no such gene is published" in provenance
+
+    # The genes whose only in-scope record is an ungraded `Supportive`, named by
+    # id in the browse-row section. It listed NOTCH1 (HGNC:7881) for a release
+    # after NOTCH1 was published on its own ClinGen term, and missed CBL.
+    supportive = sorted(
+        gene
+        for gene, entry in mirrored.items()
+        if all(record.classification is None for record in entry.records)
+    )
+    assert all(
+        len(mirrored[gene].records) == 1 and mirrored[gene].records[0].submitter == "Orphanet"
+        for gene in supportive
+    )
+    assert not set(supportive) & published
+    doc = " ".join(DOC.read_text().split())
+    word = _WORDS[len(supportive)]
+    assert f"{word.capitalize()} genes in the committed mirrors ({', '.join(supportive)})" in doc
+    assert f"{word} genes in the committed mirrors carry exactly one such Orphanet record" in doc
+
+
+def test_the_phase_paragraphs_state_each_end_basis_and_the_phases_no_stage_reaches(
+    site: Path,
+) -> None:
+    """`heart_looping` was documented as excluded at every `wpc` for two months
+    after it stopped being excluded at all (found 2026-10-26).
+
+    On 2026-08-24 its end became `derived` -- GO:0001947 defines looping as
+    ending "preceding septation", and the source dates septation's start at
+    CS12 -- and `phases_for` matches any phase with an end. The doc went on
+    saying the source "never states when it ends", that `end_basis` is
+    `not_stated`, and that the phase is excluded from every match. What is true
+    is narrower and is a fact about the data: no published stage is early
+    enough to fall inside it, nor inside `embryonic_heart_tube_morphogenesis`.
+
+    So every clause is measured: the one `derived` phase and its boundary from
+    the curation file, the absence of `not_stated` phases, and the unreached
+    phases from the built bundles against the earliest published stage.
+    """
+    corpus, _ = load_curation(REPO)
+    assert corpus.cardiac_phases is not None
+    phases = corpus.cardiac_phases.phases
+    section = _section("### The bundle's `expression_profile` object")
+    six = _WORDS[len(phases)]
+    assert f"curates {six} phases" in section
+
+    derived = [phase for phase in phases if phase.end_basis.value == "derived"]
+    assert len(derived) == 1, "the doc names one `derived` phase"
+    phase = derived[0]
+    assert f"`{phase.id}` is the one `derived` phase" in section
+    assert (
+        f"the source states when looping starts ({phase.start_carnegie_stage}) and never "
+        "when it ends" in section
+    )
+    assert f"{phase.end_carnegie_stage}, {phase.end_wpc:g} wpc (`{phase.end_hsapdv_id}`)" in section
+    assert not [p for p in phases if p.end_basis.value == "not_stated"]
+    assert f"None of the {six} is `not_stated` today" in section
+
+    reached = {
+        phase_id
+        for bundle in _bundles(site)
+        for dataset in bundle["expression_profile"]["datasets"]
+        for stage in dataset["stages"]
+        for phase_id in (stage["phase"] or {}).get("phase_ids", [])
+    }
+    earliest = min(
+        stage["wpc"]
+        for dataset in json.loads((site / "datasets.json").read_text())["datasets"]
+        for stage in dataset["stages"]
+        if stage["wpc"] is not None
+    )
+    unreached = [p for p in phases if p.id not in reached]
+    assert unreached == [p for p in phases if p.end_wpc is not None and p.end_wpc <= earliest]
+    paragraph = section[section.index("never appear in a published `phase_ids` today") :]
+    assert f"**{_WORDS[len(unreached)].capitalize()} of the {six} never appear" in section
+    assert f"the earliest stage any published dataset samples is {earliest:g} wpc" in paragraph
+    for p in unreached:
+        assert f"`{p.id}`" in paragraph and f"{p.end_wpc:g}" in paragraph
+    assert "never appears in `phase_ids` at all" not in section
+
+
+def _abridged(block: str) -> Any:
+    """A JSON example abridged with `…`, parsed, each `…` kept as a marker.
+
+    An object's trailing `, … }` becomes a `"…"` key and any other `…` an array
+    item `"…"`, so `_agrees` can tell an abridged value from a complete one.
+    """
+    keyed = re.sub(r",\s*…\s*\}", ', "…": "…" }', block)
+    return json.loads(re.sub(r'(?<!")…(?!")', '"…"', keyed))
+
+
+def _agrees(documented: Any, published: Any, at: str = "") -> None:
+    """Every value an example shows is the published one, and only `…` omits.
+
+    An object marked `…` may leave keys out and an array ending in `…` may
+    leave trailing items out; an unmarked object or array must be complete.
+    Leaves compare with their type as well as their value, because `0 ==
+    False` (CLAUDE.md section 5).
+    """
+    if isinstance(documented, dict):
+        assert isinstance(published, dict), at
+        shown = {key: value for key, value in documented.items() if key != "…"}
+        if "…" not in documented:
+            assert set(shown) == set(published), f"{at}: keys differ and nothing is marked …"
+        for key, value in shown.items():
+            assert key in published, f"{at}.{key} is not published"
+            _agrees(value, published[key], f"{at}.{key}")
+    elif isinstance(documented, list):
+        assert isinstance(published, list), at
+        abridged = bool(documented) and documented[-1] == "…"
+        shown_items = documented[:-1] if abridged else documented
+        if abridged:
+            assert len(shown_items) < len(published), f"{at}: marked … and omits nothing"
+        else:
+            assert len(shown_items) == len(published), (
+                f"{at}: {len(published)} items published, {len(shown_items)} shown, no …"
+            )
+        for index, (item, actual) in enumerate(zip(shown_items, published, strict=False)):
+            _agrees(item, actual, f"{at}[{index}]")
+    else:
+        assert (type(documented), documented) == (type(published), published), (
+            f"{at}: the doc shows {documented!r}, the build publishes {published!r}"
+        )
+
+
+def test_the_examples_that_claim_to_be_real_are_the_ones_the_build_publishes(site: Path) -> None:
+    """The opening line says every example is a real build's unless it says
+    otherwise. Measured 2026-10-26, four said nothing and were not: an
+    `expression` omics block for a dataset that does not exist, a populated
+    variant index where the real one is empty, a search record missing a term
+    the build publishes (TBX5's `HOS`), and a contested browse row no
+    published gene has. The bundle example also dropped three of its 23 keys.
+
+    Each real example is compared with the published object, value by value
+    -- through `_agrees` where it is abridged with `…` -- and each
+    illustrative one is asserted to be labelled so and to show a shape the
+    build really has no instance of.
+
+    **The abridged bundle and `omics` examples were compared by key set alone
+    until review on 2026-10-26** (plus `admitted_by`'s values), so
+    `asserted_by`'s `count` and `omics.profiles.count` could be edited to any
+    number with every test green, and the `burden` array showed a
+    PMID:42230622 row as its only item where TBX5's first of 14 is
+    PMID:40127276's. `_agrees` reads each `…` as the one mark of an omission:
+    every value shown must be published and every unmarked array and object
+    complete. Two more unmarked abridgements in the bundle example were marked
+    with it: `burden_combined` showed one of TBX5's 3 objects, and the
+    assertion object 3 of its 13 keys.
+    """
+    doc = DOC.read_text()
+    tbx5 = json.loads((site / "genes" / "HGNC_11604.json").read_text())
+
+    def block(heading: str) -> str:
+        text = doc[doc.index(heading) :]
+        opening = text.index("```json\n") + len("```json\n")
+        return text[opening : text.index("\n```", opening)]
+
+    _agrees(_abridged(block("## `genes/<slug>.json`")), tbx5, "bundle")
+    _agrees(_abridged(block("## `omics/<modality>/<accession>.json`")), {"omics": tbx5["omics"]})
+
+    variants = json.loads((site / "variants" / "index.json").read_text())
+    assert _example("## `variants/index.json`") == variants
+    assert variants == {"shards": []}, "a variant is curated; the example need not be illustrative"
+
+    records = {
+        record["id"]: record
+        for record in json.loads(gzip.decompress((site / "search" / "index.json.gz").read_bytes()))[
+            "records"
+        ]
+    }
+    for record in _example("## `search/index.json.gz`")["records"]:
+        assert record == records[record["id"]], f"the search example misquotes {record['id']}"
+
+    rows = json.loads((site / "genes" / "index.json").read_text())["genes"]
+    assert not [r for r in rows if r["has_conflicting_evidence"] and r["lesion_groups"]]
+    assert "*Illustrative* — no published gene today is both contested and curated" in (
+        _section("## Contested genes")
+    )
+    assert "*Illustrative* — no proteomics or phospho mirror is committed" in _section(
+        "## `omics/<modality>/<accession>.json`"
+    )
+    assert not list((REPO / "mirrors").glob("proteomics*")) and not list(
+        (REPO / "mirrors").glob("phospho*")
+    )
+
+
+def _card_paragraph(page: str, css: str) -> str:
+    """The visible text of one `<p class="...">` on a gene page's card, or ''."""
+    rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+    found = re.findall(rf'<p class="{css}">(.*?)</p>', rail, re.S)
+    return _text_of(found[0]) if found else ""
+
+
+def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: Path) -> None:
+    """Sentences the doc quotes or restates from a page, against the page.
+
+    Earlier batches of the 2026-10-26 review reworded several pages, and the
+    doc kept the old wording of three: it quoted the card's Orphanet line as
+    "Graded for Noonan syndrome as a syndrome" where every page says "as a
+    whole syndrome"; it stated the scope rule as a sufficient condition
+    ("for a disease that an external authority treats as congenital heart
+    disease, or in which Orphanet records ...") after `methods.html#scope`
+    had narrowed it to the terms the atlas lists; and it said the gene
+    index's cells "are plain text, not chips" beside a `conflicting evidence`
+    chip on every contested row. Each is pinned to a literal and to the page,
+    and each retired wording is asserted absent from the doc.
+    """
+    doc = " ".join(DOC.read_text().split())
+    pages = {path.stem: path.read_text() for path in sorted((site / "genes").glob("HGNC_*.html"))}
+
+    quoted = re.search(r'the reason: "(Graded for [^"]+)"', doc)
+    assert quoted, "the doc must still quote the card's Orphanet line"
+    scope_lines = {_card_paragraph(page, "card-scope") for page in pages.values()}
+    assert quoted.group(1) in scope_lines
+    assert "Graded for Noonan syndrome as a syndrome" not in doc
+
+    rule = (
+        "A disease is in scope when it is one of the terms this atlas lists, and a term is "
+        "listed only if an external authority treats it as congenital heart disease, or if a "
+        "curator nominates a syndrome and Orphanet records a structural heart malformation in "
+        "at least 30% of its cases (for a subtype, of the syndrome it belongs to)"
+    )
+    assert rule in _text_of((site / "methods.html").read_text())
+    assert rule in doc
+    assert "or in which Orphanet records a structural heart malformation" not in doc
+
+    index_html = (site / "genes" / "index.html").read_text()
+    contested = {
+        r["gene"]
+        for r in json.loads((site / "genes" / "index.json").read_text())["genes"]
+        if r["has_conflicting_evidence"]
+    }
+    assert contested
+    chip = '<span class="chip chip-warn">conflicting evidence</span>'
+    for search, grade, cells in re.findall(
+        r'<tr data-search="([^"]+)"[^>]*data-confidence="([^"]*)"[^>]*>(.*?)</tr>', index_html, re.S
+    ):
+        gene = "HGNC:" + search.split()[0].removeprefix("hgnc:")
+        confidence = re.findall(r"<td>(.*?)</td>", cells, re.S)[2]
+        assert (chip in confidence) == (gene in contested), gene
+        assert " " not in grade and "chip" not in grade
+    assert "Cells are plain text, not chips" not in doc
+    assert "a contested gene's confidence cell adds a `conflicting evidence` chip" in doc
+
+    # Rendered strings the doc cites as examples of what a page shows.
+    every_page = "".join(pages.values())
+    for literal in (
+        "OR ∞ (CI 0.786–∞)",
+        "OR ∞ (95% CI 28.1–∞)",
+        "About these cohorts, and the caveats recorded for them",
+        "not fully split",
+    ):
+        assert literal in doc.replace("*", ""), literal
+        assert literal in html.unescape(every_page), f"no page renders {literal!r}"
+    methods = _text_of((site / "methods.html").read_text())
+    assert "a flag on the gene, not on a disease" in methods
+    assert "Both are flags on the gene, not on a disease" in doc
+    # An unsplit study's `all cases` is not its whole case set: PMID:34324492's
+    # rows count 7,107 of its 7,958 cases. The doc restated `#rare-variants`'
+    # retired "whole case set" until review on 2026-10-26.
+    assert "all cases is its only case group: every case the row counts, not a subgroup" in (
+        methods
+    )
+    assert "only case group, not a subgroup, where it does not" in doc
+    assert "whole case set" not in doc

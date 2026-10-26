@@ -221,9 +221,12 @@ def _render(
     # so the hero note can state the gate it actually has. It said "every gene
     # here is published on an upstream expert panel's classification" until
     # 2026-08-06, which the widening made false for the 16 genes no panel has
-    # graded -- read from `admitting_grade`, the same function the headline and
-    # `admitted_by.classification` come from, so the front page cannot claim a
-    # split the bundles contradict.
+    # graded -- read from `admitting_grade`, which is what
+    # `admitted_by.classification` publishes, so the front page cannot claim a
+    # split the bundles contradict. (This said the headline came from the same
+    # function too; it does not -- `derive.gene_facts` takes `strongest()` over
+    # the in-scope ClinGen records -- though the two agree on every published
+    # gene, measured 2026-10-26.)
     panel_graded_count = sum(
         1 for gene in published if gene in validity and admitting_grade(validity[gene]) is not None
     )
@@ -291,6 +294,15 @@ def _render(
         )
     )
 
+    # "Where this data comes from" named Orphanet zero times until 2026-10-26,
+    # while the syndromes its frequencies bring into scope are the only route in
+    # for some published genes (26 of 119 drop when those terms are removed,
+    # measured that day) and `sources.json` records both Orphadata products as
+    # CC-BY-4.0, attribution required. The
+    # citation is Orphadata's own requested form (`mirrors/sources.yaml`); its
+    # "Data version" is the release `sources.json` pins by sha256, which this
+    # page points to rather than restating a date that would go stale on the
+    # next refresh.
     body = f"""  <h1>CHD Atlas</h1>
   <p class="tagline">Curated evidence linking genes, variants and proteins to congenital
     heart disease.</p>
@@ -315,9 +327,9 @@ def _render(
 
   <h2>What this is</h2>
   <p>A curator reads the primary literature and mirrors upstream reference sources —
-    ClinGen, GenCC, HPO — to build a static, queryable record of the evidence behind a
-    gene's association with congenital heart disease. There is no server: every page
-    below is built ahead of time, and every payload behind one is a JSON file a client
+    ClinGen, GenCC, HPO, Orphanet — to build a static, queryable record of the evidence
+    behind a gene's association with congenital heart disease. There is no server: every
+    page below is built ahead of time, and every payload behind one is a JSON file a client
     fetches and filters itself.</p>
 
   <h2>What's published</h2>
@@ -338,8 +350,15 @@ def _render(
     <strong>GenCC</strong>; phenotype terms and their synonyms are mirrored from the
     <strong>Human Phenotype Ontology</strong>. The atlas authors no validity classification
     of its own — every classification on this site is an upstream panel's or submitter's,
-    republished with its provenance intact. <a href="sources.json">sources.json</a> carries
-    the licence and attribution terms each of these is mirrored under.</p>
+    republished with its provenance intact. <strong>Orphanet</strong>'s phenotype
+    annotations decide whether a syndrome a curator nominates is in scope on how often it
+    carries a structural heart malformation; its cardiovascular annotations and its mappings
+    to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
+    Free access data from Orphanet. &copy; INSERM 1999. Available on
+    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
+    date or a checksum, and carries the licence and attribution terms each of these is
+    mirrored under.</p>
   <dl>
     <dt>{_MIRRORED_ROW_LABEL}</dt>
     <dd>{mirrored_gene_count}</dd>

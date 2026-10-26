@@ -72,7 +72,12 @@ from typing import Final, NamedTuple
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
-from chd_atlas.build.concordance import FamilyState, family_state, survives_own_correction
+from chd_atlas.build.concordance import (
+    FamilyState,
+    deciding_rows,
+    family_state,
+    survives_own_correction,
+)
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, external_links
@@ -192,9 +197,22 @@ _SCOPE_SHORT: Final = (
 #   admitted on agreement carry a ClinGen record for a disease out of scope,
 #   measured 2026-10-26 against `mirrors/clingen_gene_validity.tsv`. Those
 #   records reach no page, so the page could not even show the reader the
-#   record that contradicted it. The scope clause is the grade key's `ungraded`
-#   gloss's (`render.GRADE_GLOSS`), Orphanet path included, so the card and the
-#   key on one page describe one gate.
+#   record that contradicted it. The scope clause -- "for any of the diseases
+#   in scope here" -- is the grade key's `ungraded` gloss's (`render.GRADE_GLOSS`,
+#   on `methods.html#scope`) and the gene index's em-dash sentence's, word for
+#   word, so the three scope the claim alike. Only that clause is shared: the
+#   rest of each sentence is its own (this one says the submitters
+#   "independently assert it", the gloss that they "classify it Limited or
+#   better").
+# * **"In scope here" names the list, not a property of a disease.** The clause
+#   read "for a disease an external authority treats as congenital heart
+#   disease, or in which Orphanet records a structural heart malformation in at
+#   least 30% of cases" until 2026-10-26, which reads as a sufficient condition
+#   and was false on FLNA's card: ClinGen grades FLNA Definitive for
+#   periventricular nodular heterotopia (MONDO:0020341), which SCP007 reports
+#   would qualify through Orphanet (ORPHA:98892) and which no curator has
+#   nominated. A disease is in scope only once it is in
+#   `curation/chd_scope.yaml`; `methods.SCOPE_RULE` says how a term gets there.
 # * The opening names the lesion assertion as what is absent whenever the
 #   atlas has curated functional records for the gene; see `_card_curation`.
 _CURATION_BY_PANEL: Final = (
@@ -202,10 +220,27 @@ _CURATION_BY_PANEL: Final = (
 )
 
 _CURATION_BY_AGREEMENT: Final = (
-    "and no ClinGen expert panel has graded this gene for a disease an external authority "
-    "treats as congenital heart disease, or in which Orphanet records a structural heart "
-    "malformation in at least 30% of cases: it is published because the Gene Curation "
-    "Coalition submitters named above independently assert it."
+    "and no ClinGen expert panel has graded this gene for any of the diseases in scope "
+    "here: it is published because the Gene Curation Coalition submitters named above "
+    "independently assert it."
+)
+
+# The `sources disagree` chip's tooltip: what `has_source_discordance` measures
+# (`validity._has_source_discordance`), which its two words do not say. The flag
+# is per gene by the owner's decision (2026-10-25), and on every page carrying
+# it today ClinGen and GenCC agree on each gene-disease pair they both classify
+# (BRAF, KRAS, MAP2K1, PTPN11, RAF1 and SOS1, measured 2026-10-26): it fires
+# because one source disputes the gene for Costello or cardiofaciocutaneous
+# syndrome while the other supports it for another disease (Noonan syndrome
+# among them on all six). "Sources disagree" alone reads as two authorities
+# contradicting each other about one disease, so the tooltip says "not
+# necessarily the same disease". "The other" because there are exactly two
+# sources, and the second is GenCC's submissions as mirrored -- ClinGen's own
+# copies included, which `methods.html#validity` states.
+_SOURCE_DISCORDANCE_TITLE: Final = (
+    "One source, ClinGen's expert panels or the submissions to the Gene Curation Coalition, "
+    "disputes or refutes this gene for a disease in scope while the other classifies it "
+    "Limited or better for one, not necessarily the same disease; see the validity table."
 )
 
 _EM_DASH: Final = "—"
@@ -674,10 +709,10 @@ def _card_curation(fact: GeneFacts) -> str:
     * **not curated, a ClinGen panel holds a record** -- every classification
       on the page is a panel's or a named curator's (97 genes);
     * **not curated, no panel record** -- no ClinGen expert panel has graded
-      the gene for a disease an external authority treats as CHD (or that
-      Orphanet's phenotype frequencies bring into scope), and it is
-      published because the submitters named in the card's `admitted by` row
-      assert it (21 genes). Scoped, because unscoped it is false; see
+      the gene for any of the diseases in scope here, and it is published
+      because the submitters named in the card's `admitted by` row assert it
+      (21 genes). Scoped, because unscoped it is false; and scoped to the
+      list, because scoped to a property of a disease it was false too; see
       `_CURATION_BY_AGREEMENT`;
     * **functional records but no lesion assertion** (latent: the committed
       corpus has no `curation/functional/` directory) -- appends "The atlas
@@ -1362,7 +1397,7 @@ def _rail(
     if fact.has_conflicting_evidence:
         chips.append(chip("conflicting evidence", kind="warn"))
     if fact.has_source_discordance:
-        chips.append(chip("sources disagree", kind="warn"))
+        chips.append(chip("sources disagree", kind="warn", title=_SOURCE_DISCORDANCE_TITLE))
 
     identity_block = ""
     if identity is not None:
@@ -1492,6 +1527,22 @@ def _orphanet_notes(
     are rendered at the top of the validity section, above both groups. The
     phenotype labels and bands are Orphanet's, verbatim; a subtype also says which
     syndrome its warrant is inherited from, and through which OMIM mapping.
+
+    **Each note's last sentence names its own disease.** It read "The
+    classifications below are for the syndrome, not for heart disease" until
+    2026-10-26, above a table that is not only that syndrome's: NOTCH1's lists
+    an admitting record for a term a ClinGen expert panel scoped (NOTCH1-related
+    AOS spectrum disorder) and an Orphanet record for familial bicuspid aortic
+    valve beneath its two Adams-Oliver notes. "The classifications below for
+    Adams-Oliver syndrome" is true above that table; "the classifications
+    below" was not.
+
+    **And it ends on "that disease", not "the syndrome"** (review, the same
+    day). A subtype's note names its parent syndrome in the sentence before --
+    "... of cases of Noonan syndrome, the syndrome it is a subtype of" -- so
+    "for Noonan syndrome 4 are for the syndrome as a whole" had the parent as
+    its nearest antecedent, and read as saying the subtype's grades are the
+    parent's.
     """
     diseases = sorted({record.disease for record in gene_validity.records} & set(warrants))
     notes = []
@@ -1516,8 +1567,8 @@ def _orphanet_notes(
                 f"(Orphanet, {html.escape(found.orpha)})."
             )
         notes.append(
-            f'<p class="notice-inline">{claim} The classifications below are for the '
-            "syndrome, not for heart disease.</p>"
+            f'<p class="notice-inline">{claim} The classifications below for {label} are for '
+            "that disease as a whole, not for heart disease.</p>"
         )
     return "".join(notes)
 
@@ -1653,12 +1704,13 @@ def _effect(row: BurdenRow) -> str:
     header reading "effect" equates them. `_MEASURE_LABEL` is therefore consulted
     on every row and there is no branch that omits it.
 
-    `unbounded` rather than a number, and rather than a blank. Fisher's exact
-    test returns an infinite odds ratio where no control carries, which is the
-    strongest result in the data and also the one `encode_json`'s
-    `allow_nan=False` refuses to publish. The lower bound survives and is the
-    whole finding: TAB2's syndromic row says the true odds ratio is at least
-    28.1, which a blank cell would have thrown away.
+    `∞` rather than a number, and rather than a blank. Fisher's exact test
+    returns an infinite odds ratio where no control carries, which
+    `encode_json`'s `allow_nan=False` refuses to publish -- and which says
+    nothing about how strong the result is: 20 of the 37 such mirrored rows
+    have a lower bound below 1 (measured 2026-10-26). The lower bound survives
+    and is the whole finding: TAB2's syndromic row says the true odds ratio is
+    at least 28.1, which a blank cell would have thrown away.
     """
     if row.effect_measure is None:
         return _EM_DASH
@@ -2292,11 +2344,18 @@ def _evidence_matrix(
     about a design the whole corpus lacks. Measured 2026-08-05: three columns,
     none of them CNV de novo.
 
-    The cell shows the most significant row in it, ordered by corrected p where
+    The cell shows the most significant of the rows that give it its state
+    (`concordance.deciding_rows`) -- the surviving rows of a `corrected` cell,
+    the supporting rows of a `nominal` one -- ordered by corrected p where
     published and by raw p otherwise, tie-broken on
     `(consequence_class, cohort_stratum)` so the choice is deterministic across
-    builds. Where a cell holds more than one row the count is stated, so a
-    reader knows the cell summarises and the table below is the record.
+    builds. It chose among every row in the cell until 2026-10-26, and GJA1's
+    de novo cell in PMID:40127276 named its `damaging` union (p 0.0613, q
+    0.200) under the `nominal` glyph its missense row (p 0.0468) had earned:
+    measured that day on a real build, 1 of the 109 enriched cells named a row
+    its state is not true of. Where a cell holds more than one row the count is
+    stated, so a reader knows the cell summarises and the table below is the
+    record.
     """
     if not rows or not families or not axes:
         return ""
@@ -2347,23 +2406,25 @@ def _matrix_cell(rows: Sequence[BurdenRow]) -> str:
         )
 
     state = family_state(rows)
-    # Most significant first: corrected p where published, raw p otherwise, then
-    # a stable tie-break so two builds pick the same row.
-    best = sorted(
-        rows,
-        key=lambda row: (
-            row.pvalue_adjusted if row.pvalue_adjusted is not None else (row.pvalue or 1.0),
-            row.consequence_class,
-            row.cohort_stratum,
-        ),
-    )[0]
-
     if state is FamilyState.NO_ENRICHMENT:
         detail = f"n = {len(rows)}" if len(rows) > 1 else "&nbsp;"
         return (
             f'<td><span class="cell no-enrichment" title="{_STATE_TITLE["no_enrichment"]}">'
             f'{_STATE_CELL["no_enrichment"]}<br><span class="sub">{detail}</span></span></td>'
         )
+
+    # Most significant first among the rows the state is true of -- never a
+    # row that is not support, or not a survivor under a `corrected` glyph --
+    # by corrected p where published, raw p otherwise, then a stable tie-break
+    # so two builds pick the same row.
+    best = sorted(
+        deciding_rows(rows),
+        key=lambda row: (
+            row.pvalue_adjusted if row.pvalue_adjusted is not None else (row.pvalue or 1.0),
+            row.consequence_class,
+            row.cohort_stratum,
+        ),
+    )[0]
 
     # **The cell is a summary; the table below is the record.** So it carries the
     # effect and one statistic and stops there. The full spelling -- the
@@ -2395,22 +2456,32 @@ def _matrix_cell(rows: Sequence[BurdenRow]) -> str:
 def _effect_compact(row: BurdenRow) -> str:
     """The effect and its measure, without the interval. For the matrix cell only.
 
-    **The measure survives; only the interval is dropped.** `_effect`'s rule --
-    that no branch omits the measure, because an odds ratio of 3.1 and a de novo
-    enrichment of 3.1 are different claims -- is the one property this must not
-    trade for width. The interval is a different kind of thing: it qualifies the
-    estimate rather than naming it, and it is in the row's own table a screen
-    below, plus on this cell's `title`.
+    **The measure survives; the interval is dropped, except for an unbounded
+    effect.** `_effect`'s rule -- that no branch omits the measure, because an
+    odds ratio of 3.1 and a de novo enrichment of 3.1 are different claims --
+    is the one property this must not trade for width. The interval is a
+    different kind of thing: it qualifies the estimate rather than naming it,
+    and it is in the row's own table a screen below, plus on this cell's
+    `title`.
 
-    An unbounded effect still renders `OR &infin;` rather than a blank, for the
-    reason `_effect` does: it is the strongest result in the data and the one
-    `allow_nan=False` refuses to publish as a number.
+    **An unbounded effect keeps its lower bound: `OR ∞ (CI 0.786–∞)`**, never a
+    bare `OR ∞` and never a `≥` (see `_effect`). Fisher returns an infinite
+    odds ratio wherever no control carries, which says nothing about how large
+    the effect is: the lower bound is the finding, and alone `∞` reads as
+    "infinitely enriched". This rendered the bare form until 2026-10-26, and
+    on TBX5's and ZEB2's cells "OR ∞" over "p 0.0316" stood for an interval of
+    0.786–∞ that spans 1, visible only on hover. Measured that day: 37 of the
+    1,805 mirrored rows are unbounded above and 20 of them have a lower bound
+    below 1 (29 and 14 of the 1,210 published), and 9 matrix cells name one.
+    The bare form is the fallback for an unbounded row with no lower bound, of
+    which there are none.
     """
     if row.effect_measure is None:
         return _EM_DASH
     measure = _MEASURE_LABEL.get(row.effect_measure, row.effect_measure)
     if row.effect_bound == "unbounded_above":
-        return f"{measure} ∞"
+        low = f" (CI {_fmt(row.ci_low)}–∞)" if row.ci_low is not None else ""
+        return f"{measure} ∞{low}"
     if row.effect is None:
         return _EM_DASH
     return f"{measure} {_fmt(row.effect)}"
@@ -2475,7 +2546,9 @@ _EFFECT_AXIS_PAD: Final = 10.0**0.25
 # applies to any number. It is applied to a p-value the **study** corrected and
 # published; the atlas corrects nothing (D12/D33), which is why a row whose
 # study published no correction at all is drawn hollow rather than filled --
-# nothing says it survived one.
+# nothing says it survived one. A non-synonymous row's fill reads
+# `concordance.survives_own_correction` instead, against the same 0.05
+# (`concordance.ALPHA`); see `_survived_correction`.
 _CORRECTED_ALPHA: Final = 0.05
 
 # The two unions this schema contains, each as (the union's own value, the
@@ -2516,8 +2589,8 @@ _NO_EFFECT_MEASURE: Final = (
 def _plottable(row: BurdenRow) -> bool:
     """Whether this row can be placed on an effect axis at all.
 
-    An `unbounded_above` row **is** plottable and renders as an arrow: those
-    rows carry the strongest signals in the mirror (TAB2: 5 syndromic
+    An `unbounded_above` row **is** plottable and renders as an arrow: some of
+    those rows carry the strongest signals in the mirror (TAB2: 5 syndromic
     carriers, 0 of 45,082 controls), and `ci_low` is the finding. Excluding
     them was an error in this plan's own first measurements.
 
@@ -2610,19 +2683,56 @@ def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, b
 
 
 def _survived_correction(row: BurdenRow) -> bool:
-    """Whether this row cleared **its own study's** correction for multiple testing.
+    """Whether this row's forest marker is drawn as having cleared **its own
+    study's** correction for multiple testing.
 
     Never a correction this atlas computed -- there is none (D12/D33). A row
     whose study published no correction is `False` for the same honest
     reason a row that failed one is: nothing says it cleared anything.
 
-    One predicate, because it decides the fill of two different glyphs.
+    **For every row but a synonymous one this is
+    `concordance.survives_own_correction`**, the rule the card and the
+    evidence matrix on the same page read, so the three cannot disagree about
+    a row (CLAUDE.md section 4.28). It read the corrected p alone until
+    2026-10-26, so a depleted row with q below 0.05 would have been drawn
+    filled while the card said none survives a correction its study
+    published. 0 published rows differed between the two rules that day.
+
+    **A synonymous row keeps the corrected p alone**, because the shared rule
+    never passes one -- a negative control is not support -- and a surviving
+    one is a warning about the comparison that `_mark_class` draws muted
+    rather than hollow. One predicate, because it decides the fill of two
+    different glyphs and the key's clauses about them.
     """
-    return row.pvalue_adjusted is not None and row.pvalue_adjusted < _CORRECTED_ALPHA
+    if row.consequence_class == "synonymous":
+        return row.pvalue_adjusted is not None and row.pvalue_adjusted < _CORRECTED_ALPHA
+    return survives_own_correction(row)
+
+
+def _survived_against_the_gene(row: BurdenRow) -> bool:
+    """A non-synonymous row that cleared its study's correction without supporting the gene.
+
+    Drawn hollow by `_survived_correction`, so the key's hollow clause --
+    "did not survive" -- is false of it, and `_forest_caption` adds a clause
+    wherever one is drawn. On a validated corpus that means a row whose
+    statistic does not point to enrichment in cases: BUR018 refuses a
+    corrected p smaller than its raw one, so a corrected p below 0.05 implies
+    a raw p below it too. Latent: 0 published rows (measured 2026-10-26).
+    """
+    return (
+        row.consequence_class != "synonymous"
+        and row.pvalue_adjusted is not None
+        and row.pvalue_adjusted < _CORRECTED_ALPHA
+        and not _survived_correction(row)
+    )
 
 
 def _mark_class(row: BurdenRow, glyph: str) -> str:
     """Filled where the study's own correction was survived, hollow where not.
+
+    "Survived" is `_survived_correction`: for every row but a synonymous one,
+    survived *as support for the gene* -- the card's and the matrix's rule --
+    so a depleted row that cleared its correction is hollow (2026-10-26).
 
     **`glyph` is the shape, and the fill rule is the same for every shape.**
     A panel draws two of them -- `point` for a placed estimate, `arrow` for a
@@ -2646,11 +2756,12 @@ def _mark_class(row: BurdenRow, glyph: str) -> str:
     A synonymous row that *does* survive is drawn muted rather than in the
     result colour, because it is the study's own negative control and a
     surviving one is a warning about the comparison rather than a finding
-    (`methods.html#rare-variants` says the rest). No published row is in that state
-    today -- all 261 published synonymous rows come from the study that
-    publishes no correction -- so the branch is exercised by its test rather
-    than by the corpus. Hollowness is what may not be traded away here: it
-    carries the correction, which the muted colour does not.
+    (`methods.html#rare-variants` says the rest). No published row was in that
+    state when measured on 2026-10-26 -- every mirrored synonymous row then came
+    from PMID:42230622, which publishes no correction -- so the branch is
+    exercised by its test rather than by the corpus. Hollowness is what may not
+    be traded away here: it carries the correction, which the muted colour does
+    not.
     """
     if not _survived_correction(row):
         return f"chart-{glyph}-open"
@@ -2884,15 +2995,26 @@ def _forest_caption(
 
     **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
     key was one run of up to twelve sentences under every panel -- 185 panels
-    on 114 pages, measured on a build of 9f24190. Only the axis clause is
-    particular to its panel: the measure, its range, and what 1 means for that
-    measure. Every other clause says what a mark means in words that are the
-    same wherever that mark is drawn, so it folds under "How to read this
-    chart", which closes on a link to `methods.html#rare-variants`, where the
-    key is stated once in general. **The fold changed no clause's condition**:
-    each still renders only beside its mark, inside the toggle. The muted
-    clause alone was reworded, to name the row's role ("its negative
-    control") instead of linking the section the toggle already links.
+    on 114 pages, measured on a build of 9f24190. The axis clause stays in
+    sight: the measure, its range, and what 1 means for that measure. Every
+    other clause folds under "How to read this chart", which closes on a link
+    to `methods.html#rare-variants`, where the key is stated once in general.
+    **Not every folded clause is the same wherever it renders.** The mark
+    clauses are: each says what a mark means in words that do not change with
+    the panel. The not-fully-split clause is not -- it is a warning about this
+    panel, that a tagged row's components are not all drawn on it -- and it
+    folds too, as the approved D57 spec places it; measured 2026-10-26 on a
+    real build, it is folded on 10 panels on 10 pages (TBX5, TBX20, ZEB2,
+    CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL). This docstring said "only
+    the axis clause is particular to its panel" until then. **The fold
+    changed no clause's condition**: each still renders only where it is
+    true, inside the toggle. The muted clause alone was reworded, to name the
+    row's role ("its negative control") instead of linking the section the
+    toggle already links -- and again the same day, to "one of this study's
+    synonymous rows", because each of the 113 panels that draws one draws
+    three, one per case group. The toggle's link reads "How to read
+    rare-variant results": it read "How to read this atlas", the site nav's
+    text for the top of `methods.html`, while it led to one section of it.
 
     Conditional clause by clause, for the reason `_composite_note` is
     conditional (and `_SYNONYMOUS_NOTICE` was) and `_POOLING_NOTICE` had to be
@@ -2923,6 +3045,14 @@ def _forest_caption(
     token -- see `_NULL_LINE_GLOSS` for the measurement and the third
     vocabulary. The sibling `<title>` on the same figure had always varied
     correctly, which is why reading the panel did not show it.
+
+    **The survived-but-hollow clause (2026-10-26)** renders only where a
+    non-synonymous row cleared its study's correction without supporting the
+    gene (`_survived_against_the_gene`), which `_mark_class` draws hollow --
+    no published panel today. The hollow clause's "did not survive" is false
+    of that row, so the hollow clause renders only for the other hollow rows
+    and the new clause stands on its own where that row is the panel's only
+    one.
 
     **The union clause is conditional twice**: once on a union being shown as
     one at all, and once more on whether every tagged row is fully split.
@@ -2955,11 +3085,20 @@ def _forest_caption(
             "A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
             "study's correction for multiple testing. "
         )
-    if any(not _survived_correction(row) for row in rows):
+    if any(not _survived_correction(row) and not _survived_against_the_gene(row) for row in rows):
         parts.append(
             "A <strong>hollow</strong> marker is a row that <strong>did not survive</strong> its "
             "own study's correction for multiple testing, or whose study published no correction "
             "at all &mdash; the atlas computes none of its own. "
+        )
+    # The one hollow row the clause above is false of; see
+    # `_survived_against_the_gene`. Self-contained, because on a panel where it
+    # is the only hollow row the clause above does not render.
+    if any(_survived_against_the_gene(row) for row in rows):
+        parts.append(
+            "A row that <strong>survived</strong> its own study's correction without pointing "
+            "to enrichment in cases is drawn <strong>hollow</strong>: it is not evidence for "
+            "this gene. "
         )
     parts.append(
         "A forest plot usually ends in a summary diamond. There is <strong>no pooled</strong> "
@@ -3014,8 +3153,8 @@ def _forest_caption(
         # own -- a second link to the same place, one sentence before the
         # toggle's.
         parts.append(
-            "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-            "negative control, drawn apart from the results it calibrates."
+            "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+            "rows, its negative control, drawn apart from the results it calibrates."
         )
     # The axis clause is first and unconditional, and the pooling clause is
     # unconditional too, so `rest` is never empty.
@@ -3024,7 +3163,7 @@ def _forest_caption(
         f"<figcaption><p>{axis.strip()}</p>"
         '<details class="chart-notes"><summary>How to read this chart</summary>'
         f"<p>{rest}</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p>'
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
         "</details></figcaption>"
     )
 
@@ -3180,9 +3319,13 @@ def _footnotes(rows: Sequence[BurdenRow], combined: Sequence[CombinedRow] = ()) 
 
     A combined row's note joins the arms', so the method it names is footnoted
     under the figures it combines.
+
+    A note that is empty once stripped is no note. One of whitespace alone
+    rendered an empty `<li>` until 2026-10-26 -- 0 such rows in the mirror, so
+    latent -- while the card's `caveats` label already read it as none.
     """
     raw = [row.method_note for row in rows] + [row.method_note for row in combined]
-    notes = sorted({note.strip() for note in raw if note})
+    notes = sorted({note.strip() for note in raw if note and note.strip()})
     if not notes:
         return ""
     items = "".join(f"<li>{html.escape(note)}</li>" for note in notes)
@@ -3190,7 +3333,14 @@ def _footnotes(rows: Sequence[BurdenRow], combined: Sequence[CombinedRow] = ()) 
 
 
 def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> str:
-    """What each collection is, and the caveats that qualify every number here.
+    """What each collection is, and the caveats its curator recorded.
+
+    **Titled "About these cohorts, and the caveats recorded for them"**, which
+    read "..., and what qualifies every number above" until 2026-10-26 on all
+    118 pages carrying it. Several descriptions qualify nothing -- `cnchd`'s,
+    `nottingham`'s and `isca`'s say what the collection is and where a study
+    names it -- so the title claimed of every collection what only some carry;
+    `methods.html#cohorts` made the same correction that day.
 
     **These reached no published byte.** `curation/cohorts.yaml` records, for
     UK Biobank, that its participants are adults recruited at 40-69 while a
@@ -3225,8 +3375,8 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     if not items:
         return ""
     return (
-        '<details class="cohort-notes"><summary>About these cohorts, and what '
-        "qualifies every number above</summary><ul>"
+        '<details class="cohort-notes"><summary>About these cohorts, and the caveats '
+        "recorded for them</summary><ul>"
         + "".join(items)
         + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
     )
@@ -4958,6 +5108,16 @@ def build_gene_index_page(
     kinds link from their short form (it was a folded key on both pages until
     2026-10-26, D50).
 
+    **A contested gene is not shown as settled here either.** Until 2026-10-26
+    the confidence cell was the bare grade, so BRAF, KRAS, MAP2K1, PTPN11, RAF1
+    and SOS1 read as ordinary `definitive` rows while `genes/index.json` behind
+    this page flagged each `has_conflicting_evidence` -- the reading
+    `docs/data-api.md` tells a client never to commit. The cell now carries the
+    gene card's own `conflicting evidence` chip, wherever the flag is set;
+    `data-confidence` stays the bare grade, because the facet matches it.
+    `test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is`
+    holds it against a real build.
+
     Two couplings to `render.FILTER_SCRIPT` that nothing in the type system
     holds, both pinned by
     `test_every_facet_names_a_data_attribute_the_filter_script_reads`:
@@ -4994,7 +5154,16 @@ def build_gene_index_page(
                     # `HGNC:11604` is the identifier they cite. Linking only the
                     # id put the affordance on the string nobody scans for.
                     Link(text=symbol, href=f"../{gene_page_path(HgncId(gene))}"),
-                    confidence or _EM_DASH,
+                    # A contested gene's confidence carries the card's own
+                    # `conflicting evidence` chip, so this table never shows it
+                    # as settled; `data-confidence` below stays the bare grade,
+                    # which is what the confidence facet matches on.
+                    Markup(
+                        f"{html.escape(confidence or _EM_DASH)} "
+                        + chip("conflicting evidence", kind="warn")
+                    )
+                    if fact.has_conflicting_evidence
+                    else confidence or _EM_DASH,
                     "; ".join(diseases) or _EM_DASH,
                     # Position matters and was wrong for one commit: the header
                     # was inserted after `definitive for` while the cell stayed

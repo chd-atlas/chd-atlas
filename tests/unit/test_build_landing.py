@@ -868,6 +868,41 @@ def test_the_relabelled_mirrored_validity_row_sits_outside_whats_published(
     )
 
 
+def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires(
+    tmp_path: Path,
+) -> None:
+    """Orphanet appeared on the front page zero times until 2026-10-26.
+
+    Its phenotype frequencies are what bring Noonan, Costello, Adams-Oliver and
+    the other nominated syndromes into scope, and for some published genes
+    those syndromes are the only route in; `sources.json` records both Orphadata
+    products as CC-BY-4.0, attribution required, and Orphadata asks to be cited
+    in a stated form. Pinned against a literal in "Where this data comes from",
+    whitespace-collapsed (the template wraps it), so the citation cannot be
+    shortened, and a source named only in "What this is" does not pass: the
+    citation is what the licence asks for, not the name.
+    """
+    corpus = Corpus(root=Path("."), assertions=(_assertion(),))
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
+
+    sources_section = _prose(_section(text, "<h2>Where this data comes from</h2>"))
+    assert (
+        "<strong>Orphanet</strong>'s phenotype annotations decide whether a syndrome a curator "
+        "nominates is in scope on how often it carries a structural heart malformation; its "
+        "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
+        "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
+        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
+        "a date or a checksum, and carries the licence and attribution terms each of these is "
+        "mirrored under.</p>"
+    ) in sources_section
+    # ClinGen's, GenCC's and HGNC's entries are dates ("FILE CREATED: 2026-08-03",
+    # "retrieved 2026-08-03", "2026-10-16"), so "by version or checksum" was
+    # false of three sources (review, 2026-10-26).
+    assert "by version or checksum" not in sources_section
+    assert "ClinGen, GenCC, HPO, Orphanet" in _prose(_section(text, "<h2>What this is</h2>"))
+
+
 def test_a_single_assertion_is_singular_not_plural(tmp_path: Path) -> None:
     """The wording matters as much as the number: "1 assertions" reads as unreviewed."""
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
