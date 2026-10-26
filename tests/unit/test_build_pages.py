@@ -1537,6 +1537,14 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     # the caveats printed anywhere at all.
     notes = _slice_between(page, '<details class="cohort-notes">', ("</details>",))
     assert "survivorship bias against severe CHD" in notes
+    # The title promises what the fold holds -- the collections, and the
+    # caveats recorded for them -- and no more. It read "and what qualifies
+    # every number above" until 2026-10-26, which several descriptions do not
+    # do: some say only what a collection is.
+    assert notes.startswith(
+        "<summary>About these cohorts, and the caveats recorded for them</summary><ul>"
+    )
+    assert "qualifies every number" not in page
     assert "enriched for syndromic CHD" in notes
     # The fold stays (P4: narrowing where a cohort caveat reaches is what this
     # test exists to stop) and ends on a link to the whole registry on
@@ -1655,14 +1663,22 @@ def test_a_method_note_is_rendered_as_the_footnote_the_schema_promises(
     The column exists for the CNV case, where "carrier" means different things
     in different papers, so the first curator to need it would have got a green
     build, a correct bundle and no page text.
+
+    A note of whitespace alone is no note: it rendered an empty `<li>` until
+    2026-10-26, while the card's `caveats` label already read it as none.
     """
     page = _burden_page(
         tmp_path,
         facts_uncurated,
-        [_burden_row(method_note="Carrier means any exonic overlap of the deletion.")],
+        [
+            _burden_row(method_note="Carrier means any exonic overlap of the deletion."),
+            _burden_row(cohort_stratum="all", method_note="   "),
+        ],
     )
 
-    assert "Carrier means any exonic overlap of the deletion." in page
+    assert re.findall(r'<ul class="footnotes">.*?</ul>', page) == [
+        '<ul class="footnotes"><li>Carrier means any exonic overlap of the deletion.</li></ul>'
+    ]
 
 
 def test_the_provenance_line_unions_every_row_rather_than_reading_the_first(

@@ -3226,9 +3226,13 @@ def _footnotes(rows: Sequence[BurdenRow], combined: Sequence[CombinedRow] = ()) 
 
     A combined row's note joins the arms', so the method it names is footnoted
     under the figures it combines.
+
+    A note that is empty once stripped is no note. One of whitespace alone
+    rendered an empty `<li>` until 2026-10-26 -- 0 such rows in the mirror, so
+    latent -- while the card's `caveats` label already read it as none.
     """
     raw = [row.method_note for row in rows] + [row.method_note for row in combined]
-    notes = sorted({note.strip() for note in raw if note})
+    notes = sorted({note.strip() for note in raw if note and note.strip()})
     if not notes:
         return ""
     items = "".join(f"<li>{html.escape(note)}</li>" for note in notes)
@@ -3236,7 +3240,14 @@ def _footnotes(rows: Sequence[BurdenRow], combined: Sequence[CombinedRow] = ()) 
 
 
 def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> str:
-    """What each collection is, and the caveats that qualify every number here.
+    """What each collection is, and the caveats its curator recorded.
+
+    **Titled "About these cohorts, and the caveats recorded for them"**, which
+    read "..., and what qualifies every number above" until 2026-10-26 on all
+    118 pages carrying it. Several descriptions qualify nothing -- `cnchd`'s,
+    `nottingham`'s and `isca`'s say what the collection is and where a study
+    names it -- so the title claimed of every collection what only some carry;
+    `methods.html#cohorts` made the same correction that day.
 
     **These reached no published byte.** `curation/cohorts.yaml` records, for
     UK Biobank, that its participants are adults recruited at 40-69 while a
@@ -3271,8 +3282,8 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     if not items:
         return ""
     return (
-        '<details class="cohort-notes"><summary>About these cohorts, and what '
-        "qualifies every number above</summary><ul>"
+        '<details class="cohort-notes"><summary>About these cohorts, and the caveats '
+        "recorded for them</summary><ul>"
         + "".join(items)
         + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
     )
