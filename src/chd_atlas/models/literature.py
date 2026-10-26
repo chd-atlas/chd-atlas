@@ -1,7 +1,9 @@
 # src/chd_atlas/models/literature.py
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from chd_atlas.duplicates import duplicates
 from chd_atlas.identifiers import Doi, PhenotypeId, Pmcid, Pmid
@@ -42,6 +44,24 @@ class Publication(BaseModel):
     # Optional: a family-based linkage study reports no such count, and
     # `pages._method_line` simply omits the sentence when it is absent.
     tests_reported: int | None = Field(default=None, ge=1)
+    # What a reader must know to read this study's counts, in one sentence the
+    # gene page's card prints beneath its results (`pages._card_rare_variants`).
+    # The card shows a study's carrier counts in a 15rem column, and the
+    # caveats that qualify them -- `method_note`, the cohort descriptions --
+    # are footnoted in the study's block, one click away. For PMID:34324492
+    # that left "120 carriers / 7,107" on TBX1's card with nothing saying the
+    # case set it was drawn from includes 777 thoracic aortic aneurysm
+    # probands. The gene index prints it under the strip legend too.
+    #
+    # Curated rather than derived from `method_note`, which is free text that
+    # says different things for different studies: only a curator can say which
+    # caveat changes what a count means. Bounded so it stays short in that
+    # column, and stripped so a blank one cannot print a note that names the
+    # study and says nothing.
+    summary_caveat: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
+        | None
+    ) = None
 
 
 class PublicationFile(BaseModel):

@@ -75,6 +75,20 @@
         "study_type": {
           "$ref": "#/$defs/StudyType"
         },
+        "summary_caveat": {
+          "anyOf": [
+            {
+              "maxLength": 240,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary Caveat"
+        },
         "tests_reported": {
           "anyOf": [
             {

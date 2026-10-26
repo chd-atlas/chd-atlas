@@ -37,6 +37,19 @@ def test_own_lab_flag_marks_enrique_audain_papers() -> None:
     assert publication.own_lab is True
 
 
+def test_a_summary_caveat_is_optional_and_short_enough_for_the_card() -> None:
+    """Absent is `None`; an empty, blank or over-240-character one is refused.
+
+    The gene page's card prints it beside the study's results in a 15rem
+    column, so the bound is part of what the field is for.
+    """
+    assert Publication.model_validate(_publication()).summary_caveat is None
+    assert Publication.model_validate(_publication(summary_caveat="x" * 240)).summary_caveat
+    for refused in ("", "   ", "x" * 241):
+        with pytest.raises(ValidationError):
+            Publication.model_validate(_publication(summary_caveat=refused))
+
+
 def test_rejects_an_implausible_year() -> None:
     with pytest.raises(ValidationError):
         Publication.model_validate(_publication(year=1799))

@@ -2134,6 +2134,71 @@ def test_the_gene_and_its_symbol_both_link_to_the_page_and_the_strip_does_not(
     assert "strip-tally" in strip
 
 
+def test_the_gene_index_prints_each_named_studys_summary_caveat_once(
+    tmp_path: Path,
+    facts_two: dict[str, GeneFacts],
+    validity_two: dict[str, GeneValidity],
+) -> None:
+    """Under the strip legend, in study-id order, for every study a strip names.
+
+    The strips summarise each study's result for each gene -- "enriched, and
+    survives that study's own correction" -- so the caveat the card prints
+    beside a study's counts is owed here too. PMID:34324492 is named on both
+    rows and noted once; the rows meet PMID:40127276 first, so the order is
+    the sort's; PMID:42230622 carries a caveat and is named by no strip, and
+    PMID:99999999 is named and has no record. Label and caveat are escaped.
+    """
+
+    def family(*studies: str, state: str = "corrected") -> dict[str, object]:
+        return {"studies": list(studies), "state": state}
+
+    publications = {
+        "PMID:34324492": _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(
+            update={"summary_caveat": "Cases include <777> TAA probands & CHD."}
+        ),
+        "PMID:40127276": _SIERANT_PUBLICATION["PMID:40127276"].model_copy(
+            update={"authors": ["D'Alessandro M"], "summary_caveat": "Counts alleles."}
+        ),
+        "PMID:42230622": _PUBLICATION.model_copy(update={"summary_caveat": "Named nowhere."}),
+    }
+    emitter = Emitter(root=tmp_path)
+    build_gene_index_page(
+        facts_two,
+        emitter,
+        symbols={GATA4: "GATA4", TBX5: "TBX5"},
+        validity=validity_two,
+        burden_counts={},
+        concordance={
+            TBX5: {
+                "tested": 2,
+                "enriched": 2,
+                "corrected": 1,
+                "families": [
+                    family("PMID:40127276"),
+                    family("PMID:34324492", "PMID:99999999", state="nominal"),
+                ],
+            },
+            GATA4: {
+                "tested": 1,
+                "enriched": 0,
+                "corrected": 0,
+                "families": [family("PMID:34324492", state="no_enrichment")],
+            },
+        },
+        publications=publications,
+    )
+    page = _page(tmp_path, "index.html")
+    notes = re.findall(r'<p class="strip-legend"><strong>.*?</p>', page[page.index("</table>") :])
+
+    assert notes == [
+        '<p class="strip-legend"><strong>Audain E et al. 2021</strong> (PMID:34324492): '
+        "Cases include &lt;777&gt; TAA probands &amp; CHD.</p>",
+        '<p class="strip-legend"><strong>D&#x27;Alessandro M et al. 2025</strong> '
+        "(PMID:40127276): Counts alleles.</p>",
+    ]
+    assert "Named nowhere." not in page
+
+
 def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
     tmp_path: Path,
     facts_two: dict[str, GeneFacts],
@@ -6291,6 +6356,60 @@ def test_the_card_names_each_study_and_test_by_its_first_surviving_row(
     ]
     for anchor, _ in anchors:
         assert page.count(f'id="{anchor}"') == 1, anchor
+
+
+def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """A curated `Publication.summary_caveat` follows the card's list, once per study.
+
+    The card shows a study's counts and the caveat that says what they count
+    sat one click away, in the study's block: PMID:34324492's cases include 777
+    thoracic aortic aneurysm probands, and a carrier there is anyone with a
+    rare deletion overlapping the gene. A count that reaches the card must not
+    shed what qualifies it on the way.
+
+    **Once per study with a line, in study-id order**: PMID:40127276 has two
+    lines (two analyses) and one note, and its rows arrive first. **Never for a
+    study with no line**: PMID:42230622 carries a caveat and only a
+    no-correction line, which shows no counts to qualify, and a study whose
+    rows all fail their correction shows no counts either. The caveat and
+    the study's label are curator-written text, so both are escaped.
+    """
+    publications = {
+        "PMID:42230622": _PUBLICATION.model_copy(
+            update={"summary_caveat": "A caveat for a study with no line."}
+        ),
+        "PMID:34324492": _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(
+            update={"summary_caveat": "Cases include <777> TAA probands & CHD."}
+        ),
+        "PMID:40127276": _SIERANT_PUBLICATION["PMID:40127276"].model_copy(
+            update={"authors": ["D'Alessandro M"], "summary_caveat": "Counts alleles."}
+        ),
+    }
+    rows = [_sierant_de_novo(), _sierant(), _audain2021(), _burden_row()]
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=publications)
+    card = _card_variants(_rail_of(page))
+
+    assert card.count("<li>") == 3
+    after = card[card.index("</ul>") + len("</ul>") :]
+    assert after == (
+        '<p class="card-note"><a href="#study-34324492">Audain E et al. 2021</a>: '
+        "Cases include &lt;777&gt; TAA probands &amp; CHD.</p>"
+        '<p class="card-note"><a href="#study-40127276">D&#x27;Alessandro M et al. 2025</a>: '
+        "Counts alleles.</p>"
+        '<p class="card-uncorrected"><a href="#study-42230622">Audain E et al. 2026</a> '
+        "publishes no corrected p for this gene; judge its results against its scan of "
+        f"138,609 tests (see its block) · study by an atlas author</p>{_CARD_CAVEAT}"
+    )
+
+    failing = _burden_page(
+        tmp_path / "failing",
+        facts_uncurated,
+        [_sierant(pvalue_adjusted=0.5)],
+        publications=publications,
+    )
+    assert 'class="card-note"' not in _card_variants(_rail_of(failing))
 
 
 def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(

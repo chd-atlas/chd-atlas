@@ -406,7 +406,14 @@ from chd_atlas.corpus import Corpus
 # were mirrored for every published gene; before 2.17 `locus`, `ensembl_gene`,
 # `ncbi_gene`, `uniprot` and `mane_select` reached no published byte, and
 # `name` only search's `terms`.
-SCHEMA_VERSION: Final = "2.17"
+#
+# 2.18 adds `summary_caveat` to every record of `publications.json` (and so
+# to `featured.json`'s embedded publications), `null` where the curator
+# recorded none. Additive, so MINOR. It is the one sentence a gene page's
+# card prints beneath a study's results, and the gene index under its strip
+# legend; on the committed corpus only PMID:34324492 carries one, naming the
+# 777 thoracic aortic aneurysm probands in its case set.
+SCHEMA_VERSION: Final = "2.18"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is

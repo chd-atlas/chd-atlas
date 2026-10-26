@@ -527,6 +527,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # The same objects the bundles publish, so the strip a reader scans
         # and the JSON a program reads cannot disagree.
         concordance=concordance,
+        # For the summary caveats of the studies the strips name, which the
+        # gene pages' cards print from the same records.
+        publications={publication.id: publication for publication in corpus.publications},
     )
     # Last, and enforced as last: this seals the emitter.
     #
