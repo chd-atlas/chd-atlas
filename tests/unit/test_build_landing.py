@@ -809,6 +809,9 @@ def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
     The `<nav>` is the other half of the shell, and `root=""` is what makes its
     links right from the site root: a landing page rendered with `"../"` would
     point every visitor's "Genes" link above the deploy root.
+
+    Its third link, to `methods.html` (D50, 2026-10-26), is what puts the
+    site's reading notes one click from every page, the gene pages included.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
@@ -818,6 +821,7 @@ def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
     assert text.count("<style>") == 1
     assert '<a href="index.html">CHD Atlas</a>' in text
     assert '<a href="genes/index.html">Genes</a>' in text
+    assert '<a href="methods.html">How to read this atlas</a></nav>' in text
 
 
 def test_the_front_page_links_to_the_browsable_gene_index(tmp_path: Path) -> None:

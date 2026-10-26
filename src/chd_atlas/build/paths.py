@@ -139,3 +139,10 @@ LANDING: Final = "index.html"
 # because `pages.py` writes it and `landing.py` links to it, and nothing in code
 # ties a written path to a path a payload promised.
 GENE_INDEX_PAGE: Final = "genes/index.html"
+
+# The site's reading notes: what every gene page assumes, written once (D50).
+# `methods.py` writes it here. The shared nav and the gene pages' short forms
+# link to it in literal markup, as the nav links `genes/index.html`, so what
+# ties those links to this file is the real-build link sweep in
+# `tests/test_built_site_is_consumable.py`, fragments included.
+METHODS_PAGE: Final = "methods.html"

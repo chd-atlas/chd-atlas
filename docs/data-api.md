@@ -214,7 +214,8 @@ wrong by the next one.
   Additive.
   `2.18` added `summary_caveat` to every record of
   [`publications.json`](#publicationsjson) and so to `featured.json`'s
-  embedded publications, `null` where none is curated. Additive.
+  embedded publications, `null` where none is curated, and added
+  [`methods.html`](#methodshtml), the site's reading notes. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -226,15 +227,16 @@ wrong by the next one.
 ## The site root: `index.html`
 
 The page a person opens directly rather than fetches as JSON, and the entry
-point to the other 120. It states what the atlas is, the same development-status
+point to the other 121. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 carrying rare-variant evidence, and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
 than written by hand. It links to
-`genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json` and the
-repository. Self-contained: no external request, no build timestamp,
+`genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
+[`methods.html`](#methodshtml) (from the navigation bar every page shares) and
+the repository. Self-contained: no external request, no build timestamp,
 byte-identical between two builds of one commit like everything else here.
 
 It also carries a key to the four evidence glyphs, built from the same constant
@@ -242,10 +244,43 @@ as the browse page's strip legend and the gene page's matrix legend. The three
 cannot come to describe the same four states in different words.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
-build behind this document publishes 121 of them — this one, `genes/index.html`
-and one per published gene — and each has an entry in `files` giving the sha256
-of the bytes served at it. A page is published output, so it is verifiable
-output.
+build behind this document publishes 122 of them — this one, `genes/index.html`,
+[`methods.html`](#methodshtml) and one per published gene — and each has an entry
+in `files` giving the sha256 of the bytes served at it. A page is published
+output, so it is verifiable output.
+
+## `methods.html`
+
+"How to read this atlas": the explanation every gene page assumes, written once
+at the site root rather than repeated on each page (design decision D50), and
+linked from the navigation bar on every page. Each section carries an `id`, so a
+page can link the paragraph it shortens.
+
+- `#scope` states in full the rule that admits a gene to this atlas, and carries
+  the grade key: what each rung means, glossed from ClinGen's Gene-Disease
+  Validity SOP, and where a disputed or refuted record is listed. The gene index
+  and every gene page carry a one-line short form of the rule that links here.
+- `#validity` says how a gene page lists the mirrored validity records: in two
+  groups, which of ClinGen's own GenCC copies are listed, and that a record for
+  a disease outside this atlas's remit is not shown. Every gene page's validity
+  table's intro carries a one-sentence short form of that last point and links
+  here.
+- `#rare-variants` says how to read a gene page's rare-variant results: that
+  the counts and statistics in its study tables are the studies' own, that no
+  statistic is pooled across studies, what each count unit means and what an
+  absent row does not mean, the synonymous negative control, what a
+  damaging composite row is, what each mark on a forest plot means, and what a
+  study block with no effect measure shows instead of a plot. A gene page keeps
+  one-line forms of the first two and links here, and each forest plot's
+  folded key ends with a link here.
+- `#cohorts` lists every sample collection in the registry, sorted by id: its
+  name, id, description and public page where it has one — the same records as
+  [`cohorts.json`](#cohortsjson). A gene page keeps the notes of the cohorts
+  its own rows cite, folded at the end of its rare-variant section, and that
+  fold ends with a link here.
+
+Like the other pages it is for people: its markup is not a contract, and no
+payload depends on it.
 
 ## `genes/index.json`
 
@@ -468,10 +503,15 @@ that gene's page — the symbol, `headline_confidence`, `validity_state`,
 `atlas_curation` and the gene's lesion groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
 atlas curation, rare-variant evidence), whose options are the values actually present
-in the build rather than every value the vocabulary allows. The confidence menu
-now includes genes with no headline at all: 21 of the 119 are admitted on
-submitter agreement and carry `null`, and the browse page renders those with a
-`not classified` chip rather than an empty cell.
+in the build rather than every value the vocabulary allows. Above them, one
+line says each classification is an external authority's, for the disease it
+names, which for many genes here is a syndrome rather than CHD, and links
+[`methods.html#scope`](#methodshtml) for the admission rule and the grade key.
+21 of the 119 genes have no headline at all — they are admitted on submitter
+agreement and carry `null` — and the browse page renders an em dash (—) in
+their confidence and graded-for cells, as it does for every empty cell. Cells
+are plain text, not chips. The confidence menu offers no value for them: only
+*any confidence* shows them.
 
 **Every row is rendered by the build, and the inline script only hides rows.**
 There is no empty `<tbody>` filled in by a fetch, so `curl`, a crawler and a
@@ -899,7 +939,8 @@ Five obligations, each of which is a wrong claim if you get it wrong:
    `"taa_cases"`; that file maps each to a name, a URL where one exists, and the
    caveats that qualify every number drawn from it. `taa_cases` is 777 probands
    with **thoracic aortic aneurysm, a condition outside this atlas's scope** — a
-   row citing it is not a plain CHD case set, and only the description says so.
+   row citing it is not a plain CHD case set, and nothing in the row says so but
+   its `method_note`; the description is the caveat in full.
 
    Until schema `2.9` these ids resolved to nothing at all: the descriptions
    lived in the repository and reached a reader only through the gene *page*,
@@ -1324,18 +1365,66 @@ The page no longer prints `validity_state`, `atlas_curation`, the lesion groups
 or the assertion, functional-record, curated-publication and burden-row counts
 as rows; every one of them is in the bundle, which remains the record.
 
-Beside the card, the mirrored validity table in two groups — **Expert panel
-(ClinGen)** first, then **Other curators (GenCC)** — each row giving who curated
-it, the disease, the mode of inheritance in one vocabulary (ClinGen's `AD` reads
-as GenCC's "Autosomal dominant"), the authority's own `classification_term`
-**verbatim** rather than the rung this atlas maps it onto, the date as
+Beside the card, the main column opens with the same one-line short form of the
+scope rule as the gene index, linking [`methods.html#scope`](#methodshtml),
+which states the rule in full and carries the grade key; before this release,
+every gene page carried both. Below it, the mirrored validity table in two groups —
+**Expert panel (ClinGen)** first, then **Other curators (GenCC)** — each row
+giving who curated it, the disease, the mode of inheritance in one vocabulary
+(ClinGen's `AD` reads as GenCC's "Autosomal dominant"), the authority's own
+`classification_term` **verbatim** rather than the rung this atlas maps it onto,
+the date as
 `YYYY-MM-DD`, and a link to the upstream report where one is published, labelled
 with its SOP for a ClinGen record. ClinGen also submits its classifications to
 GenCC; the page lists such a copy only where its mapped grade, date, inheritance or
 disease differs from the panel's own record, or where it carries no date or has
-no panel record to match. The bundle keeps every record. A curated gene's page
+no panel record to match. The bundle keeps every record. The table's intro says
+that only records for in-scope diseases are listed, so the table may not be every
+classification the gene has — "may not", because many published genes have no
+ClinGen or GenCC record for any other disease — and links
+[`methods.html#validity`](#methodshtml). Neither the page nor the bundle carries
+a record for a disease outside scope. A curated gene's page
 follows it with the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites.
+
+The rare-variant section opens with one line attributing every count and
+statistic in its study tables to the upstream study, linking
+[`methods.html#rare-variants`](#methodshtml). The line is scoped to the study
+tables because the evidence matrix beneath it shows tallies the atlas derives
+(how many rows a cell summarises). The reading notes this section folded before
+this release — the count units, what an absent row means, the synonymous
+negative control — are on that page now, as is why a damaging composite row is
+shown. What stays visible beside the matrix, the plots and the tables, outside
+every fold:
+
+- under the matrix, its legend — rows are independent cohort families, and no
+  enrichment at these cohort sizes is not evidence against a gene — and that
+  no statistic is pooled across studies;
+- any sample collection the gene's studies share, as this atlas has recorded
+  them;
+- on a block from a study by an author of this atlas, a one-line declaration;
+- the multiple-testing line. For a study with any row it published no
+  corrected p for, the study's number of tests (`tests_reported` in
+  `publications.json`, where one is recorded) and the Bonferroni threshold
+  over it. `tests_reported` is named on a gene page only for such a study,
+  here and in the card's line for it. For a study that
+  corrected every row, that its corrected p carries its own correction for
+  multiple testing, and no count;
+- where a block has a damaging composite, that it is the union of the two rows
+  below it;
+- a study's own combination of its arms, where it publishes one
+  ([`burden_combined`](#the-bundles-burden_combined-array-one-studys-own-combination-of-its-arms));
+- where a study publishes no effect measure for the gene, a sentence saying so
+  in place of a plot, with its counts and p-values in the table;
+- every row's `method_note` footnote.
+
+Each forest plot — one per study and effect measure — shows one line of its
+caption: the axis, naming the effect measure, its range on a logarithmic scale
+and what the line at 1 means for that measure. The rest of its key is folded
+under *How to read this chart*: what each mark means — filled and hollow
+markers, hatched bars, arrows, muted and `union`-tagged rows — each only where
+the panel draws one, and why there is no summary diamond, ending with a link to
+[`methods.html#rare-variants`](#methodshtml), which states the key in general.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:
@@ -1756,7 +1845,7 @@ them. Added in schema `2.9`.
     {
       "id": "taa_cases",
       "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
-      "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases. TAA IS NOT CONGENITAL HEART DISEASE and is explicitly out of this atlas's scope …",
+      "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases; the study's abstract describes its probands as \"probands with CHD including cases with sporadic thoracic aortic aneurysm\". Thoracic aortic aneurysm is outside this atlas's scope …",
       "url": null
     }
   ]

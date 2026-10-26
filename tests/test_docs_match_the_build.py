@@ -779,3 +779,27 @@ def test_the_report_url_census_in_the_doc_is_the_census_the_build_publishes(site
     assert f", {null} publish `report_url: null`" in doc
     assert f"and {homepage} more point at" in doc
     assert f"so {null + homepage} of the {len(gencc)} offer" in doc
+
+
+def test_the_cohorts_example_quotes_the_record_the_build_publishes(site: Path) -> None:
+    """The `cohorts.json` example quotes `taa_cases`, and it went stale (2026-10-26).
+
+    Its description was rewritten in `curation/cohorts.yaml` -- it published a
+    curator's instruction ("and the page must say so") and a denominator no
+    row uses -- and an example quoting the old text would teach a consumer the
+    caveat that was withdrawn. The example abbreviates with a trailing "…", so
+    what it quotes must be a prefix of the published description; the name
+    and url are quoted whole.
+    """
+    documented = _example("## `cohorts.json`")["cohorts"][0]
+    published = {
+        cohort["id"]: cohort
+        for cohort in json.loads((site / "cohorts.json").read_text())["cohorts"]
+    }[documented["id"]]
+
+    assert set(documented) == set(published)
+    assert documented["name"] == published["name"]
+    assert documented["url"] == published["url"]
+    quoted = documented["description"].removesuffix("…").rstrip()
+    assert len(quoted) > 100, "the example quotes too little of the description to check"
+    assert published["description"].startswith(quoted)

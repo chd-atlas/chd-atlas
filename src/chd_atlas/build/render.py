@@ -119,6 +119,10 @@ STYLESHEET: Final = """
   }
   .notice p { margin: 0; }
   .scope-rule { color: var(--muted); font-size: 0.9rem; }
+  /* On methods.html the rule is the section's content, not a gloss beside a
+     gene: body colour and size there, and only there. The gene pages' and the
+     gene index's short form keeps the muted style above. */
+  h2#scope + .scope-rule { color: var(--fg); font-size: 1rem; }
   /* The burden section's four paragraph kinds. `.notice-inline` and
      `.provenance` were emitted by `pages.py` with no rule at all, so the single
      most important safety message this site can print -- "these two studies are
@@ -248,6 +252,11 @@ STYLESHEET: Final = """
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
   .cohort-notes summary { cursor: pointer; color: var(--muted); }
   .cohort-notes li { margin: 0.5rem 0; }
+  /* `methods.html#cohorts`: each name above its description rather than beside
+     it, since the base `dl` grid sizes its label column to the widest label.
+     (0,1,1) against the base rule's (0,0,1). */
+  dl.cohort-list { display: block; }
+  .cohort-list dd { margin: 0.15rem 0 0.9rem; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: break-word; }
@@ -272,8 +281,9 @@ STYLESHEET: Final = """
   }
   .chip-warn { background: var(--warn); color: #fff; }
   .grade-key { margin: 1rem 0; font-size: 0.9rem; }
-  .grade-key summary { cursor: pointer; color: var(--muted); }
-  .grade-key dt { margin-top: 0.5rem; }
+  /* A row gap rather than a margin on `dt`: the margin pushed each chip below
+     the first line of its own gloss, since `dd` had none. */
+  .grade-key dl { row-gap: 0.6rem; }
   .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; }
   @media (max-width: 46rem) { .layout { grid-template-columns: 1fr; } }
   .rail { font-size: 0.9rem; }
@@ -545,15 +555,34 @@ _GRADE_KEY_ORDER: Final = (
 )
 
 
-def grade_legend() -> str:
-    """The validity-chip key, as a collapsed `<details>`.
+def grade_key() -> str:
+    """The validity-chip key, rendered open, for `methods.html#scope`.
 
-    Rendered on the browse page and on every gene page, from one constant, for
-    the reason `EVIDENCE_POWER_CAVEAT` is one constant: a key that exists on the
-    page a reader arrives at and not on the page they land on is a key that is
-    absent exactly when it is needed. Measured 2026-08-05 in the concordance
-    review, where the browse page carried the evidence legend and the gene page
-    did not.
+    It was `grade_legend()` until 2026-10-26: a collapsed `<details>` rendered on
+    the browse page and on every gene page, from one constant, for the reason
+    `EVIDENCE_POWER_CAVEAT` is one constant: a key that exists on the page a
+    reader arrives at and not on the page they land on is a key that is absent
+    exactly when it is needed. Measured 2026-08-05 in the concordance review,
+    where the browse page carried the evidence legend and the gene page did not.
+
+    **Moved to `methods.html#scope` on 2026-10-26 (D50).** Its dispute sentence
+    said "the record is in the table below", which was false on the gene index
+    (no validity table) and is false here; it now points at the gene's validity
+    table. "This page is not a complete account" became "a gene page" for the
+    same reason. Both page kinds still reach it: each carries the scope short
+    form, whose link names the key, and a gene page's card glosses its own
+    headline grade in the key's words (`GRADE_GLOSS`). Rendered open, because on
+    the page that exists to explain it the key is not a digression to fold.
+
+    **It must render after `methods.SCOPE_RULE`.** The dispute sentence's
+    condition read "Where that disease is one an external authority treats as
+    congenital heart disease", which named one path into scope of two: Costello
+    and cardiofaciocutaneous syndrome, the diseases the six disputed genes are
+    disputed for, are in scope only on Orphanet's phenotype frequencies. It now
+    reads "in scope here, by either path above" (2026-10-26), which points at
+    the rule rather than restating it -- so it is true only below the rule, and
+    `test_the_key_follows_the_rule_its_dispute_sentence_points_back_to` pins
+    that order.
 
     `disputed` and `refuted` are deliberately not listed. They are in
     `GRADE_CHIP_KIND` as a guard, but no gene headlined by either is published,
@@ -588,8 +617,9 @@ def grade_legend() -> str:
 
     The qualifier deliberately avoids the phrase "this atlas's CHD scope", which
     `test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas`
-    asserts is absent from every page: it told 24 pages that this atlas decides
-    what counts as congenital heart disease, and it does not.
+    asserts is absent from both page kinds, and `test_build_methods.py` from
+    `methods.html`: it told 24 pages that this atlas decides what counts as
+    congenital heart disease, and it does not.
     """
     rows = "".join(
         f'<dt><span class="chip chip-{GRADE_CHIP_KIND.get(grade, "ungraded")}">'
@@ -598,7 +628,7 @@ def grade_legend() -> str:
         for grade in _GRADE_KEY_ORDER
     )
     return (
-        '<details class="grade-key"><summary>What these classifications mean</summary>'
+        '<div class="grade-key">'
         "<p>Every classification on this site is mirrored from the authority that made it. "
         "The rung names are "
         '<a href="https://clinicalgenome.org/curation-activities/gene-disease-validity/">'
@@ -608,12 +638,12 @@ def grade_legend() -> str:
         "and which this atlas maps to no rung. "
         "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
         "may still have disputed the same gene for a different disease. Where that disease "
-        "is one an external authority treats as congenital heart disease, the record is in "
-        "the table below, marked <em>Disputed</em> or <em>Refuted</em>, and the gene "
-        "carries a <em>conflicting evidence</em> flag. Where it is not, the record is not "
-        "shown: the records below are only those for diseases in this atlas&#x27;s remit, "
-        "so this page is not a complete account of what ClinGen has said about the gene.</p>"
-        f"<dl>{rows}</dl></details>"
+        "is in scope here, by either path above, the record is in that gene&#x27;s validity "
+        "table, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries a "
+        "<em>conflicting evidence</em> flag. Where it is not, the record "
+        "is not shown: a gene page lists only records for diseases in this atlas&#x27;s "
+        "remit, so it is not a complete account of what ClinGen has said about the gene.</p>"
+        f"<dl>{rows}</dl></div>"
     )
 
 
@@ -751,7 +781,8 @@ def document(*, title: str, root: str, body: str, script: str = "") -> str:
     home = html.escape(root)
     nav = (
         f'<nav><a href="{home}index.html">CHD Atlas</a> &middot; '
-        f'<a href="{home}genes/index.html">Genes</a></nav>'
+        f'<a href="{home}genes/index.html">Genes</a> &middot; '
+        f'<a href="{home}methods.html">How to read this atlas</a></nav>'
     )
     notice = f'<div class="notice" role="note"><p>{RESEARCH_USE_NOTICE}</p></div>'
     return f"""<!doctype html>

@@ -439,7 +439,7 @@ def build_genes(
                 # why both are published rather than one replacing the other.
                 "validity": _validity(gene_validity),
                 # Why this gene is published at all, as a payload rather than a
-                # rule a reader has to trust. `_SCOPE_RULE` tells every visitor
+                # rule a reader has to trust. `methods.SCOPE_RULE` tells a reader
                 # that no disease is in scope on this atlas's own judgement;
                 # this is what lets them check which authority admitted the gene
                 # in front of them. Kept beside `validity` rather than inside it

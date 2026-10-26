@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from dataclasses import replace
 from datetime import date
@@ -20,7 +21,6 @@ from chd_atlas.build.emit import Emitter
 from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.pages import (
     _EM_DASH,
-    _SCOPE_RULE,
     _analysis_label,
     _count,
     _date,
@@ -390,6 +390,10 @@ def test_a_non_http_report_url_never_becomes_a_link(
     Measured 2026-08-04 with the guard removed (`Link(text="open", href=url) if
     url else _EM_DASH`): 3 failed, 619 passed -- one failure per case here, and
     no other test in the suite noticed.
+
+    Since 2026-10-26 (D50) the section's intro links `methods.html#validity`,
+    so "no anchor in the section" can no longer pass; the check reads the two
+    authority groups, from the first `<h3>` on, which is where every row is.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -404,8 +408,10 @@ def test_a_non_http_report_url_never_becomes_a_link(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert "<a href=" not in _validity_table(page)
-    assert "<td>SOP11</td>" in _validity_table(page)
+    section = _validity_table(page)
+    groups = section[section.index("<h3>") :]
+    assert "<a href=" not in groups
+    assert "<td>SOP11</td>" in groups
     assert report_url.strip() not in page
 
 
@@ -508,11 +514,13 @@ def test_a_contested_gene_is_never_chipped_as_settled(
         to `warn`: the assertion below is that the rail's chip is the caution colour,
         not merely that it is not green.
 
-        **The slice is the rail, not the page.** `render.grade_legend` renders one
+        **The slice is the rail, not the page.** `render.grade_legend` rendered one
         chip of every class -- including `chip-definitive` -- inside a `<details>` on
-        every page, so a page-wide `not in` can never fail again and passed only
+        every page, so a page-wide `not in` could never fail again and passed only
         because the legend did not exist when it was written. CLAUDE.md section 4.19
-        is this exact shape: a page-wide assertion is not a section assertion.
+        is this exact shape: a page-wide assertion is not a section assertion. The
+        legend left the gene page for `methods.html#scope` on 2026-10-26 (D50); the
+        slice stays, because the rail is still the element under test.
 
         Parametrised over the two warning flags in opposite states because they are
         separate axes: `has_conflicting_evidence` is any mixed evidence,
@@ -730,8 +738,6 @@ def test_browse_facet_options_are_ordered_against_a_literal(
 
 def test_the_browse_page_says_whose_classification_the_confidence_column_carries(
     tmp_path: Path,
-    facts_two: dict[str, GeneFacts],
-    validity_two: dict[str, GeneValidity],
 ) -> None:
     """23 rows reading `definitive` under a column headed `confidence`, unattributed.
 
@@ -745,22 +751,43 @@ def test_the_browse_page_says_whose_classification_the_confidence_column_carries
     and the pointer to the column that says whether the atlas has curated the
     gene at all. `_BROWSE_HEADERS` is checked in the same breath so the sentence
     cannot come to name a column the table stopped rendering.
+
+    **The attribution itself was wrong, and is pinned as a literal since
+    2026-10-26.** The paragraph said "Every confidence below is an upstream
+    panel's or submitter's" and "A blank confidence means ...". The column is
+    `headline_confidence`, the admitting ClinGen panel's grade and never a
+    submitter's, and a gene no panel graded renders an em dash there, not a
+    blank -- 21 of the 119 rows on a real build. So the fixture now carries one
+    gene of each kind, and the em-dash cell is asserted beside the sentence
+    that describes it: the two fail together.
     """
+    graded, graded_validity = _limited(TBX5)
+    admitted, admitted_validity = _submitter_admitted(GATA4)
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
-        facts_two,
+        {TBX5: graded, GATA4: admitted},
         emitter,
         symbols={TBX5: "TBX5", GATA4: "GATA4"},
-        validity=validity_two,
+        validity={TBX5: graded_validity, GATA4: admitted_validity},
         burden_counts={},
     )
-
     page = _page(tmp_path, "index.html")
-    assert "upstream panel's or submitter's" in page
-    assert "the atlas authors no validity classification of its own" in page
-    assert "<strong>atlas curation</strong> column" in page
+
+    intro = _slice_between(page, "<p>Every confidence below", ("</p>",))
+    assert intro == (
+        " is a ClinGen expert panel's, republished with its provenance intact "
+        "&mdash; the atlas authors no validity classification of its own. The "
+        "<strong>atlas curation</strong> column is what says whether the atlas has "
+        "curated a gene itself, and the <strong>graded for</strong> column names the "
+        "disease each panel actually graded. A confidence shown as &mdash; means no "
+        "ClinGen expert panel has graded the gene for any of the diseases in scope "
+        "here; its page names the submitters whose agreement admitted it."
+    )
     assert '<th scope="col">atlas curation</th>' in page
     assert '<th scope="col">confidence</th>' in page
+    row = re.search(r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>", page, re.S)
+    assert row, "the submitter-admitted gene has no browse row"
+    assert re.findall(r"<td>(.*?)</td>", row.group(0), re.S)[2] == "—"
 
 
 def test_no_browse_row_states_a_bare_definitive_without_the_disease_it_is_for(
@@ -895,21 +922,30 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
     facts_two: dict[str, GeneFacts],
     validity_two: dict[str, GeneValidity],
 ) -> None:
-    """No page on the site said what the published set is. `docs/data-api.md` did.
+    """Both page kinds say whose classification they show, and link the rule in full.
 
-    A reader of the HTML never sees that document, so the browse page and every
-    gene page now carry the rule themselves: a gene is published when a ClinGen
-    expert panel classifies it Limited or better for a disease an external
-    authority treats as CHD, or when two GenCC submitters agree and no panel
-    disputes it. Neither is the same as definitive for congenital heart disease.
+    No page on the site said what the published set is until 2026-08-04;
+    `docs/data-api.md` did, and a reader of the HTML never sees that document.
+    Until 2026-10-26 both page kinds carried the whole admission rule and a
+    folded grade key. Both moved to `methods.html#scope` (D50), where
+    `test_build_methods.py` pins them; each page kind now carries a one-line
+    short form and a link to that section.
 
-    Both page kinds are checked from one constant, `pages._SCOPE_RULE`, because
-    the rule is one editorial claim and two copies of it are two things that
-    drift. What is asserted here is that the constant *reaches both kinds of
-    page* -- the drift this cannot catch is the constant itself being reworded,
-    which is what the phrase assertions below are for. They are deliberately not
-    the whole string: this must fail when the sentence stops distinguishing the
-    two claims, not merely when a comma moves.
+    What this asserts, on the browse page and on two gene pages: the short form
+    as a literal, sliced to its `<p class="scope-rule">` element and present
+    exactly once; the link inside it; that the full rule has not come back
+    beside it (a page carrying both is the page D50 exists to slim); and the
+    retired "this atlas's CHD scope" absent in both spellings of its
+    apostrophe.
+
+    **The short form must be true on a page whose panel graded CHD itself.**
+    The spec's first wording -- "for the disease named, which is not the same
+    as for CHD" -- contradicted the card on 53 of the 119 gene pages, whose
+    panel graded congenital heart disease (ISL1: "definitive for congenital
+    heart disease", one line above a sentence saying that is not CHD; measured
+    2026-10-26). GATA4 here is graded for "structural congenital heart
+    disease", so it is that page, independent of the real corpus: its card is
+    asserted to name the disease, and its short form not to deny it.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
@@ -932,7 +968,9 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
 
     for name in ("index.html", "HGNC_11604.html", "HGNC_4173.html"):
         page = _page(tmp_path, name)
-        assert _SCOPE_RULE in page, f"{name} does not state the inclusion rule"
+        # Both spellings: the build writes one apostrophe `'` and another
+        # `&#x27;`, and a retired phrase must not pass by changing which.
+        texts = (page, html.unescape(page))
         # **The published provenance claim, corrected 2026-08-06.** Every page
         # used to say a gene is definitive "for a disease in this atlas's CHD
         # scope", which told 24 published pages that this atlas decides what
@@ -944,32 +982,35 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
         # The negative assertion is the load-bearing half. Without it a future
         # edit could restore the old sentence beside the new one and satisfy
         # every positive check here.
-        assert "this atlas's CHD scope" not in page
-        assert "an external authority treats as congenital heart disease" in page
-        assert "No disease is in scope on this atlas's own judgement" in page
-        assert "not the same as definitive for congenital heart disease" in page
+        assert all("this atlas's CHD scope" not in text for text in texts)
         # **Both warrants, or the sentence describes a gate the site does not
-        # have.** Stating only the ClinGen half would tell a reader that every
-        # gene here was graded by an expert panel; 16 of the 92 were not, and
-        # they are the ones whose provenance most needs stating.
-        #
-        # **Sliced to the scope-rule element, and that is what makes these
-        # assertions able to fail.** Page-wide they could not: the grade key's
-        # `ungraded` gloss carries the phrase "two or more Gene Curation
-        # Coalition submitters independently assert it" further down every page,
-        # so rewriting `_SCOPE_RULE` to state a **one**-submitter gate -- the
-        # site describing a gate that admits on a single laboratory's word --
-        # **survived all 796 tests** when measured 2026-08-06. The assertion
-        # above it, `_SCOPE_RULE in page`, cannot catch a rewording either: it
-        # compares the module's constant to itself and passes on any wording at
-        # all. CLAUDE.md section 4.19.
+        # have**, and **sliced to the scope-rule element, because page-wide the
+        # phrase checks could not fail** (CLAUDE.md section 4.19): both
+        # recorded decisions moved with the full rule to `test_build_methods.py`
+        # (2026-10-26, D50). The short form names neither warrant -- it says
+        # whose classification it is and for what -- so what is pinned here is
+        # the literal, and that the rule in full has not come back beside it.
+        assert page.count('<p class="scope-rule">') == 1, f"{name}: one short form, once"
         rule = re.search(r'<p class="scope-rule">.*?</p>', page, re.S)
         assert rule, f"{name} carries no scope-rule element"
         sentence = rule.group(0)
-        assert "Limited or better" in sentence
-        assert "two or more Gene Curation Coalition submitters" in sentence
-        assert "one or more Gene Curation Coalition submitters" not in sentence
-        assert "no ClinGen panel disputes it" in sentence
+        assert sentence == (
+            '<p class="scope-rule">Published on an external authority&#x27;s classification '
+            "for the disease it names, which for many genes here is a syndrome rather than "
+            'CHD. <a href="../methods.html#scope">How a gene is admitted, and what each '
+            "grade means</a>.</p>"
+        ), f"{name}: the scope short form changed"
+        assert 'href="../methods.html#scope"' in sentence
+        assert all(
+            "No disease is in scope on this atlas's own judgement" not in text for text in texts
+        )
+
+    # A page whose panel graded CHD itself: the card says so, and the short form
+    # must not deny it.
+    gata4 = _page(tmp_path, "HGNC_4173.html")
+    assert "<dt>definitive for</dt><dd>structural congenital heart disease</dd>" in gata4
+    short = _slice_between(gata4, '<p class="scope-rule">', ("</p>",))
+    assert "not the same as for CHD" not in short
 
 
 def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
@@ -1389,60 +1430,17 @@ def test_two_studies_sharing_a_cohort_are_declared_not_independent(
     assert "Deciphering Developmental Disorders (DDD)" in page
 
 
-def test_the_section_says_what_a_missing_row_means_without_asserting_why(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """The sentence that is the difference between a table and a trap -- and the
-    mechanism it must NOT assert.
-
-    The burden matrix is sparse, and a reader meeting a gap will read it as "not
-    tested" unless told. So the page says an absent cell is one the study did not
-    report.
-
-    **It must not say why.** Until 2026-08-05 it asserted "no variant of that
-    class was seen in either group, so there was nothing to compare" -- measured
-    over PMID:42230622 alone, where 0 of 1,192 rows have no carrier on either
-    side. That is false for the other two studies now rendering tables beside it:
-    PMID:34324492 tests one consequence class by construction, and PMID:40127276
-    observed 14,364 synonymous variants (its own Dataset S4) and published no
-    synonymous row because its gene-level table covers only damaging classes. A
-    reader told "no variant of that class was seen" would conclude that study
-    found none.
-    """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    section = page[page.index(_RARE_VARIANT_HEADING) :]
-
-    assert "did not report" in section
-    assert "does not always mean" in section
-    # The refuted mechanism, in the exact words that were wrong.
-    assert "no variant of that class was seen in either group" not in section
-
-
-def test_the_synonymous_negative_control_is_explained_only_where_one_exists(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """Conditional, for the reason `_POOLING_NOTICE` and `_composite_note` are.
-
-    A reader who does not know the synonymous row is a negative control reads a
-    null result as a null finding rather than as the calibration check it is --
-    so where one exists, the page says so.
-
-    Where none exists, the page must not tell a reader to weigh one. Measured
-    2026-08-05: 69 of the 290 published burden rows are synonymous and **every
-    one comes from PMID:42230622**; the other two studies publish no negative
-    control at all. Rendered unconditionally, this paragraph promised a check
-    that two of the three tables on the page cannot offer.
-    """
-    without = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="lof")])
-    assert "negative control" not in without
-
-    with_syn = _burden_page(
-        tmp_path / "syn",
-        facts_uncurated,
-        [_burden_row(consequence_class="lof"), _burden_row(consequence_class="synonymous")],
-    )
-    assert "negative control" in with_syn
-    assert "uncorrected" in with_syn
+# `test_the_section_says_what_a_missing_row_means_without_asserting_why` and
+# `test_the_synonymous_negative_control_is_explained_only_where_one_exists` sat
+# here until 2026-10-26, pinning the rare-variant reading notes a gene page
+# folded under "How to read these numbers". The notes moved to
+# `methods.html#rare-variants` (D50) and both tests' positives and recorded
+# decisions moved with them, to
+# `test_rare_variants_states_what_every_gene_page_folded_or_shortened` in
+# `test_build_methods.py`. The refuted mechanism ("no variant of that class was
+# seen in either group") is asserted absent on both pages: there by
+# `test_no_sentence_the_move_retired_comes_back_here`, here by
+# `test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page`.
 
 
 def test_the_page_names_how_many_tests_the_study_ran(
@@ -1474,6 +1472,11 @@ def test_the_page_names_how_many_tests_the_study_ran(
     assert "138,609" in method
     assert "3.6e-07" in method
     assert "judge the raw one against the whole scan" in method
+    # "138,609 such comparisons" until 2026-10-26: its antecedent, the design
+    # clause, renders after it and folded under "How this study counted", so
+    # "such" pointed at a sentence the reader had not met. Now self-contained.
+    assert "This study reported 138,609 comparisons in all." in method
+    assert "such comparisons" not in page
 
 
 def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
@@ -1492,12 +1495,22 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
 
-    assert "survivorship bias against severe CHD" in page
-    assert "enriched for syndromic CHD" in page
     # In a `<details>`, so the caveats are one click from every table rather than
     # repeated at full length above 23 of them -- and still in the document for
-    # a crawler, a `curl`, and a reader with no JavaScript.
-    assert "<details" in page
+    # a crawler, a `curl`, and a reader with no JavaScript. Sliced to the
+    # cohort-notes fold itself (2026-10-26): `"<details" in page` passed on any
+    # other fold on the page, the rare-variant reading notes among them, with
+    # the caveats printed anywhere at all.
+    notes = _slice_between(page, '<details class="cohort-notes">', ("</details>",))
+    assert "survivorship bias against severe CHD" in notes
+    assert "enriched for syndromic CHD" in notes
+    # The fold stays (P4: narrowing where a cohort caveat reaches is what this
+    # test exists to stop) and ends on a link to the whole registry on
+    # methods.html, so this section links its anchor like every other
+    # (2026-10-26, D50). Last in the fold, after the list it extends.
+    assert notes.endswith(
+        '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p>'
+    )
 
 
 def test_the_page_says_what_was_counted_not_only_how_many(
@@ -1540,9 +1553,24 @@ def test_a_study_by_an_author_of_this_atlas_says_so(
     line applies, so a stale version of it is worse than none -- it describes a
     corpus that no longer exists and invites the conclusion that the disclosure
     is unconditional.
+
+    **Shortened to one sentence on 2026-10-26 (D50)**, and pinned whole, sliced
+    to its own element; `methods.html#rare-variants` says the rest. The spec's
+    approved short form ended "nothing added", and that is false where it sits:
+    measured on a real build of 4233eca, 113 of the 190 own-lab study blocks
+    also carry the atlas's own Bonferroni arithmetic (`0.05 / 138,609`) and
+    draw a forest plot from the study's rows. It keeps the hedge the sentence
+    it replaced had: no *assessment* added.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    assert "this study is by an author of this atlas" in page
+    disclosure = re.search(r'<p class="disclosure">.*?</p>', page, re.S)
+    assert disclosure, "an own-lab study's block carries no disclosure"
+    assert disclosure.group(0) == (
+        '<p class="disclosure">Declaration: this study is by an author of this atlas; '
+        "republished as published, no assessment added.</p>"
+    )
+    for text in (page, html.unescape(page)):
+        assert "nothing added" not in text
 
     outside = _PUBLICATION.model_copy(update={"own_lab": False})
     other = _burden_page(
@@ -1668,9 +1696,28 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     and it belongs there whenever the matrix does, one study or three. Folding
     it while introducing the thing it guards against would have been the worst
     available pairing.
+
+    **Shortened to the spec's approved short form on 2026-10-26 (D50, P7)**,
+    made explicit about what would double-count: the spec's "those sharing a
+    collection would count" left the pooling implicit. Pinned whole, sliced to
+    the section; the full sentence, with how a gene page names an overlap, is on
+    `methods.html#rare-variants`, where "these cohorts overlap" is asserted
+    absent too.
+
+    **"people", not "children", since 2026-10-26.** `shared_cohorts` unions a
+    study's case *and* control collections, and a shared collection may be a
+    control cohort of adults -- UK Biobank's own note says "~500,000 UK adults
+    recruited at ages 40-69" -- so the double-counted are not always children.
+    The matrix caption and `docs/data-api.md` already said "people".
     """
     one = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
     assert "no pooled statistic across studies" in one
+    section = _burden_section_text(one)
+    assert (
+        "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
+        "two that share a sample collection would count the same people twice.</p>" in section
+    )
+    assert "children" not in section
     # Immediately after the matrix, not four paragraphs above it.
     assert one.index("</table>") < one.index("no pooled statistic across studies")
     # **And it must be true of a one-study page.** It used to assert "these
@@ -1855,17 +1902,105 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
     and the advice to judge against the whole scan. PMID:34324492 corrects every
     row, so that same advice would point them at the column they should *not* be
     reading. The block says whichever is true of its own rows.
+
+    **The corrected branch names no column since 2026-10-26 (P9).** It said
+    "The corrected p column carries the study's own correction", and where the
+    study has a forest plot that column is folded under "every figure from this
+    study" while the plot names the same number `q` or `corrected p`. It now
+    names the statistic, with the `q` it is shown as where it is a
+    false-discovery rate (`_statistic`), and is pinned identical on a block with
+    a forest and on one without, so it cannot come to depend on either layout.
+
+    **And it states no count (2026-10-26).** It opened "This study reported N
+    comparisons in all", and for PMID:40127276 N is `tests_reported: 248` --
+    the study's panel *genes*, each tested in two arms over three consequence
+    classes -- so the sentence was false on all 36 pages carrying that study. A
+    study that corrected every row needs no denominator from the reader; the
+    count is shown only where the reader must apply it, beside the Bonferroni
+    arithmetic, which is true of PMID:42230622 (138,609 is one Fisher test per
+    row of its Supplementary Data 3). Pinned on a corrected study whose
+    publication records no count at all, too: the sentence no longer reads
+    one, so it must not depend on it. And pinned absent where no row carries a
+    p-value at all -- a case series -- because there is then no corrected p to
+    read: with the branch keyed on "no uncorrected row" alone it told such a
+    block to read one (a mutant doing exactly that survived every other test,
+    measured 2026-10-26).
     """
+    read_corrected = (
+        '<p class="method">Its <strong>corrected p</strong> (shown as <em>q</em> where it is a '
+        "false-discovery rate) carries the study's own correction for multiple testing; "
+        "read it rather than the raw p.</p>"
+    )
     corrected = _burden_page(
         tmp_path,
         facts_uncurated,
         [_burden_row(pvalue_adjusted=0.991, pvalue_adjustment="bonferroni")],
     )
-    assert "read it rather than the raw p" in corrected
+    assert "<svg" in _burden_section_text(corrected), "this fixture must draw a forest"
+    assert read_corrected in corrected
     assert "judge the raw one against the whole scan" not in corrected
 
+    unplotted_row = _burden_row(
+        study="PMID:34324492",
+        variant_class="cnv_deletion",
+        effect=None,
+        effect_measure=None,
+        effect_bound=None,
+        ci_low=None,
+        ci_high=None,
+        pvalue_adjusted=0.991,
+        pvalue_adjustment="familywise_permutation",
+    )
+    unplotted = _burden_page(
+        tmp_path / "unplotted",
+        facts_uncurated,
+        [unplotted_row],
+        publications=_OTHER_PUBLICATIONS,
+    )
+    assert "<svg" not in _burden_section_text(unplotted), "this fixture must draw no forest"
+    assert read_corrected in unplotted
+
+    uncounted = _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(update={"tests_reported": None})
+    no_count = _burden_page(
+        tmp_path / "no_count",
+        facts_uncurated,
+        [unplotted_row],
+        publications={uncounted.id: uncounted},
+    )
+    assert read_corrected in no_count
+    for page in (corrected, unplotted, no_count):
+        assert "comparisons in all" not in page
+        assert "corrected p</strong> column" not in page
+
+    series = _burden_page(
+        tmp_path / "series",
+        facts_uncurated,
+        [
+            _burden_row(
+                comparator="none",
+                n_control_carriers=None,
+                n_controls=None,
+                control_cohorts=(),
+                effect=None,
+                effect_measure=None,
+                effect_bound=None,
+                ci_low=None,
+                ci_high=None,
+                pvalue=None,
+                pvalue_test=None,
+            )
+        ],
+    )
+    assert _RARE_VARIANT_H2 in series, "the case series must still render its block"
+    assert "corrected p</strong> (shown as" not in series
+    assert "comparisons in all" not in series
+
     plain = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    assert "judge the raw one against the whole scan" in plain
+    assert (
+        '<p class="method">This study reported 138,609 comparisons in all. Where it published '
+        "no corrected p, judge the raw one against the whole scan rather than against 0.05 "
+        "&mdash; a Bonferroni threshold over that many is p &lt; 3.6e-07.</p>" in plain
+    )
     assert "read it rather than the raw p" not in plain
 
 
@@ -1984,6 +2119,16 @@ def test_the_composite_row_is_named_as_a_union_of_the_two_below_it(
 
     with_composite = _burden_page(tmp_path, facts_uncurated, composite)
     assert "union</strong> of the loss-of-function" in with_composite
+    # One sentence since 2026-10-26 (D50, P8), pinned whole and sliced to the
+    # section. Why the composite is shown at all -- its p-value is not derivable
+    # from its components' -- moved to `methods.html#rare-variants`.
+    assert (
+        '<p class="notice-inline">The <strong>damaging (LOF + missense)</strong> rows are '
+        "the <strong>union</strong> of the loss-of-function and damaging-missense rows "
+        "below them, not a third independent result &mdash; the same variants are counted "
+        "in both.</p>" in _burden_section_text(with_composite)
+    )
+    assert "not derivable from the other two" not in with_composite
 
     without = _burden_page(tmp_path / "b", facts_uncurated, components)
     assert "union</strong> of the loss-of-function" not in without
@@ -2009,6 +2154,15 @@ def test_every_particular_caveat_survives_outside_the_fold(
     0.05 and 3 survive Bonferroni over the study's own 138,609 comparisons --
     so `_method_line` returns it separately from the design clause, which does
     fold. Reuniting them would bury it one release after it was added.
+
+    The pooling caveat's wording became the spec's approved short form on
+    2026-10-26 ("count the same children twice", D50, P7), and "children"
+    became "people" the same day (a shared collection may be a control cohort
+    of adults); the rule -- visible outside every fold -- is unchanged. The
+    scan-size assertion is pinned to the method line's own words since the
+    same day: the card's no-correction line also carries "138,609" ("judge its
+    results against its scan of 138,609 tests"), so the bare number would pass
+    with the method line folded away.
     """
     rows = [
         _burden_row(consequence_class="lof"),
@@ -2030,31 +2184,76 @@ def test_every_particular_caveat_survives_outside_the_fold(
     # The atlas's claim about itself.
     assert "computes none of them" in unfolded
     # The relocated pooling caption -- it qualifies the matrix directly above it.
-    assert "count those children twice" in unfolded
+    assert "count the same people twice" in unfolded
     # A row's own method note: this is where the TAA contamination, which is not
     # congenital heart disease, reaches a reader at all.
     assert "thoracic aortic aneurysm" in unfolded
-    # The multiple-testing denominator.
+    # The multiple-testing denominator, in the method line's own words.
     assert "138,609" in unfolded
+    assert "138,609 comparisons in all" in unfolded
 
 
-def test_the_general_reading_notes_are_folded_out_of_the_way(
+def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
     """The other half of the rule, so "fold everything" fails as loudly as
     "fold nothing".
 
-    These three paragraphs are identical on all 23 pages and teach how to read
+    These paragraphs are identical wherever they render and teach how to read
     the table rather than saying anything about this gene. Nothing is lost by
-    folding them: the unit word is still in every count cell, and the matrix
+    moving them: the unit word is still in every count cell, and the matrix
     renders `not tested` as its own state rather than as a gap.
+
+    **They left the gene page on 2026-10-26 (D50)**, and this test was named
+    `test_the_general_reading_notes_are_folded_out_of_the_way` until then: they
+    were folded under "How to read these numbers" on all 118 pages with a
+    rare-variant section -- the synonymous paragraph on the 113 of them with a
+    synonymous row -- and are now on `methods.html#rare-variants`, where
+    `test_build_methods.py` pins them. What stays on the page is the section's
+    one-line attribution, scoped to the study tables and linking there -- the
+    evidence matrix beside it shows tallies the atlas derives ("n = N" on 86
+    pages and "N rows" on 48, measured on a build of 4233eca), so "every count
+    and statistic below" was false of the matrix -- and the pooling caption
+    beneath the matrix (`test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional`).
+
+    The moved paragraphs are asserted absent from the **whole** page, in both
+    apostrophe spellings, by a phrase unique to each, not by "negative
+    control": the forest key may name the synonymous row's role, and a
+    negative on that phrase would fail on a caption it was never about -- and
+    since the forest key folded behind its own toggle (2026-10-26, D57) it
+    does: its muted clause says "its negative control". The fixture is a
+    synonymous row, so that clause renders, and it must not point at a fold
+    that has left the page; the toggle it sits in closes on a link to the
+    notes where they now are.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="synonymous")])
-    unfolded = re.sub(r"<details.*?</details>", "", page, flags=re.S)
+    section = _burden_section_text(page)
 
-    for general in ("every cell names what it counted", "negative control"):
-        assert general in page, f"{general!r} must still be on the page"
-        assert general not in unfolded, f"{general!r} must be behind the fold"
+    assert section.startswith(
+        "<p>Every count and statistic in the study tables below is an upstream study's, "
+        "republished as published; the atlas computes none of them. "
+        '<a href="../methods.html#rare-variants">How to read these results</a>.</p>'
+    )
+    assert '<details class="reading-notes"><summary>How to read these numbers' not in section
+    figure = _forest_figures(section)[0]
+    assert (
+        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
+        "negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+        in figure
+    )
+    for text in (page, html.unescape(page)):
+        for moved in (
+            "every cell names what it counted",
+            "synonymous variants should show no enrichment",
+            "Only a study that publishes one has it",
+            "How to read these numbers",
+            # The refuted mechanism for an absent row (2026-08-05).
+            "no variant of that class was seen in either group",
+            "every count and statistic below",
+            "Every count and statistic below",
+        ):
+            assert moved not in text, f"{moved!r} is back on the gene page"
 
 
 def test_the_matrix_names_an_untested_design_rather_than_leaving_a_blank(
@@ -3102,9 +3301,13 @@ def test_the_axis_key_glosses_the_null_line_in_its_own_panels_vocabulary(
     )
 
     figure = _forest_figures(section)[0]
-    axis = re.search(r"Axis: .*?\. ", figure, re.S)
+    # The axis line's own `<p>`, the caption's one visible line (D57). Until
+    # 2026-10-26 the caption was one run of sentences and this matched up to
+    # the first ". "; the axis sentence now ends at `</p>`, so that pattern
+    # would run on into the folded key and check a slice it was not about.
+    axis = re.search(r"<figcaption><p>(Axis: .*?)</p>", figure, re.S)
     assert axis is not None, "the panel prints no axis sentence"
-    sentence = axis.group(0)
+    sentence = axis.group(1)
 
     assert f"<strong>{label}</strong>" in sentence
     assert f"the vertical line is <strong>1</strong>, {gloss}." in sentence
@@ -3151,12 +3354,142 @@ def test_the_forest_carries_no_summary_diamond(
     caption = re.sub(r"<title>.*?</title>", "", figure, flags=re.S)
     assert "A forest plot usually ends in a summary diamond" in caption
     assert "no pooled" in caption
+    # "people", not "children" (2026-10-26): a shared collection may be an
+    # adult control cohort, and `shared_cohorts` counts control collections too.
+    assert (
+        "two studies that share a sample collection describe partly the same people, and "
+        "adding their rows would count them more than once." in caption
+    )
+    assert "children" not in caption
     # And the same scoping again, one level in: the caption and the title are
     # two sentences and a check over the figure is answered by either.
     announced = re.search(r"<title>(.*?)</title>", figure, re.S)
     assert announced is not None, "the figure announces nothing to a screen reader"
     assert "no pooled summary" in announced.group(1)
     assert "a pooled summary" not in announced.group(1).replace("no pooled summary", "")
+
+
+def test_the_forest_key_folds_behind_one_visible_axis_line(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D57: a chart caption is one visible line plus a "How to read this chart" toggle.
+
+    The key was one `<figcaption>` of up to twelve sentences under every panel
+    -- 185 panels on 114 pages, measured on a build of 9f24190. Only the axis
+    clause is particular to its panel (the measure, its range, and what 1
+    means for that measure), so it alone stays in sight; every other clause
+    describes a mark in words that are the same wherever that mark is drawn,
+    and folds. **Each clause keeps its condition**: the tests above that
+    assert a clause renders only beside its mark slice the figure, which
+    contains the toggle, so they hold unchanged; this one asserts where the
+    clauses sit.
+
+    One panel that draws every mark, so every conditional clause renders: a
+    surviving composite (filled), an arrow to the right (unbounded, its
+    correction failed: hollow), an arrow to the left (an effect of zero), a
+    stratum union whose non-syndromic half is absent (the not-fully-split
+    warning), and a synonymous row with no interval (hatched and muted).
+
+    Both halves are pinned whole, as literals, so a clause that leaves the
+    fold, drops out or changes fails here. That pins two clauses nothing
+    pinned before (inventory finding 1) -- the left arrow and the muted row --
+    and the muted clause changed on the fold: it ended "How to read these
+    results says why", a link to the same section the toggle now closes on,
+    so it names the row's role itself ("its negative control").
+    """
+    survived = {"pvalue_adjusted": 0.0037, "pvalue_adjustment": "benjamini_hochberg"}
+    placed: dict[str, object] = {"effect_bound": None}
+    page = _burden_page(
+        tmp_path,
+        facts_uncurated,
+        [
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="damaging",
+                effect=2.45,
+                ci_low=1.2,
+                ci_high=8.1,
+                **placed,
+                **survived,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="lof",
+                pvalue_adjusted=0.42,
+                pvalue_adjustment="benjamini_hochberg",
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="missense_damaging",
+                n_case_carriers=0,
+                effect=0.0,
+                ci_low=0.0,
+                ci_high=3.2,
+                pvalue_adjusted=1.0,
+                pvalue_adjustment="benjamini_hochberg",
+                **placed,
+            ),
+            _burden_row(
+                cohort_stratum="syndromic",
+                consequence_class="lof",
+                effect=3.1,
+                ci_low=1.4,
+                ci_high=9.0,
+                **placed,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="synonymous",
+                effect=1.1,
+                ci_low=None,
+                ci_high=None,
+                pvalue_adjusted=0.9,
+                pvalue_adjustment="benjamini_hochberg",
+                **placed,
+            ),
+        ],
+    )
+
+    figure = _forest_figures(_burden_section_text(page))[0]
+    caption = re.search(r"<figcaption>(.*?)</figcaption>", figure, re.S)
+    assert caption is not None, "the forest carries no caption"
+    visible, toggle, folded = caption.group(1).partition(
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+    )
+    assert toggle, "the forest key is not folded behind a toggle"
+    assert visible == (
+        "<p>Axis: <strong>OR</strong> on a logarithmic scale, 0.562 to 50; the vertical "
+        "line is <strong>1</strong>, no association.</p>"
+    )
+    assert folded == (
+        "<p>A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
+        "study's correction for multiple testing. "
+        "A <strong>hollow</strong> marker is a row that <strong>did not survive</strong> its "
+        "own study's correction for multiple testing, or whose study published no correction "
+        "at all &mdash; the atlas computes none of its own. "
+        "A forest plot usually ends in a summary diamond. There is <strong>no pooled</strong> "
+        "estimate here and none is computed anywhere on this site: two studies that share a "
+        "sample collection describe partly the same people, and adding their rows would "
+        "count them more than once. "
+        "A <strong>hatched</strong> bar means <strong>no interval published</strong> for "
+        "that row, not a wide one. "
+        "An arrow to the <strong>right</strong> is an effect unbounded above &mdash; no "
+        "control carried the variant &mdash; so the study's lower bound is the whole "
+        "finding and there is no point estimate to place. "
+        "An arrow to the <strong>left</strong> is an effect of zero &mdash; no case "
+        "carried the variant &mdash; which a logarithmic axis has no position for. "
+        "A row tagged <strong>union</strong> contains at least one other row in this panel "
+        "and is not an independent finding: <code>damaging</code> is the loss-of-function "
+        "and damaging-missense rows together; <code>all cases</code> is the syndromic and "
+        "non-syndromic rows together. "
+        "Here a tagged row is <strong>not fully split</strong>: at least one of the rows it "
+        "contains is not itself plotted, so what sits under a union on this panel is part of "
+        "it and not all of it. The table below carries every row this study published for "
+        "this gene. "
+        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
+        "negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+    )
 
 
 def test_a_forest_never_replaces_the_figures_it_summarises(
@@ -3182,10 +3515,11 @@ def test_a_forest_never_replaces_the_figures_it_summarises(
     assert "<table" in folded.group(0)
     assert "5 carriers / 1,471" in folded.group(0)
     assert "OR 2.45 (95% CI 1.2–8.1)" in folded.group(0)
-    # A section-wide `<details` check would not be enough: the reading notes
-    # and the how-this-study-counted block are both `<details>` a few lines
-    # above (CLAUDE.md section 4.19). Nor is `"<table" not in unfolded`: the
-    # evidence matrix is a table too, and it is outside the fold on purpose.
+    # A section-wide `<details` check would not be enough: the how-this-study-
+    # counted block is a `<details>` a few lines above, and the section's
+    # reading notes were one until 2026-10-26 (CLAUDE.md section 4.19). Nor is
+    # `"<table" not in unfolded`: the evidence matrix is a table too, and it is
+    # outside the fold on purpose.
     # Asserted on a count only this study's own table renders -- the matrix
     # cell carries the effect and one statistic and no count at all.
     unfolded = re.sub(r"<details.*?</details>", "", section, flags=re.S)
@@ -3311,8 +3645,10 @@ def test_the_rail_names_the_grade_the_panel_gave_and_the_disease_it_gave_it_for(
     Both halves now come from `fact.headline_confidence`, so this asserts the
     label, the disease and the chip class **as one string in one element**. A
     page-wide check on each separately would pass with the lookup keyed back on
-    `DEFINITIVE`, because `render.grade_legend` puts the word "definitive" on
-    every page (CLAUDE.md section 4.19).
+    `DEFINITIVE`, because `render.grade_legend` put the word "definitive" on
+    every page (CLAUDE.md section 4.19). It left the gene page for
+    `methods.html#scope` on 2026-10-26 (D50); the slice stays, because nothing
+    stops the next page-wide "definitive" from arriving.
     """
     fact, validity = _limited(TBX5)
     emitter = Emitter(root=tmp_path)
@@ -3374,7 +3710,7 @@ def test_a_gene_no_panel_graded_names_the_submitters_that_admitted_it(
         assert f"chip-{rung}" not in rail_html
 
 
-def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> None:
+def test_both_page_kinds_leave_the_grade_key_to_methods_html(tmp_path: Path) -> None:
     """A colour ramp with no key is a ranking the reader has to guess at.
 
     Until 2026-08-06 the site needed no key: every published gene was
@@ -3388,22 +3724,23 @@ def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> No
     and the gene page did not, and the gene page is where the omission did the
     damage.
 
-    Each rung's gloss is checked by a distinctive phrase rather than in full, so
-    this fails when a rung stops being explained and not when a comma moves.
+    **The label, the chip class and the gloss were asserted as one triple**,
+    because checking only that seven phrases appeared somewhere on the page let
+    `moderate` painted with `strong`'s chip survive all 796 tests (measured
+    2026-08-06).
 
-    **The label, the chip class and the gloss are asserted as one triple, and
-    that is the whole point of this test.** It checked only that seven phrases
-    appeared *somewhere on the page* until 2026-08-06, which says nothing about
-    which rung each is attached to. Measured that day: painting `moderate` with
-    `strong`'s chip -- inverting the colour ramp mid-ladder for the 10 genes on
-    those two rungs -- **survived all 796 tests**, as did swapping two glosses.
-    A ramp whose colours are checked only for presence is a ramp with no guard
-    at all, and the chips are the part a reader reads first.
-
-    Scoped to the `<dl>` inside the grade key rather than to the page, because
-    every one of these words also occurs in the rail, the browse table or the
-    scope rule; a page-wide substring check passes against a legend rendering
-    nothing (CLAUDE.md section 4.19).
+    **The key left both page kinds for `methods.html#scope` on 2026-10-26
+    (D50, P3)**, and this test was named
+    `test_both_page_kinds_gloss_every_grade_they_can_render` until then. The
+    triple assertion moved with the key, to `test_build_methods.py`, and so did
+    the reworded dispute sentence. Section 4.31 is still met, by a different
+    route: both page kinds carry the scope
+    short form, whose link names the key ("what each grade means"), and a gene
+    page's card glosses its own headline grade in the key's words. What stays
+    here is that neither page kind carries the key -- a copy left behind is a
+    copy that drifts from the one on `methods.html` -- and the two retired
+    denials, absent on both: a negative on published bytes is what fails when a
+    deleted sentence comes back (section 4.35).
     """
     fact, validity = _limited(TBX5)
     emitter = Emitter(root=tmp_path)
@@ -3421,41 +3758,18 @@ def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> No
         cohorts={},
     )
 
-    # (label a reader sees, chip class that colours it, phrase unique to its gloss)
-    rungs = (
-        ("definitive", "chip-definitive", "upheld over time"),
-        ("strong", "chip-strong", "without the years of replication"),
-        ("moderate", "chip-moderate", "several unrelated probands"),
-        ("limited", "chip-limited", "not yet made"),
-        ("no known association", "chip-warn", "found no evidence of a relationship"),
-        (
-            "not classified",
-            "chip-ungraded",
-            "two or more Gene Curation Coalition submitters independently assert it",
-        ),
-    )
     for name in ("index.html", "HGNC_11604.html"):
         page = _page(tmp_path, name)
-        assert "What these classifications mean" in page, f"{name} carries no grade key"
-        block = re.search(r'<details class="grade-key">.*?</details>', page, re.S)
-        assert block, f"{name} carries no grade key"
-        key = block.group(0)
-        legend = re.search(r"<dl>(.*?)</dl>", key, re.S)
-        assert legend, f"{name} carries no grade key rows"
-        pairs = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", legend.group(1), re.S)
-        assert len(pairs) == len(rungs), f"{name} glosses {len(pairs)} rungs, expected {len(rungs)}"
-        for (label, chip, gloss), (dt, dd) in zip(rungs, pairs, strict=True):
-            assert chip in dt, f"{name}: {label} is not chipped {chip} -- got {dt}"
-            assert f">{label}<" in dt, f"{name}: expected the label {label}, got {dt}"
-            assert gloss in dd, f"{name}: {label} is not glossed by {gloss!r}"
-
-        # The scope-qualified claim, on both page kinds. Unqualified it was false
-        # for 5 published genes carrying an out-of-scope ClinGen `Disputed`; and
-        # its in-scope half went false on 2026-10-25, when six published
-        # RASopathy genes gained an in-scope `Disputed` for Costello or CFC.
-        assert "No gene here is published on a disputed or refuted grade." in key
-        assert "No gene here was disputed or refuted by an expert panel" not in page
-        assert "not published here at all" not in page
+        assert 'class="grade-key"' not in page, f"{name} still carries the grade key"
+        assert "What these classifications mean" not in page, f"{name} still folds a key"
+        # Unqualified it was false for 5 published genes carrying an
+        # out-of-scope ClinGen `Disputed`; and its in-scope half went false on
+        # 2026-10-25, when six published RASopathy genes gained an in-scope
+        # `Disputed` for Costello or CFC. Both spellings, as everywhere a
+        # retired phrase is asserted absent.
+        for text in (page, html.unescape(page)):
+            assert "No gene here was disputed or refuted" not in text
+            assert "not published here at all" not in text
 
 
 # --- Developmental expression -----------------------------------------------
@@ -5562,9 +5876,11 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     it in a CHD atlas with nothing saying why the syndrome counts, and takes it
     for a grade for heart disease. The notes sit above both groups of
     classifications, because a warrant concerns the disease, which either group
-    may grade. The scope rule at the top of the page names the
-    Orphanet path too, and is checked here on the built element, not on the
-    constant that produced it.
+    may grade. The scope rule at the top of the page named the Orphanet path
+    too, and was checked here on the built element; it moved to
+    `methods.html#scope` on 2026-10-26 (D50), and its Orphanet clause and
+    `scope.json` parenthetical are pinned there, by `test_build_methods.py`.
+    The page keeps a short form that names neither.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5608,36 +5924,15 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     # A disease an expert panel curated as CHD gets no Orphanet sentence.
     assert "Holt-Oram syndrome is in scope because" not in section
 
-    rule = _slice_between(page, '<p class="scope-rule">', ("</p>",))
-    assert (
-        "for a disease that an external authority treats as congenital heart disease (or in "
-        "which <strong>Orphanet records a structural heart malformation in at least 30% of "
-        "cases</strong>)"
-    ) in rule
-    assert "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)" in rule
 
-
-def test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """The sentence went false when Costello and CFC syndrome entered scope (2026-10-25).
-
-    It read "No gene here was disputed or refuted by an expert panel for a disease
-    an external authority treats as congenital heart disease". ClinGen's RASopathy
-    panel disputes six published genes for those two syndromes, and PTPN11's page
-    carried the denial beside two `Disputed` rows. Pinned on built bytes, both
-    ways: the replacement present, the denial absent (CLAUDE.md section 4.35).
-    """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    key = _slice_between(page, '<details class="grade-key">', ("</details>",))
-    assert (
-        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
-        "may still have disputed the same gene for a different disease. Where that disease "
-        "is one an external authority treats as congenital heart disease, the record is in "
-        "the table below, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries "
-        "a <em>conflicting evidence</em> flag."
-    ) in key
-    assert "No gene here was disputed or refuted" not in page
+# `test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays` sat
+# here until 2026-10-26, pinning the grade key's dispute sentence on a gene page.
+# The key moved to `methods.html#scope` (D50) and the test moved with it, its
+# docstring and its literal reworded for the new position:
+# `test_scope_states_where_a_dispute_is_listed_without_pointing_below` in
+# `test_build_methods.py`. Its gene-page negative ("No gene here was disputed or
+# refuted" absent) is asserted on both page kinds by
+# `test_both_page_kinds_leave_the_grade_key_to_methods_html`.
 
 
 @pytest.mark.parametrize(
@@ -5762,6 +6057,12 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
     the copy is ClinGen-submitted -- folded away or listed -- so a visible ClinGen
     row is never unexplained, and be absent only for "another submitter", which is
     no copy at all.
+
+    **The notice's last sentence says "every copy" since 2026-10-26**, pinned
+    whole. It said "This gene's JSON keeps every record", beneath an intro that
+    now says the table may not be every classification the gene has -- so it
+    read as though the JSON held the out-of-scope records the intro means. It
+    holds none; it does hold every copy (`methods.html#validity` says the same).
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5775,13 +6076,17 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
         cohorts={},
     )
 
-    others = _slice_between(
-        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2",)
-    )
+    page = _page(tmp_path, "HGNC_4173.html")
+    others = _slice_between(page, "<h3>Other curators (GenCC)</h3>", ("<h2",))
     assert others.count("<tr><td>") == (1 if listed else 0)
-    assert ("listed here only where it differs" in others) is (
-        copy_overrides.get("submitter", "ClinGen") == "ClinGen"
+    notice = (
+        "<p>ClinGen also submits its own classifications to the Gene Curation Coalition; "
+        "such a copy is listed here only where it differs from the panel record above, "
+        "carries no date, or has no panel record to match. "
+        "This gene's JSON keeps every copy.</p>"
     )
+    assert (notice in others) is (copy_overrides.get("submitter", "ClinGen") == "ClinGen")
+    assert "keeps every record" not in page
 
 
 def test_a_copy_spelling_the_panels_rung_differently_is_still_folded(
@@ -5832,6 +6137,17 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     raw -- ClinGen's `AD` against GenCC's phrase, an ISO timestamp against a
     space-separated one -- so each raw surface the old table exposed is pinned
     by at least one assertion.
+
+    **The intro states the table's own truth condition since 2026-10-26 (D50).**
+    The grade key said "a gene page lists only records for diseases in this
+    atlas's remit", and the key left the page for `methods.html#scope`; so the
+    intro now says it where the table is, and links `methods.html#validity`
+    for how the records are listed. Pinned whole, sliced from the heading to
+    the first group: nothing else sits there on a gene with no Orphanet note.
+    It says the table **may not** be every classification the gene has, not
+    that it is not: measured 2026-10-26 against the committed mirrors, 43 of
+    the 119 published genes have no ClinGen or GenCC record for any disease
+    outside scope, so "is not" was false on 43 pages.
     """
     panel = replace(_validity().records[0], classification_date="2024-11-07T17:00:00.000Z")
     submission = ValidityRecord(
@@ -5879,9 +6195,12 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     assert "<td>2018-05-31</td>" in section and "20:04:32" not in section
     intro = (
         "<p>Every classification below is an upstream panel's or submitter's, "
-        "republished with its provenance intact.</p>"
+        "republished with its provenance intact. Only records for diseases in this "
+        "atlas&#x27;s remit are listed, so this may not be every classification this gene "
+        'has (<a href="../methods.html#validity">how these records are listed</a>).</p>'
     )
-    assert intro in section
+    head = section[: section.index("<h3>")]
+    assert head == "<h2>Mirrored gene&ndash;disease validity</h2>" + intro
     # "below" is true only above both groups.
     assert section.index(intro) < section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.count("<td>Autosomal dominant</td>") == 2

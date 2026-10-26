@@ -221,7 +221,8 @@ def test_an_attribution_the_mirror_does_not_support_is_reported() -> None:
     while every published page asserts the term came from an external authority.
 
     ERROR, not WARNING: a false attribution is a provenance claim the atlas
-    cannot support, and `_SCOPE_RULE` publishes it on all 24 pages.
+    cannot support, and the scope rule published it on all 24 pages
+    (`pages._SCOPE_RULE` then; `methods.SCOPE_RULE` since 2026-10-26, D50).
 
     The truthful entry is asserted in the same test rather than a separate one:
     a check that reports everything passes this file's negative case too, and
@@ -268,7 +269,7 @@ def test_a_commercial_submitters_term_cannot_be_relabelled_as_clingens_chd_panel
     set and asked only "did some authority use this term" -- so a curator could
     take a term whose sole warrant is a commercial laboratory's GenCC
     submission, write `admitted_by: clingen_chd_panel`, leave the laboratory in
-    `attributed_to`, and pass. `_SCOPE_RULE` then tells every reader on 24 pages
+    `attributed_to`, and pass. The scope rule then tells every reader on 24 pages
     that a ClinGen expert panel scoped the disease. Found by adversarial review
     of #30.
 
