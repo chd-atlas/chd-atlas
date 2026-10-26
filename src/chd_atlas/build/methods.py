@@ -311,11 +311,19 @@ _RARE_VARIANTS: Final = (
     # (measured on a real build: 113 panels, one synonymous row per case group
     # of PMID:42230622), so it is "one of a study's synonymous rows", true for
     # one or many.
+    #
+    # One sentence added 2026-10-26, when a marker's fill began reading
+    # `concordance.survives_own_correction` for every row but a synonymous one
+    # (`pages._survived_correction`): a depleted row that cleared its
+    # correction is drawn hollow, and "did not" survive would be false of it.
+    # 0 published rows are in that state (measured that day).
     "<p>A forest plot shows each row's effect and interval on a logarithmic axis. A "
     "<strong>filled</strong> marker is a row that survived its own study's correction for "
     "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
     "study published no correction at all &mdash; the atlas computes none of its own. A "
-    "forest plot usually ends in a summary diamond; this atlas's have none, because no "
+    "row that survived its correction without pointing to enrichment in cases is drawn "
+    "hollow too: it is not evidence for the gene. A forest plot usually ends in a "
+    "summary diamond; this atlas's have none, because no "
     "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
     "means no interval was published for that row, not a wide one. An arrow to the "
     "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "

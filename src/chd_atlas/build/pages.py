@@ -72,7 +72,12 @@ from typing import Final, NamedTuple
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
-from chd_atlas.build.concordance import FamilyState, family_state, survives_own_correction
+from chd_atlas.build.concordance import (
+    FamilyState,
+    deciding_rows,
+    family_state,
+    survives_own_correction,
+)
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, external_links
@@ -1688,12 +1693,13 @@ def _effect(row: BurdenRow) -> str:
     header reading "effect" equates them. `_MEASURE_LABEL` is therefore consulted
     on every row and there is no branch that omits it.
 
-    `unbounded` rather than a number, and rather than a blank. Fisher's exact
-    test returns an infinite odds ratio where no control carries, which is the
-    strongest result in the data and also the one `encode_json`'s
-    `allow_nan=False` refuses to publish. The lower bound survives and is the
-    whole finding: TAB2's syndromic row says the true odds ratio is at least
-    28.1, which a blank cell would have thrown away.
+    `∞` rather than a number, and rather than a blank. Fisher's exact test
+    returns an infinite odds ratio where no control carries, which
+    `encode_json`'s `allow_nan=False` refuses to publish -- and which says
+    nothing about how strong the result is: 20 of the 37 such mirrored rows
+    have a lower bound below 1 (measured 2026-10-26). The lower bound survives
+    and is the whole finding: TAB2's syndromic row says the true odds ratio is
+    at least 28.1, which a blank cell would have thrown away.
     """
     if row.effect_measure is None:
         return _EM_DASH
@@ -2327,11 +2333,18 @@ def _evidence_matrix(
     about a design the whole corpus lacks. Measured 2026-08-05: three columns,
     none of them CNV de novo.
 
-    The cell shows the most significant row in it, ordered by corrected p where
+    The cell shows the most significant of the rows that give it its state
+    (`concordance.deciding_rows`) -- the surviving rows of a `corrected` cell,
+    the supporting rows of a `nominal` one -- ordered by corrected p where
     published and by raw p otherwise, tie-broken on
     `(consequence_class, cohort_stratum)` so the choice is deterministic across
-    builds. Where a cell holds more than one row the count is stated, so a
-    reader knows the cell summarises and the table below is the record.
+    builds. It chose among every row in the cell until 2026-10-26, and GJA1's
+    de novo cell in PMID:40127276 named its `damaging` union (p 0.0613, q
+    0.200) under the `nominal` glyph its missense row (p 0.0468) had earned:
+    measured that day on a real build, 1 of the 109 enriched cells named a row
+    its state is not true of. Where a cell holds more than one row the count is
+    stated, so a reader knows the cell summarises and the table below is the
+    record.
     """
     if not rows or not families or not axes:
         return ""
@@ -2382,23 +2395,25 @@ def _matrix_cell(rows: Sequence[BurdenRow]) -> str:
         )
 
     state = family_state(rows)
-    # Most significant first: corrected p where published, raw p otherwise, then
-    # a stable tie-break so two builds pick the same row.
-    best = sorted(
-        rows,
-        key=lambda row: (
-            row.pvalue_adjusted if row.pvalue_adjusted is not None else (row.pvalue or 1.0),
-            row.consequence_class,
-            row.cohort_stratum,
-        ),
-    )[0]
-
     if state is FamilyState.NO_ENRICHMENT:
         detail = f"n = {len(rows)}" if len(rows) > 1 else "&nbsp;"
         return (
             f'<td><span class="cell no-enrichment" title="{_STATE_TITLE["no_enrichment"]}">'
             f'{_STATE_CELL["no_enrichment"]}<br><span class="sub">{detail}</span></span></td>'
         )
+
+    # Most significant first among the rows the state is true of -- never a
+    # row that is not support, or not a survivor under a `corrected` glyph --
+    # by corrected p where published, raw p otherwise, then a stable tie-break
+    # so two builds pick the same row.
+    best = sorted(
+        deciding_rows(rows),
+        key=lambda row: (
+            row.pvalue_adjusted if row.pvalue_adjusted is not None else (row.pvalue or 1.0),
+            row.consequence_class,
+            row.cohort_stratum,
+        ),
+    )[0]
 
     # **The cell is a summary; the table below is the record.** So it carries the
     # effect and one statistic and stops there. The full spelling -- the
@@ -2430,22 +2445,32 @@ def _matrix_cell(rows: Sequence[BurdenRow]) -> str:
 def _effect_compact(row: BurdenRow) -> str:
     """The effect and its measure, without the interval. For the matrix cell only.
 
-    **The measure survives; only the interval is dropped.** `_effect`'s rule --
-    that no branch omits the measure, because an odds ratio of 3.1 and a de novo
-    enrichment of 3.1 are different claims -- is the one property this must not
-    trade for width. The interval is a different kind of thing: it qualifies the
-    estimate rather than naming it, and it is in the row's own table a screen
-    below, plus on this cell's `title`.
+    **The measure survives; the interval is dropped, except for an unbounded
+    effect.** `_effect`'s rule -- that no branch omits the measure, because an
+    odds ratio of 3.1 and a de novo enrichment of 3.1 are different claims --
+    is the one property this must not trade for width. The interval is a
+    different kind of thing: it qualifies the estimate rather than naming it,
+    and it is in the row's own table a screen below, plus on this cell's
+    `title`.
 
-    An unbounded effect still renders `OR &infin;` rather than a blank, for the
-    reason `_effect` does: it is the strongest result in the data and the one
-    `allow_nan=False` refuses to publish as a number.
+    **An unbounded effect keeps its lower bound: `OR ∞ (CI 0.786–∞)`**, never a
+    bare `OR ∞` and never a `≥` (see `_effect`). Fisher returns an infinite
+    odds ratio wherever no control carries, which says nothing about how large
+    the effect is: the lower bound is the finding, and alone `∞` reads as
+    "infinitely enriched". This rendered the bare form until 2026-10-26, and
+    on TBX5's and ZEB2's cells "OR ∞" over "p 0.0316" stood for an interval of
+    0.786–∞ that spans 1, visible only on hover. Measured that day: 37 of the
+    1,805 mirrored rows are unbounded above and 20 of them have a lower bound
+    below 1 (29 and 14 of the 1,210 published), and 9 matrix cells name one.
+    The bare form is the fallback for an unbounded row with no lower bound, of
+    which there are none.
     """
     if row.effect_measure is None:
         return _EM_DASH
     measure = _MEASURE_LABEL.get(row.effect_measure, row.effect_measure)
     if row.effect_bound == "unbounded_above":
-        return f"{measure} ∞"
+        low = f" (CI {_fmt(row.ci_low)}–∞)" if row.ci_low is not None else ""
+        return f"{measure} ∞{low}"
     if row.effect is None:
         return _EM_DASH
     return f"{measure} {_fmt(row.effect)}"
@@ -2510,7 +2535,9 @@ _EFFECT_AXIS_PAD: Final = 10.0**0.25
 # applies to any number. It is applied to a p-value the **study** corrected and
 # published; the atlas corrects nothing (D12/D33), which is why a row whose
 # study published no correction at all is drawn hollow rather than filled --
-# nothing says it survived one.
+# nothing says it survived one. A non-synonymous row's fill reads
+# `concordance.survives_own_correction` instead, against the same 0.05
+# (`concordance.ALPHA`); see `_survived_correction`.
 _CORRECTED_ALPHA: Final = 0.05
 
 # The two unions this schema contains, each as (the union's own value, the
@@ -2551,8 +2578,8 @@ _NO_EFFECT_MEASURE: Final = (
 def _plottable(row: BurdenRow) -> bool:
     """Whether this row can be placed on an effect axis at all.
 
-    An `unbounded_above` row **is** plottable and renders as an arrow: those
-    rows carry the strongest signals in the mirror (TAB2: 5 syndromic
+    An `unbounded_above` row **is** plottable and renders as an arrow: some of
+    those rows carry the strongest signals in the mirror (TAB2: 5 syndromic
     carriers, 0 of 45,082 controls), and `ci_low` is the finding. Excluding
     them was an error in this plan's own first measurements.
 
@@ -2645,19 +2672,56 @@ def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, b
 
 
 def _survived_correction(row: BurdenRow) -> bool:
-    """Whether this row cleared **its own study's** correction for multiple testing.
+    """Whether this row's forest marker is drawn as having cleared **its own
+    study's** correction for multiple testing.
 
     Never a correction this atlas computed -- there is none (D12/D33). A row
     whose study published no correction is `False` for the same honest
     reason a row that failed one is: nothing says it cleared anything.
 
-    One predicate, because it decides the fill of two different glyphs.
+    **For every row but a synonymous one this is
+    `concordance.survives_own_correction`**, the rule the card and the
+    evidence matrix on the same page read, so the three cannot disagree about
+    a row (CLAUDE.md section 4.28). It read the corrected p alone until
+    2026-10-26, so a depleted row with q below 0.05 would have been drawn
+    filled while the card said none survives a correction its study
+    published. 0 published rows differed between the two rules that day.
+
+    **A synonymous row keeps the corrected p alone**, because the shared rule
+    never passes one -- a negative control is not support -- and a surviving
+    one is a warning about the comparison that `_mark_class` draws muted
+    rather than hollow. One predicate, because it decides the fill of two
+    different glyphs and the key's clauses about them.
     """
-    return row.pvalue_adjusted is not None and row.pvalue_adjusted < _CORRECTED_ALPHA
+    if row.consequence_class == "synonymous":
+        return row.pvalue_adjusted is not None and row.pvalue_adjusted < _CORRECTED_ALPHA
+    return survives_own_correction(row)
+
+
+def _survived_against_the_gene(row: BurdenRow) -> bool:
+    """A non-synonymous row that cleared its study's correction without supporting the gene.
+
+    Drawn hollow by `_survived_correction`, so the key's hollow clause --
+    "did not survive" -- is false of it, and `_forest_caption` adds a clause
+    wherever one is drawn. On a validated corpus that means a row whose
+    statistic does not point to enrichment in cases: BUR018 refuses a
+    corrected p smaller than its raw one, so a corrected p below 0.05 implies
+    a raw p below it too. Latent: 0 published rows (measured 2026-10-26).
+    """
+    return (
+        row.consequence_class != "synonymous"
+        and row.pvalue_adjusted is not None
+        and row.pvalue_adjusted < _CORRECTED_ALPHA
+        and not _survived_correction(row)
+    )
 
 
 def _mark_class(row: BurdenRow, glyph: str) -> str:
     """Filled where the study's own correction was survived, hollow where not.
+
+    "Survived" is `_survived_correction`: for every row but a synonymous one,
+    survived *as support for the gene* -- the card's and the matrix's rule --
+    so a depleted row that cleared its correction is hollow (2026-10-26).
 
     **`glyph` is the shape, and the fill rule is the same for every shape.**
     A panel draws two of them -- `point` for a placed estimate, `arrow` for a
@@ -2970,6 +3034,14 @@ def _forest_caption(
     vocabulary. The sibling `<title>` on the same figure had always varied
     correctly, which is why reading the panel did not show it.
 
+    **The survived-but-hollow clause (2026-10-26)** renders only where a
+    non-synonymous row cleared its study's correction without supporting the
+    gene (`_survived_against_the_gene`), which `_mark_class` draws hollow --
+    no published panel today. The hollow clause's "did not survive" is false
+    of that row, so the hollow clause renders only for the other hollow rows
+    and the new clause stands on its own where that row is the panel's only
+    one.
+
     **The union clause is conditional twice**: once on a union being shown as
     one at all, and once more on whether every tagged row is fully split.
     Measured 2026-08-20: 10 panels tag a row with only one of its two
@@ -3001,11 +3073,20 @@ def _forest_caption(
             "A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
             "study's correction for multiple testing. "
         )
-    if any(not _survived_correction(row) for row in rows):
+    if any(not _survived_correction(row) and not _survived_against_the_gene(row) for row in rows):
         parts.append(
             "A <strong>hollow</strong> marker is a row that <strong>did not survive</strong> its "
             "own study's correction for multiple testing, or whose study published no correction "
             "at all &mdash; the atlas computes none of its own. "
+        )
+    # The one hollow row the clause above is false of; see
+    # `_survived_against_the_gene`. Self-contained, because on a panel where it
+    # is the only hollow row the clause above does not render.
+    if any(_survived_against_the_gene(row) for row in rows):
+        parts.append(
+            "A row that <strong>survived</strong> its own study's correction without pointing "
+            "to enrichment in cases is drawn <strong>hollow</strong>: it is not evidence for "
+            "this gene. "
         )
     parts.append(
         "A forest plot usually ends in a summary diamond. There is <strong>no pooled</strong> "

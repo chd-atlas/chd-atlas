@@ -2497,8 +2497,34 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
         )
 
 
+# One matrix cell's state, `title`, visible effect and statistic, in order.
+_MATRIX_CELL: Final = re.compile(
+    r'class="cell (corrected|nominal)" title="([^"]*)">(.*?)<br><span class="sub">([^<]*)</span>'
+)
+
+
+@pytest.mark.parametrize(
+    ("row", "shown"),
+    [
+        pytest.param(
+            _burden_row(effect=6.53, effect_bound=None, ci_low=2.1, ci_high=20.3),
+            "OR 6.53",
+            id="bounded: the interval is dropped",
+        ),
+        pytest.param(
+            _burden_row(ci_low=0.786, pvalue=0.0316),
+            "OR ∞ (CI 0.786–∞)",
+            id="TBX5: unbounded, the lower bound kept",
+        ),
+        pytest.param(
+            _burden_row(ci_low=None),
+            "OR ∞",
+            id="unbounded with no lower bound to keep",
+        ),
+    ],
+)
 def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts], row: BurdenRow, shown: str
 ) -> None:
     """The one property `_effect_compact` trades width for, and the one it does not.
 
@@ -2513,27 +2539,25 @@ def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
     2026-08-05 found that dropping it from the compact form survived the entire
     suite, which is the only reason this test exists.
 
-    An unbounded effect still renders `∞` rather than a blank, for the reason
-    `_effect` does: it is the strongest result in the data, and the one
-    `allow_nan=False` refuses to publish as a number.
+    **An unbounded effect keeps its lower bound** (2026-10-26). It rendered a
+    bare `OR ∞`, and on TBX5's and ZEB2's cells "OR ∞" over "p 0.0316" stood for
+    an interval of 0.786–∞ that spans 1, visible only on hover -- the reading
+    `_effect` already refuses, "infinitely enriched" with the bound that
+    contradicts it out of sight. The bare form is left only where there is no
+    bound to keep. Asserted on the cell's visible text, sliced from its `title`,
+    which carries the interval wherever the row has one.
     """
-    rows = [
-        _burden_row(consequence_class="lof", effect=6.53, effect_bound=None, ci_low=2.1),
-        _burden_row(consequence_class="missense_damaging"),  # the unbounded fixture
-    ]
-    page = _burden_page(tmp_path, facts_uncurated, rows)
-    section = page[page.index(_RARE_VARIANT_HEADING) :]
-    matrix = section[section.index('<table class="matrix">') : section.index("</table>")]
+    page = _burden_page(tmp_path, facts_uncurated, [row])
+    section = _burden_section_text(page)
+    matrix = _slice_between(section, '<table class="matrix">', ("</table>",))
 
-    # The measure travels with every number.
-    assert "OR 6.53" in matrix or "OR ∞" in matrix
-    assert (
-        re.search(r'class="cell (corrected|nominal)"[^>]*>(?!OR|enrichment|rate)', matrix) is None
-    )
-
-    # The interval does not -- it is in the table below and on the cell's title.
-    assert "95% CI" not in matrix
-    assert "95% CI" in section[section.index("</table>") :]
+    [(_, title, visible, _)] = _MATRIX_CELL.findall(matrix)
+    assert visible == shown
+    # The interval is on hover, and spelled in full only there and in the table.
+    interval = row.ci_low is not None
+    assert ("95% CI" in title) is interval
+    assert "95% CI" not in re.sub(r'title="[^"]*"', "", matrix)
+    assert ("95% CI" in section[section.index("</table>") :]) is interval
 
 
 def test_the_browse_headers_and_cells_line_up(
@@ -3250,6 +3274,73 @@ def test_marker_fill_encodes_survival_of_the_studys_own_correction(
     # `var(--link)` leaves all 604 hollow circles on the site indistinguishable
     # from the 250 filled ones.
     assert ".chart-point-open { fill: var(--bg); stroke: var(--link); stroke-width: 1.6; }" in page
+
+
+def test_a_survivor_that_is_not_support_is_hollow_and_the_key_says_why(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The forest's fill reads the card's rule, and its key names no fill it does not draw.
+
+    **A depleted row that cleared its correction is hollow (2026-10-26).** The
+    fill read the corrected p alone, so this row would have been drawn filled
+    while the card beside it said none survives a correction its study
+    published: the card and the evidence matrix read
+    `concordance.survives_own_correction`, which counts only support. Now every
+    row but a synonymous one is filled by that rule. 0 published rows differed
+    between the two rules that day, so this fixture is the only place the
+    difference is drawn. The hollow clause, "did not survive", is false of
+    this row, so the key says what it is instead -- and only that, because it
+    is the panel's only hollow row.
+
+    **And no filled clause where only the negative control survived.** A
+    surviving synonymous row is drawn muted, never in the result colour, and a
+    key promising a filled marker would send a reader hunting for one. Keying
+    the clause on survival alone survived the release review's 634-test
+    mutation run until this case (2026-10-26).
+    """
+    corrected: dict[str, object] = {"pvalue_adjustment": "benjamini_hochberg"}
+    page = _burden_page(
+        tmp_path,
+        facts_uncurated,
+        [
+            _burden_row(
+                cohort_stratum="all",
+                effect=0.31,
+                effect_bound=None,
+                ci_low=0.12,
+                ci_high=0.74,
+                pvalue=0.001,
+                pvalue_adjusted=0.012,
+                **corrected,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="synonymous",
+                effect=2.0,
+                effect_bound=None,
+                ci_low=1.3,
+                ci_high=3.1,
+                pvalue=0.0004,
+                pvalue_adjusted=0.008,
+                **corrected,
+            ),
+        ],
+    )
+
+    [figure] = _forest_figures(_burden_section_text(page))
+    assert figure.count('class="chart-point-open"') == 1
+    assert figure.count('class="chart-control-point"') == 1
+    assert 'class="chart-point"' not in figure
+    assert (
+        "A row that <strong>survived</strong> its own study's correction without pointing to "
+        "enrichment in cases is drawn <strong>hollow</strong>: it is not evidence for this "
+        "gene." in figure
+    )
+    assert "<strong>did not survive</strong>" not in figure
+    assert "A <strong>filled</strong> marker" not in figure
+    assert "A <strong>muted</strong> row is one of this study's" in figure
+    # The card on the same page reads the same rule.
+    assert "none survives a correction its study published" in _card_variants(_rail_of(page))
 
 
 def test_a_gene_with_no_plottable_row_gets_a_sentence_and_no_chart(
@@ -6842,6 +6933,68 @@ def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
 
     lines = re.findall(r"<li>(.*?)</li>", _card_variants(_rail_of(page)))
     assert [line.split(" · ")[0] for line in lines] == ["Sierant MC et al. 2025"]
+
+
+@pytest.mark.parametrize(
+    ("rows", "cell"),
+    [
+        pytest.param(
+            [
+                _sierant_de_novo(effect=15.8, pvalue=0.0613, pvalue_adjusted=0.200),
+                _sierant_de_novo(
+                    consequence_class="missense_damaging",
+                    effect=20.8,
+                    pvalue=0.0468,
+                    pvalue_adjusted=0.270,
+                ),
+                _sierant_de_novo(
+                    consequence_class="lof", effect=0.0, pvalue=1.0, pvalue_adjusted=1.0
+                ),
+            ],
+            ("nominal", "enrichment 20.8; 0.27 (Benjamini-Hochberg)", "enrichment 20.8", "q 0.27"),
+            id="GJA1: nominal by its missense row, not by the lower-q damaging union",
+        ),
+        pytest.param(
+            [
+                _sierant(),
+                _sierant(
+                    consequence_class="lof",
+                    effect=4.2,
+                    pvalue=1.2e-5,
+                    pvalue_adjusted=None,
+                    pvalue_adjustment=None,
+                ),
+            ],
+            ("corrected", "OR 2.31; 0.00944 (Benjamini-Hochberg)", "OR 2.31", "q 0.00944"),
+            id="corrected by its survivor, not by a lower raw p no correction cleared",
+        ),
+    ],
+)
+def test_the_matrix_cell_names_a_row_its_state_is_true_of(
+    tmp_path: Path,
+    facts_uncurated: dict[str, GeneFacts],
+    rows: list[BurdenRow],
+    cell: tuple[str, str, str, str],
+) -> None:
+    """The cell's glyph and the row it names come from one rule (2026-10-26).
+
+    The cell named the most significant row in it -- corrected p where
+    published, raw p otherwise -- whatever that row's role. GJA1's de novo cell
+    in PMID:40127276 is `nominal` because its missense row is (p 0.0468, q
+    0.270), and it named the `damaging` union (p 0.0613, q 0.200) under the
+    "enriched nominally" glyph: a row that is not nominally significant at all.
+    1 of 109 enriched cells on a real build. The fixture is GJA1's three rows.
+
+    The second case is the same defect under the `corrected` glyph: a
+    supporting row whose study published no correction sorts on its raw p, and
+    1.2e-5 sorts before the survivor's q of 0.00944. It names the survivor.
+    Both read `concordance.deciding_rows`, which `family_state` reads its tier
+    from, so the glyph and the named row cannot come apart again.
+    """
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES)
+    matrix = _slice_between(_burden_section_text(page), '<table class="matrix">', ("</table>",))
+
+    assert _MATRIX_CELL.findall(matrix) == [cell]
 
 
 _NO_TESTS_REPORTED: Final = {

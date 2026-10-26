@@ -481,6 +481,12 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     singular, while every panel that draws one draws three -- one synonymous row
     per case group, 113 panels on a real build -- so it is "one of a study's
     synonymous rows".
+
+    **One sentence added the same day**, when a marker's fill began reading
+    `concordance.survives_own_correction` for every row but a synonymous one:
+    a depleted row that cleared its correction is drawn hollow, and "a hollow
+    marker is a row that did not" survive is false of it. Latent: 0 published
+    rows are in that state.
     """
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
@@ -520,7 +526,9 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "<strong>filled</strong> marker is a row that survived its own study's correction for "
         "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
         "study published no correction at all &mdash; the atlas computes none of its own. A "
-        "forest plot usually ends in a summary diamond; this atlas's have none, because no "
+        "row that survived its correction without pointing to enrichment in cases is drawn "
+        "hollow too: it is not evidence for the gene. A forest plot usually ends in a "
+        "summary diamond; this atlas's have none, because no "
         "pooled estimate is computed anywhere on this site. A <strong>hatched</strong> bar "
         "means no interval was published for that row, not a wide one. An arrow to the "
         "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
