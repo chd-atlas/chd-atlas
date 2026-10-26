@@ -446,6 +446,21 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     # The claim the widening made false must not come back (section 4.35: the
     # negative assertion is the half nobody is watching for).
     assert "Every gene here is published on an upstream expert panel" not in text
+    # D49: the figures count every rare-variant test, and a de novo enrichment is
+    # not a burden test, so the front page never calls them "burden statistics".
+    assert "Rare-variant statistics are reported per independent cohort family" in sentence
+    assert "burden statistic" not in text.lower()
+    # D49: the definition names all three analyses, as literal prose (not the
+    # source constant), and says "copy-number variants" so a future non-deletion
+    # CNV analysis does not make it false.
+    definition = re.search(r"<p>A <strong>rare-variant statistic</strong>.*?</p>", text, re.S)
+    assert definition, "the front page carries no definition of a rare-variant statistic"
+    assert " ".join(re.sub(r"<[^>]+>", "", definition.group(0)).split()).startswith(
+        "A rare-variant statistic is one study's rare-variant test of one gene under one "
+        "design: a case-control burden test of rare SNVs and indels or of copy-number "
+        "variants, or a de novo enrichment test, which are different analyses and are named "
+        "as such on each gene's page."
+    )
 
 
 def test_the_published_and_mirrored_counts_are_derived_not_hardcoded(tmp_path: Path) -> None:
@@ -597,14 +612,14 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     for value, label in (
         (4, "genes published"),
         (3, "independent datasets"),
-        (6, "burden statistics"),
+        (6, "rare-variant statistics"),
     ):
         assert re.search(
             rf'"figure-value">{value}</span> <span class="figure-label">{label}<', hero
         ), f"the hero no longer states {value} beside {label!r}"
-    assert re.search(r"<dt>Burden statistics</dt>\s*<dd>6</dd>", listed)
+    assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
-    assert re.search(r"<dt>Genes with burden evidence</dt>\s*<dd>2</dd>", listed)
+    assert re.search(r"<dt>Genes with rare-variant evidence</dt>\s*<dd>2</dd>", listed)
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
 
 
@@ -755,8 +770,8 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
     # label because "Phenotype terms (HPO)" carries regex metacharacters.
     cards = {
         "assertions": "Curated gene-disease assertions",
-        "burden_combined": "Within-study combined burden results",
-        "burden_rows": "Burden statistics",
+        "burden_combined": "Within-study combined rare-variant results",
+        "burden_rows": "Rare-variant statistics",
         "cohort_families": "Independent datasets",
         "cohorts": "Sample collections",
         "datasets": "Omics datasets",
