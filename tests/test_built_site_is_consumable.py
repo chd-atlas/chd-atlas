@@ -134,15 +134,18 @@ def test_every_html_page_the_build_writes_carries_the_research_use_notice(site: 
     and the browse page. That fails on a gene page that was not written and on a
     stray page that was, which is what this guards, and it does not fail merely
     because the population moved.
+
+    `+ 3` since 2026-10-26: `methods.html`, the site's reading notes (D50), is
+    the third page that is not a gene's.
     """
     pages = sorted(site.rglob("*.html"))
     bundles = sorted((site / "genes").glob("HGNC_*.json"))
-    expected = len(bundles) + 2
+    expected = len(bundles) + 3
 
     assert len(bundles) > 1, "the build published no gene bundles; the fixture is broken"
     assert len(pages) == expected, (
-        f"expected {expected} HTML pages (1 landing + 1 browse + {len(bundles)} gene "
-        f"pages), found {len(pages)}"
+        f"expected {expected} HTML pages (1 landing + 1 browse + 1 methods + "
+        f"{len(bundles)} gene pages), found {len(pages)}"
     )
     for page in pages:
         assert RESEARCH_USE_NOTICE in page.read_text(encoding="utf-8"), (
@@ -264,21 +267,30 @@ def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site
         assert type(identity["ncbi_gene"]) is int, entry["gene"]
 
 
-def _page_links(site: Path) -> list[tuple[str, str, str]]:
+def _page_links(site: Path) -> list[tuple[str, str, str, str]]:
     """Every internal `href` on every built page, with the page that carries it.
 
-    Returns `(page, href, resolved)` where `resolved` is the site-relative path
-    the browser would request. External schemes and pure fragments are skipped:
-    this sweep is about links the build is responsible for.
+    Returns `(page, href, resolved, fragment)` where `resolved` is the
+    site-relative path the browser would request and `fragment` is what follows
+    a `#`, or `""`. External schemes and pure fragments are skipped: this sweep
+    is about links the build is responsible for, and a pure fragment is
+    `test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page`'s.
+
+    The fragment is split off before resolving, because a browser requests the
+    file and scrolls to the fragment: `../methods.html#scope` is a request for
+    `methods.html`. Resolved with the fragment attached it would name a file no
+    build could write, and every short form linking `methods.html` (D50) would
+    read as broken.
     """
-    links: list[tuple[str, str, str]] = []
+    links: list[tuple[str, str, str, str]] = []
     for path in sorted(site.rglob("*.html")):
         page = path.relative_to(site).as_posix()
         for href in re.findall(r'href="([^"]+)"', path.read_text(encoding="utf-8")):
             if href.startswith(("http://", "https://", "mailto:", "#")):
                 continue
-            target = posixpath.normpath(posixpath.join(posixpath.dirname(page), href))
-            links.append((page, href, target))
+            file, _, fragment = href.partition("#")
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(page), file))
+            links.append((page, href, target, fragment))
     return links
 
 
@@ -305,20 +317,44 @@ def test_every_link_on_every_page_resolves_to_a_file_the_build_wrote(site: Path)
     Resolution is `posixpath.normpath` against the page's own directory, so a
     link that escapes the site root normalises to a path starting `..` and fails
     the membership test rather than silently resolving somewhere on disk.
+
+    **A fragment must land too (2026-10-26, D50).** Every gene page and the
+    gene index link `../methods.html#scope`. A fragment that names no element
+    opens the right file at the top -- a reader sent to "how a gene is
+    admitted" lands on the page title and has to hunt, and nothing reports it.
+    So each cross-page fragment must name exactly one `id` in the page it
+    targets: absent is a link that scrolls nowhere, repeated is a link whose
+    target the browser picks for you.
     """
     written = {path.relative_to(site).as_posix() for path in site.rglob("*") if path.is_file()}
     links = _page_links(site)
 
     assert links, "no page links found; the sweep would pass vacuously"
 
-    broken = [
-        (page, href)
-        for page, href, target in links
+    def served(target: str) -> str | None:
         # A directory URL is served by its `index.html`, which is how
         # `genes/index.html` is reached as `genes/`.
-        if target not in written and f"{target}/index.html" not in written
-    ]
+        for candidate in (target, f"{target}/index.html"):
+            if candidate in written:
+                return candidate
+        return None
+
+    broken = [(page, href) for page, href, target, _ in links if served(target) is None]
     assert not broken, f"pages link to files the build never wrote: {broken}"
+
+    ids: dict[str, list[str]] = {}
+    fragments = 0
+    for page, href, target, fragment in links:
+        if not fragment:
+            continue
+        fragments += 1
+        file = served(target)
+        assert file is not None
+        if file not in ids:
+            ids[file] = re.findall(r' id="([^"]+)"', (site / file).read_text(encoding="utf-8"))
+        found = ids[file].count(fragment)
+        assert found == 1, f"{page} links {href}, and {file} carries that id {found} time(s)"
+    assert fragments, "no page links a fragment on another page; the check measures nothing"
 
 
 def test_every_cohort_a_published_burden_row_cites_resolves_with_its_caveat(site: Path) -> None:

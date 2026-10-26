@@ -235,7 +235,9 @@ from chd_atlas.corpus import Corpus
 #   carried it.
 # * a consumer that renders the chip without the grade's meaning turns
 #   `limited` -- a panel saying the case is not yet made -- into a weak yes.
-#   `render.grade_legend` is what the site itself does about this.
+#   The grade key is what the site itself does about this (`render.grade_key`,
+#   on `methods.html#scope` since 2.18; before it a folded `grade_legend` on
+#   every gene page and the gene index).
 # * `asserted_by.count` is a count of institutions, never a score. Eight
 #   authorities asserting a gene frequently means it sits on more commercial
 #   panels, not that it is eight times better supported. D12 applies: a rank
@@ -413,6 +415,9 @@ from chd_atlas.corpus import Corpus
 # card prints beneath a study's results, and the gene index under its strip
 # legend; on the committed corpus only PMID:34324492 carries one, naming the
 # 777 thoracic aortic aneurysm probands in its case set.
+#
+# It also publishes `methods.html`, the site's reading notes: an HTML page,
+# additive in the sense 2.2 records, so no bump of its own.
 SCHEMA_VERSION: Final = "2.18"
 
 # What `status` publishes today. A literal rather than something derived from

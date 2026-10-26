@@ -170,7 +170,8 @@ def validate_scope_attribution(
     reports it: one bad id must cost one issue, not two.
 
     ERROR rather than WARNING: a false attribution is a provenance claim the
-    atlas cannot support, and `pages._SCOPE_RULE` publishes it on every page.
+    atlas cannot support, and the scope rule publishes it: in full on
+    `methods.html` (`methods.SCOPE_RULE`), linked from every gene page.
 
     Measured 2026-08-06 across the 68 committed terms: **13** are used by
     ClinGen's Congenital Heart Disease GCEP, **10** by another ClinGen expert

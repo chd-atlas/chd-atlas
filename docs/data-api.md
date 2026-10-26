@@ -214,7 +214,8 @@ wrong by the next one.
   Additive.
   `2.18` added `summary_caveat` to every record of
   [`publications.json`](#publicationsjson) and so to `featured.json`'s
-  embedded publications, `null` where none is curated. Additive.
+  embedded publications, `null` where none is curated, and added
+  [`methods.html`](#methodshtml), the site's reading notes. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -226,7 +227,7 @@ wrong by the next one.
 ## The site root: `index.html`
 
 The page a person opens directly rather than fetches as JSON, and the entry
-point to the other 120. It states what the atlas is, the same development-status
+point to the other 121. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
@@ -242,10 +243,25 @@ as the browse page's strip legend and the gene page's matrix legend. The three
 cannot come to describe the same four states in different words.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
-build behind this document publishes 121 of them — this one, `genes/index.html`
-and one per published gene — and each has an entry in `files` giving the sha256
-of the bytes served at it. A page is published output, so it is verifiable
-output.
+build behind this document publishes 122 of them — this one, `genes/index.html`,
+[`methods.html`](#methodshtml) and one per published gene — and each has an entry
+in `files` giving the sha256 of the bytes served at it. A page is published
+output, so it is verifiable output.
+
+## `methods.html`
+
+"How to read this atlas": the explanation every gene page assumes, written once
+at the site root rather than repeated on each page (design decision D50), and
+linked from the navigation bar on every page. Each section carries an `id`, so a
+page can link the paragraph it shortens.
+
+- `#scope` states in full the rule that admits a gene to this atlas, and carries
+  the grade key: what each rung means, glossed from ClinGen's Gene-Disease
+  Validity SOP, and where a disputed or refuted record is listed. The gene index
+  and every gene page carry a one-line short form of the rule that links here.
+
+Like the other pages it is for people: its markup is not a contract, and no
+payload depends on it.
 
 ## `genes/index.json`
 
@@ -468,10 +484,13 @@ that gene's page — the symbol, `headline_confidence`, `validity_state`,
 `atlas_curation` and the gene's lesion groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
 atlas curation, rare-variant evidence), whose options are the values actually present
-in the build rather than every value the vocabulary allows. The confidence menu
-now includes genes with no headline at all: 21 of the 119 are admitted on
-submitter agreement and carry `null`, and the browse page renders those with a
-`not classified` chip rather than an empty cell.
+in the build rather than every value the vocabulary allows. Above them, one
+line says each classification is an external authority's, for the disease named,
+which is not the same as for CHD, and links
+[`methods.html#scope`](#methodshtml) for the admission rule and the grade key.
+The confidence menu now includes genes with no headline at all: 21 of the 119
+are admitted on submitter agreement and carry `null`, and the browse page
+renders those with a `not classified` chip rather than an empty cell.
 
 **Every row is rendered by the build, and the inline script only hides rows.**
 There is no empty `<tbody>` filled in by a fetch, so `curl`, a crawler and a
@@ -1324,11 +1343,15 @@ The page no longer prints `validity_state`, `atlas_curation`, the lesion groups
 or the assertion, functional-record, curated-publication and burden-row counts
 as rows; every one of them is in the bundle, which remains the record.
 
-Beside the card, the mirrored validity table in two groups — **Expert panel
-(ClinGen)** first, then **Other curators (GenCC)** — each row giving who curated
-it, the disease, the mode of inheritance in one vocabulary (ClinGen's `AD` reads
-as GenCC's "Autosomal dominant"), the authority's own `classification_term`
-**verbatim** rather than the rung this atlas maps it onto, the date as
+Beside the card, the main column opens with the same one-line short form of the
+scope rule as the gene index, linking [`methods.html#scope`](#methodshtml),
+which states the rule in full and carries the grade key; until `2.18` every gene
+page carried both itself. Below it, the mirrored validity table in two groups —
+**Expert panel (ClinGen)** first, then **Other curators (GenCC)** — each row
+giving who curated it, the disease, the mode of inheritance in one vocabulary
+(ClinGen's `AD` reads as GenCC's "Autosomal dominant"), the authority's own
+`classification_term` **verbatim** rather than the rung this atlas maps it onto,
+the date as
 `YYYY-MM-DD`, and a link to the upstream report where one is published, labelled
 with its SOP for a ClinGen record. ClinGen also submits its classifications to
 GenCC; the page lists such a copy only where its mapped grade, date, inheritance or

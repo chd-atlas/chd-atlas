@@ -20,7 +20,6 @@ from chd_atlas.build.emit import Emitter
 from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.pages import (
     _EM_DASH,
-    _SCOPE_RULE,
     _analysis_label,
     _count,
     _date,
@@ -508,11 +507,13 @@ def test_a_contested_gene_is_never_chipped_as_settled(
         to `warn`: the assertion below is that the rail's chip is the caution colour,
         not merely that it is not green.
 
-        **The slice is the rail, not the page.** `render.grade_legend` renders one
+        **The slice is the rail, not the page.** `render.grade_legend` rendered one
         chip of every class -- including `chip-definitive` -- inside a `<details>` on
-        every page, so a page-wide `not in` can never fail again and passed only
+        every page, so a page-wide `not in` could never fail again and passed only
         because the legend did not exist when it was written. CLAUDE.md section 4.19
-        is this exact shape: a page-wide assertion is not a section assertion.
+        is this exact shape: a page-wide assertion is not a section assertion. The
+        legend left the gene page for `methods.html#scope` on 2026-10-26 (D50); the
+        slice stays, because the rail is still the element under test.
 
         Parametrised over the two warning flags in opposite states because they are
         separate axes: `has_conflicting_evidence` is any mixed evidence,
@@ -910,6 +911,15 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
     which is what the phrase assertions below are for. They are deliberately not
     the whole string: this must fail when the sentence stops distinguishing the
     two claims, not merely when a comma moves.
+
+    **The rule moved to `methods.html#scope` on 2026-10-26 (D50).** Both page
+    kinds now carry its short form -- the classification is an external
+    authority's, for the disease named, which is not the same as for CHD --
+    and a link to the full rule, which `test_build_methods.py` pins together
+    with the phrase assertions that used to live here. What this asserts now is
+    the short form as a literal, sliced to its element, the link inside it,
+    and that the full rule is not also on the page: a page carrying both is the
+    page D50 exists to slim.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
@@ -932,7 +942,6 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
 
     for name in ("index.html", "HGNC_11604.html", "HGNC_4173.html"):
         page = _page(tmp_path, name)
-        assert _SCOPE_RULE in page, f"{name} does not state the inclusion rule"
         # **The published provenance claim, corrected 2026-08-06.** Every page
         # used to say a gene is definitive "for a disease in this atlas's CHD
         # scope", which told 24 published pages that this atlas decides what
@@ -945,31 +954,25 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
         # edit could restore the old sentence beside the new one and satisfy
         # every positive check here.
         assert "this atlas's CHD scope" not in page
-        assert "an external authority treats as congenital heart disease" in page
-        assert "No disease is in scope on this atlas's own judgement" in page
-        assert "not the same as definitive for congenital heart disease" in page
         # **Both warrants, or the sentence describes a gate the site does not
-        # have.** Stating only the ClinGen half would tell a reader that every
-        # gene here was graded by an expert panel; 16 of the 92 were not, and
-        # they are the ones whose provenance most needs stating.
-        #
-        # **Sliced to the scope-rule element, and that is what makes these
-        # assertions able to fail.** Page-wide they could not: the grade key's
-        # `ungraded` gloss carries the phrase "two or more Gene Curation
-        # Coalition submitters independently assert it" further down every page,
-        # so rewriting `_SCOPE_RULE` to state a **one**-submitter gate -- the
-        # site describing a gate that admits on a single laboratory's word --
-        # **survived all 796 tests** when measured 2026-08-06. The assertion
-        # above it, `_SCOPE_RULE in page`, cannot catch a rewording either: it
-        # compares the module's constant to itself and passes on any wording at
-        # all. CLAUDE.md section 4.19.
+        # have**, and **sliced to the scope-rule element, because page-wide the
+        # phrase checks could not fail** (CLAUDE.md section 4.19): both
+        # recorded decisions moved with the full rule to `test_build_methods.py`
+        # (2026-10-26, D50). The short form names neither warrant -- it says
+        # whose classification it is and for what -- so what is pinned here is
+        # the literal, and that the rule in full has not come back beside it.
+        assert page.count('<p class="scope-rule">') == 1, f"{name}: one short form, once"
         rule = re.search(r'<p class="scope-rule">.*?</p>', page, re.S)
         assert rule, f"{name} carries no scope-rule element"
         sentence = rule.group(0)
-        assert "Limited or better" in sentence
-        assert "two or more Gene Curation Coalition submitters" in sentence
-        assert "one or more Gene Curation Coalition submitters" not in sentence
-        assert "no ClinGen panel disputes it" in sentence
+        assert sentence == (
+            '<p class="scope-rule">Published on an external authority&#x27;s classification: '
+            "for the disease named, which is not the same as for CHD. "
+            '<a href="../methods.html#scope">How a gene is admitted, and what each grade '
+            "means</a>.</p>"
+        ), f"{name}: the scope short form changed"
+        assert 'href="../methods.html#scope"' in sentence
+        assert "No disease is in scope on this atlas's own judgement" not in page
 
 
 def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
@@ -3311,8 +3314,10 @@ def test_the_rail_names_the_grade_the_panel_gave_and_the_disease_it_gave_it_for(
     Both halves now come from `fact.headline_confidence`, so this asserts the
     label, the disease and the chip class **as one string in one element**. A
     page-wide check on each separately would pass with the lookup keyed back on
-    `DEFINITIVE`, because `render.grade_legend` puts the word "definitive" on
-    every page (CLAUDE.md section 4.19).
+    `DEFINITIVE`, because `render.grade_legend` put the word "definitive" on
+    every page (CLAUDE.md section 4.19). It left the gene page for
+    `methods.html#scope` on 2026-10-26 (D50); the slice stays, because nothing
+    stops the next page-wide "definitive" from arriving.
     """
     fact, validity = _limited(TBX5)
     emitter = Emitter(root=tmp_path)
@@ -3374,7 +3379,7 @@ def test_a_gene_no_panel_graded_names_the_submitters_that_admitted_it(
         assert f"chip-{rung}" not in rail_html
 
 
-def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> None:
+def test_both_page_kinds_leave_the_grade_key_to_methods_html(tmp_path: Path) -> None:
     """A colour ramp with no key is a ranking the reader has to guess at.
 
     Until 2026-08-06 the site needed no key: every published gene was
@@ -3388,22 +3393,23 @@ def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> No
     and the gene page did not, and the gene page is where the omission did the
     damage.
 
-    Each rung's gloss is checked by a distinctive phrase rather than in full, so
-    this fails when a rung stops being explained and not when a comma moves.
+    **The label, the chip class and the gloss were asserted as one triple**,
+    because checking only that seven phrases appeared somewhere on the page let
+    `moderate` painted with `strong`'s chip survive all 796 tests (measured
+    2026-08-06).
 
-    **The label, the chip class and the gloss are asserted as one triple, and
-    that is the whole point of this test.** It checked only that seven phrases
-    appeared *somewhere on the page* until 2026-08-06, which says nothing about
-    which rung each is attached to. Measured that day: painting `moderate` with
-    `strong`'s chip -- inverting the colour ramp mid-ladder for the 10 genes on
-    those two rungs -- **survived all 796 tests**, as did swapping two glosses.
-    A ramp whose colours are checked only for presence is a ramp with no guard
-    at all, and the chips are the part a reader reads first.
-
-    Scoped to the `<dl>` inside the grade key rather than to the page, because
-    every one of these words also occurs in the rail, the browse table or the
-    scope rule; a page-wide substring check passes against a legend rendering
-    nothing (CLAUDE.md section 4.19).
+    **The key left both page kinds for `methods.html#scope` on 2026-10-26
+    (D50, P3)**, and this test was named
+    `test_both_page_kinds_gloss_every_grade_they_can_render` until then. The
+    triple assertion moved with the key, to `test_build_methods.py`, and so did
+    the reworded dispute sentence. Section 4.31 is still met, by a different
+    route: both page kinds carry the scope
+    short form, whose link names the key ("what each grade means"), and a gene
+    page's card glosses its own headline grade in the key's words. What stays
+    here is that neither page kind carries the key -- a copy left behind is a
+    copy that drifts from the one on `methods.html` -- and the two retired
+    denials, absent on both: a negative on published bytes is what fails when a
+    deleted sentence comes back (section 4.35).
     """
     fact, validity = _limited(TBX5)
     emitter = Emitter(root=tmp_path)
@@ -3421,40 +3427,15 @@ def test_both_page_kinds_gloss_every_grade_they_can_render(tmp_path: Path) -> No
         cohorts={},
     )
 
-    # (label a reader sees, chip class that colours it, phrase unique to its gloss)
-    rungs = (
-        ("definitive", "chip-definitive", "upheld over time"),
-        ("strong", "chip-strong", "without the years of replication"),
-        ("moderate", "chip-moderate", "several unrelated probands"),
-        ("limited", "chip-limited", "not yet made"),
-        ("no known association", "chip-warn", "found no evidence of a relationship"),
-        (
-            "not classified",
-            "chip-ungraded",
-            "two or more Gene Curation Coalition submitters independently assert it",
-        ),
-    )
     for name in ("index.html", "HGNC_11604.html"):
         page = _page(tmp_path, name)
-        assert "What these classifications mean" in page, f"{name} carries no grade key"
-        block = re.search(r'<details class="grade-key">.*?</details>', page, re.S)
-        assert block, f"{name} carries no grade key"
-        key = block.group(0)
-        legend = re.search(r"<dl>(.*?)</dl>", key, re.S)
-        assert legend, f"{name} carries no grade key rows"
-        pairs = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", legend.group(1), re.S)
-        assert len(pairs) == len(rungs), f"{name} glosses {len(pairs)} rungs, expected {len(rungs)}"
-        for (label, chip, gloss), (dt, dd) in zip(rungs, pairs, strict=True):
-            assert chip in dt, f"{name}: {label} is not chipped {chip} -- got {dt}"
-            assert f">{label}<" in dt, f"{name}: expected the label {label}, got {dt}"
-            assert gloss in dd, f"{name}: {label} is not glossed by {gloss!r}"
-
-        # The scope-qualified claim, on both page kinds. Unqualified it was false
-        # for 5 published genes carrying an out-of-scope ClinGen `Disputed`; and
-        # its in-scope half went false on 2026-10-25, when six published
-        # RASopathy genes gained an in-scope `Disputed` for Costello or CFC.
-        assert "No gene here is published on a disputed or refuted grade." in key
-        assert "No gene here was disputed or refuted by an expert panel" not in page
+        assert 'class="grade-key"' not in page, f"{name} still carries the grade key"
+        assert "What these classifications mean" not in page, f"{name} still folds a key"
+        # Unqualified it was false for 5 published genes carrying an
+        # out-of-scope ClinGen `Disputed`; and its in-scope half went false on
+        # 2026-10-25, when six published RASopathy genes gained an in-scope
+        # `Disputed` for Costello or CFC.
+        assert "No gene here was disputed or refuted" not in page
         assert "not published here at all" not in page
 
 
@@ -5562,9 +5543,11 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     it in a CHD atlas with nothing saying why the syndrome counts, and takes it
     for a grade for heart disease. The notes sit above both groups of
     classifications, because a warrant concerns the disease, which either group
-    may grade. The scope rule at the top of the page names the
-    Orphanet path too, and is checked here on the built element, not on the
-    constant that produced it.
+    may grade. The scope rule at the top of the page named the Orphanet path
+    too, and was checked here on the built element; it moved to
+    `methods.html#scope` on 2026-10-26 (D50), and its Orphanet clause and
+    `scope.json` parenthetical are pinned there, by `test_build_methods.py`.
+    The page keeps a short form that names neither.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5608,36 +5591,15 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     # A disease an expert panel curated as CHD gets no Orphanet sentence.
     assert "Holt-Oram syndrome is in scope because" not in section
 
-    rule = _slice_between(page, '<p class="scope-rule">', ("</p>",))
-    assert (
-        "for a disease that an external authority treats as congenital heart disease (or in "
-        "which <strong>Orphanet records a structural heart malformation in at least 30% of "
-        "cases</strong>)"
-    ) in rule
-    assert "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)" in rule
 
-
-def test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """The sentence went false when Costello and CFC syndrome entered scope (2026-10-25).
-
-    It read "No gene here was disputed or refuted by an expert panel for a disease
-    an external authority treats as congenital heart disease". ClinGen's RASopathy
-    panel disputes six published genes for those two syndromes, and PTPN11's page
-    carried the denial beside two `Disputed` rows. Pinned on built bytes, both
-    ways: the replacement present, the denial absent (CLAUDE.md section 4.35).
-    """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    key = _slice_between(page, '<details class="grade-key">', ("</details>",))
-    assert (
-        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
-        "may still have disputed the same gene for a different disease. Where that disease "
-        "is one an external authority treats as congenital heart disease, the record is in "
-        "the table below, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries "
-        "a <em>conflicting evidence</em> flag."
-    ) in key
-    assert "No gene here was disputed or refuted" not in page
+# `test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays` sat
+# here until 2026-10-26, pinning the grade key's dispute sentence on a gene page.
+# The key moved to `methods.html#scope` (D50) and the test moved with it, its
+# docstring and its literal reworded for the new position:
+# `test_scope_states_where_a_dispute_is_listed_without_pointing_below` in
+# `test_build_methods.py`. Its gene-page negative ("No gene here was disputed or
+# refuted" absent) is asserted on both page kinds by
+# `test_both_page_kinds_leave_the_grade_key_to_methods_html`.
 
 
 @pytest.mark.parametrize(

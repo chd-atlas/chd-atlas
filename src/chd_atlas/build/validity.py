@@ -524,7 +524,7 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
     """Why this gene is published, as a payload. `admitted_by` + `asserted_by`.
 
     **The gate is a claim about external authorities, and this is what lets a
-    consumer check it rather than trust it.** `pages._SCOPE_RULE` tells every
+    consumer check it rather than trust it.** `methods.SCOPE_RULE` tells a
     reader that no disease is in scope on the atlas's own judgement; without
     this field the same reader has no way to see which authority actually
     admitted the gene in front of them.

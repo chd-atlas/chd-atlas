@@ -35,11 +35,13 @@ wording must not deny the functional records the atlas may have curated for the
 same gene, and `_card_curation` is where that wording and the reason for it are
 recorded.
 
-**Neither page kind states a bare grade.** `_SCOPE_RULE` says what admits a gene
-to this site at all, `render.grade_legend` says what each rung means in the
-grading authority's own words, and `_graded_diseases` names the disease each
+**Neither page kind states a bare grade.** `_SCOPE_SHORT` says in one line whose
+classification it is and for what, and links `methods.html#scope`, where the
+rule that admits a gene to this site at all and `render.grade_key`'s gloss of
+each rung in the grading authority's own words are stated in full (D50,
+2026-10-26); and `_graded_diseases` names the disease each
 ClinGen panel actually graded -- in the browse table's `graded for` column and in
-the gene page's rail, one line under the chip. All three read the same `validity`
+the gene page's rail, one line under the chip. Both read the same `validity`
 mapping the bundles were written from, so the two pages cannot name different
 diseases for one gene.
 
@@ -100,7 +102,6 @@ from chd_atlas.build.render import (
     definition_list,
     document,
     evidence_legend,
-    grade_legend,
 )
 from chd_atlas.build.validity import (
     GeneValidity,
@@ -125,48 +126,27 @@ from chd_atlas.vocab import (
     ValidityState,
 )
 
-# What the published set *is*, in one sentence, on both page kinds that show it.
+# What the published set *is*, in one line, on both page kinds that show it: the
+# short form of the scope rule, which lives in full on `methods.html#scope`
+# (`methods.SCOPE_RULE`, D50, spec section 5's table) together with the grade
+# key. Both page kinds carried the whole rule and the key until 2026-10-26; the
+# history of why the rule exists at all moved with it.
 #
-# No page on this site said it. `docs/data-api.md` states the rule and a reader
-# of the HTML never sees it, so a browse page of 23 rows all reading
-# `definitive`, under a title reading "CHD Atlas" and a tagline about congenital
-# heart disease, said "these 23 genes are definitive for CHD". Measured
-# 2026-08-04 against the committed mirrors, that was false for most of them: 10
-# of the 23 were qualified by a panel that is not the Congenital Heart Disease
-# GCEP -- SCID-CID for KMT2D and KDM6A, Hearing Loss for CHD7, Kidney Cystic and
-# Ciliopathy Disorders for NOTCH2 and EVC, Intellectual Disability and Autism
-# for ZEB2, Skeletal Disorders for EVC2, Syndromic Disorders for TBX5 and
-# TFAP2B, Prenatal for FLT4 -- and 10 were definitive for a disease whose label
-# names no cardiac feature at all (Kabuki syndrome 1 and 2, Mowat-Wilson,
-# CHARGE, Alagille, Ellis-van Creveld twice, Holt-Oram, TARP, and NR2F2-related
-# multiple congenital anomalies).
+# What the short form keeps is the half a reader needs on every page, because it
+# is the half whose absence did the damage: whose classification this is (an
+# external authority's, not the atlas's) and what it is for (the disease named,
+# not congenital heart disease). A green `definitive` under a title reading "CHD
+# Atlas" read as definitive for CHD, which measured 2026-08-04 was false for
+# most of the first 23 genes.
 #
-# The 2026-08-06 widening makes the sentence carry more, not less. Measured on
-# the widened corpus: 92 genes, of which 76 are admitted by a ClinGen record at
-# or above `Limited` and 16 by two or more GenCC submitters with no ClinGen
-# record at all. A reader meeting `limited` needs to know both that a chartered
-# panel wrote it and that this atlas did not.
-#
-# One constant for both pages, in the idiom the uncurated notices used (they are
-# the card's curation sentences since D55): the rule is one editorial claim, and
-# two copies of it are two things that drift.
-_SCOPE_RULE: Final = (
-    '<p class="scope-rule">A gene is published here when an external authority already '
-    "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
-    "panel</strong> classifies it <strong>Limited or better</strong> for a disease that "
-    "an external authority treats as congenital heart disease (or in which "
-    "<strong>Orphanet records a structural heart malformation in at least 30% of "
-    "cases</strong>), or <strong>two or more "
-    "Gene Curation Coalition submitters</strong> independently assert it and no ClinGen "
-    "panel disputes it. "
-    "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
-    "is any gene: every scope term names the authority it came from "
-    "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
-    "page names the authority that "
-    "admitted the gene. A classification is not the same as definitive for congenital "
-    "heart disease: for many of these genes the disease graded is a syndrome of which a "
-    "cardiac lesion is one feature, and the disease the panel actually named is shown "
-    "beside the gene.</p>"
+# Both page kinds sit in `genes/`, hence `../`. One constant for both, for the
+# reason the full rule was one: two copies of one claim are two things that
+# drift.
+_SCOPE_SHORT: Final = (
+    '<p class="scope-rule">Published on an external authority&#x27;s classification: for '
+    "the disease named, which is not the same as for CHD. "
+    '<a href="../methods.html#scope">How a gene is admitted, and what each grade '
+    "means</a>.</p>"
 )
 
 # **Two notices, because the sentence was true of 23 genes and is now true of
@@ -1350,8 +1330,10 @@ def _rail(
     `moderate` or `limited`, and a bare `.chip` renders all three in the same
     grey as `not classified`. A reader cannot tell a panel's weakest supportive
     rung from no panel having looked, which is the distinction the widened gate
-    turns on. `render.grade_legend` is the other half -- the colours are ordinal
-    and mean nothing without ClinGen's own definitions beside them.
+    turns on. The definitions are the other half -- the colours are ordinal and
+    mean nothing without ClinGen's own words beside them. Since 2026-10-26 (D50)
+    the card's gloss line gives the headline rung's, and `render.grade_key` on
+    `methods.html#scope`, linked from the page, gives every rung's.
 
     **The first row's label carries the grade, so the label and the disease
     cannot come apart.** It read `definitive for` unconditionally until the same
@@ -4783,8 +4765,7 @@ def build_gene_pages(
                 identity=identity,
             )
             + "<div>"
-            + _SCOPE_RULE
-            + grade_legend()
+            + _SCOPE_SHORT
             # The Orphanet notes sit above both groups, not under either: a
             # scope warrant concerns the disease, which may be graded in the
             # panel group, the GenCC group, or both (measured: for 14 of 27
@@ -4873,7 +4854,8 @@ def build_gene_index_page(
     confidence column does not -- whether the atlas has curated the gene at all.
 
     **Whose call it is was only half of it.** All 23 of those rows read
-    `definitive` with no disease anywhere on the page, and `_SCOPE_RULE` plus the
+    `definitive` with no disease anywhere on the page, and the scope rule
+    (`_SCOPE_SHORT` here since D50, in full on `methods.html#scope`) plus the
     `graded for` column are the other half: a row reading `KMT2D | definitive` on
     a site titled "CHD Atlas" claims KMT2D is definitive for congenital heart
     disease, and ClinGen's actual assertion is `KMT2D -- Definitive for Kabuki
@@ -4886,8 +4868,9 @@ def build_gene_index_page(
     `confidence` cell now means something specific -- no ClinGen panel graded the
     gene, which is why `_graded_diseases` returns nothing for it -- and an em
     dash beside a blank is the only pair on this table that is not a gap in the
-    data. The paragraph under the heading says so, and `grade_legend` glosses it
-    on both pages.
+    data. The paragraph under the heading says so, and `render.grade_key` glosses
+    it on `methods.html#scope`, which both page kinds link from their short form
+    (it was a folded key on both pages until 2026-10-26, D50).
 
     Two couplings to `render.FILTER_SCRIPT` that nothing in the type system
     holds, both pinned by
@@ -5019,7 +5002,7 @@ def build_gene_index_page(
 
     body = (
         "<h1>Genes</h1>"
-        + _SCOPE_RULE
+        + _SCOPE_SHORT
         + "<p>Every confidence below is an upstream panel's or submitter's, republished "
         "with its provenance intact &mdash; the atlas authors no validity classification "
         "of its own. The <strong>atlas curation</strong> column is what says whether the "
@@ -5027,7 +5010,6 @@ def build_gene_index_page(
         "names the disease each panel actually graded. A blank confidence means no "
         "ClinGen expert panel has graded the gene for any of the diseases in scope here; "
         "its page names the submitters whose agreement admitted it.</p>"
-        + grade_legend()
         + f'<p>Showing <span id="shown">{len(rows)}</span> of {len(rows)} genes.</p>'
         '<form id="filters" class="filters">'
         '<input name="q" type="search" aria-label="Search by gene symbol or HGNC id" '
