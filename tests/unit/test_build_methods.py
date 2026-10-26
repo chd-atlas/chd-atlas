@@ -726,7 +726,12 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
       (`Placement.n_genes`: 58,735 in every cell of E-MTAB-6814's grid);
     * "a dataset's own detection floor" read as the source's, and the only
       floor in the corpus is this atlas's curated choice
-      (`floor_source: "Curated, not mirrored"`), so it is "its dataset's";
+      (`floor_source: "Curated, not mirrored"`). "its dataset's" read the same
+      way, so since review (2026-10-26) the paragraph says whose a floor is
+      and where `datasets.json` gives its value and basis, and the bulk
+      paragraph says "the detection floor"; the dataset that sentence names is
+      held to its record by
+      `test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own`;
     * the reference distribution changes shape "over development", not "as
       the heart matures": every organ's grid moves -- liver's 90th percentile
       is 24 tpm at 4 wpc and 5 at adolescence, heart's 28 and 6;
@@ -746,14 +751,19 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
         "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
         "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
         "the conduction system. A gene expressed intensely in one such lineage can still read "
-        "low, or fall below a dataset's detection floor, once diluted across the whole organ: "
+        "low, or fall below the detection floor, once diluted across the whole organ: "
         "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
         "development.</p>"
         "<p>A gene's median abundance in an organ is placed against that organ's own "
         "percentile grid for the same dataset and developmental stage, and the number of "
         "genes that grid was built from travels with every percentile a gene page shows. No "
         "percentile is published for a median below its dataset's detection floor, because "
-        "the rank of an unreliable measurement is not itself a measurement.</p>"
+        "the rank of an unreliable measurement is not itself a measurement. A detection floor "
+        "is a threshold this atlas records per dataset, not necessarily one its source "
+        "declares: where a source declares none, as the Expression Atlas declares none for "
+        "E-MTAB-6814, the atlas chooses one, and every developmental dataset's record in "
+        '<a href="datasets.json"><code>datasets.json</code></a> gives its floor and where '
+        "that floor comes from.</p>"
         "<p>Percentiles in this atlas are <strong>not comparable across organs or across "
         "developmental stages</strong>: each organ transcribes a different fraction of the "
         "whole gene set, and an organ's reference distribution itself changes shape over "
@@ -786,6 +796,23 @@ def test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say(
     profiles = [dataset for dataset in corpus.datasets if dataset.design is DatasetDesign.PROFILE]
     assert profiles, "no profile dataset curated; the check would pass vacuously"
     assert {dataset.technology for dataset in profiles} == {Technology.BULK_RNASEQ}
+
+
+def test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own(
+    corpus: Corpus,
+) -> None:
+    """`#expression` says "the Expression Atlas declares none for E-MTAB-6814,
+    the atlas chooses one" (2026-10-26), and that is a fact about one record.
+
+    Unconditional, like the bulk claim, so it reads no data; this does. A
+    curator who found the Atlas's own threshold and recorded it would make the
+    sentence false, and the record's `floor_source` is where that would show.
+    """
+    record = next(dataset for dataset in corpus.datasets if dataset.id == "E-MTAB-6814")
+    assert record.detection_floor is not None
+    assert (record.floor_source or "").startswith(
+        "Curated, not mirrored: the Expression Atlas declares no threshold for this experiment."
+    ), record.floor_source
 
 
 @pytest.mark.parametrize("built", ["page", "real_page"])

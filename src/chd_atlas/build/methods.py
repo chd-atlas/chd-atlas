@@ -67,7 +67,7 @@ from collections.abc import Mapping
 from typing import Final
 
 from chd_atlas.build.emit import Emitter
-from chd_atlas.build.paths import COHORTS, METHODS_PAGE
+from chd_atlas.build.paths import COHORTS, DATASETS, METHODS_PAGE
 from chd_atlas.build.render import document, grade_key
 from chd_atlas.models.cohort import Cohort
 
@@ -435,8 +435,10 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 #   gene page's section renders, all `bulk_rnaseq` today (E-MTAB-6814 alone).
 #   Unconditional by design, it reads no data, so
 #   `test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say`
-#   holds it to the curation instead. "the detection floor" became "a
-#   dataset's": none is in view here.
+#   holds it to the curation instead. Its "the detection floor" was "a
+#   dataset's" for one revision and is "the" again since review (2026-10-26):
+#   "a dataset's" read as the source's, and the second paragraph now says
+#   whose a floor is.
 # * "Each organ's median abundance" had a gene in view; it is "a gene's median
 #   abundance in an organ". "the number of genes measured" is the number the
 #   grid was built from (`Placement.n_genes`, 58,735 in every cell of
@@ -446,10 +448,21 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 #   genes".
 # * "a dataset's own detection floor" read as the source's, and the one floor
 #   in the corpus is this atlas's curated choice (E-MTAB-6814's `floor_source`:
-#   "Curated, not mirrored"), so it is "its dataset's". No percentile is
-#   published below it: `profiles.placement` returns `None` for a median under
-#   the floor, the bundle publishes that `null`, and `percentile_annotations`
-#   skips it for the omics preview.
+#   "Curated, not mirrored: the Expression Atlas declares no threshold for this
+#   experiment"). Dropping "own" did not fix that -- "its dataset's" still
+#   credits the floor to the dataset, which a reader takes for the source's,
+#   and no HTML page said otherwise (review, 2026-10-26). So the paragraph now
+#   says it: a floor is a threshold this atlas records per dataset, not
+#   necessarily its source's; E-MTAB-6814 is named as a dataset whose source
+#   declares none; and `datasets.json`, which publishes `detection_floor` and
+#   `floor_source` for every dataset, is linked for the value and its basis.
+#   "every developmental dataset's record" holds by construction: a
+#   developmental dataset here is a profile one, as in the bulk claim above,
+#   and a profile dataset declares both fields or does not load
+#   (`Dataset.a_profile_dataset_is_fully_declared`). No number: a floor is per
+#   dataset, and the record carries it. No percentile is published below it: `profiles.placement`
+#   returns `None` for a median under the floor, the bundle publishes that
+#   `null`, and `percentile_annotations` skips it for the omics preview.
 # * The comparability sentence was conditional on a page laying out more than
 #   one placement (118 of 119 did); stated once in general it has no position
 #   to be false in. "on this page" became "in this atlas" and "elsewhere on
@@ -471,7 +484,7 @@ _EXPRESSION: Final = (
     "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
     "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
     "the conduction system. A gene expressed intensely in one such lineage can still read "
-    "low, or fall below a dataset's detection floor, once diluted across the whole organ: "
+    "low, or fall below the detection floor, once diluted across the whole organ: "
     "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
     "development.</p>"
     # was pages._EXPRESSION_READING_NOTES
@@ -479,7 +492,12 @@ _EXPRESSION: Final = (
     "percentile grid for the same dataset and developmental stage, and the number of "
     "genes that grid was built from travels with every percentile a gene page shows. No "
     "percentile is published for a median below its dataset's detection floor, because "
-    "the rank of an unreliable measurement is not itself a measurement.</p>"
+    "the rank of an unreliable measurement is not itself a measurement. A detection floor "
+    "is a threshold this atlas records per dataset, not necessarily one its source "
+    "declares: where a source declares none, as the Expression Atlas declares none for "
+    "E-MTAB-6814, the atlas chooses one, and every developmental dataset's record in "
+    f'<a href="{DATASETS}"><code>{DATASETS}</code></a> gives its floor and where that '
+    "floor comes from.</p>"
     # was pages._PERCENTILE_COMPARABILITY_NOTICE
     "<p>Percentiles in this atlas are <strong>not comparable across organs or across "
     "developmental stages</strong>: each organ transcribes a different fraction of the "

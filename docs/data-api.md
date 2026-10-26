@@ -315,10 +315,13 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   section: that every developmental expression measurement here is from whole,
   bulk tissue, so a low or absent figure is not evidence against a gene; how a
   median is placed against its organ's percentile grid, and that none is placed
-  below its dataset's detection floor; that percentiles are not comparable
-  across organs or developmental stages; and what the charts' axes are. A gene
-  page keeps a one-line form of the first and links here, and each expression
-  chart's folded key ends with a link here.
+  below its dataset's detection floor, a threshold this atlas records per
+  dataset and not necessarily one its source declares (a profile dataset's
+  record in [`datasets.json`](#datasetsjson) gives the floor and its basis);
+  that percentiles are not comparable across organs or developmental stages;
+  and what the charts' axes are. A gene page keeps a one-line form of the
+  first and links here, and each expression chart's folded key ends with a
+  link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
