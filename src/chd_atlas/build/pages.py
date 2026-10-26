@@ -281,7 +281,8 @@ _EVIDENCE_HEADERS: Final = ("class", "strength", "summary", "publication")
 # * `cases` and `controls` hold "carriers / total", and nothing said so. The
 #   denominator must travel with the numerator -- six carriers is a different
 #   claim in 3,876 people than in 45,082 -- and the header is where a reader
-#   looks for what a cell means. `_BURDEN_PREAMBLE` states the rule as well.
+#   looks for what a cell means. `methods.html#rare-variants` states the rule
+#   as well (`_BURDEN_PREAMBLE` until 2026-10-26).
 _BURDEN_HEADERS: Final = (
     "case group",
     "consequence",
@@ -521,9 +522,18 @@ _TEST_LABEL: Final[dict[str, str]] = {
 # sibling says "Mirrored gene-disease validity", and the uncurated notice that
 # sat above it (on the card since D55) scopes itself to *classifications* -- so
 # nothing between the heading and the table said whose numbers these are.
+#
+# One line since 2026-10-26 (D50), linking `methods.html#rare-variants`, which
+# states it in full. **Scoped to the study tables, not to "below".** The
+# evidence matrix directly under this line shows tallies the atlas derives --
+# "n = N" in a cell on 86 pages, "N rows" on 48 (measured on a build of
+# 4233eca) -- so "every count and statistic below ... the atlas computes none
+# of them" was false of the first thing below it, and had been since the matrix
+# arrived. "exactly" went too: the tables round to three significant figures.
 _MIRRORED_NOTICE: Final = (
-    "<p>Every count and statistic below is an upstream study's, republished exactly as "
-    "published. The atlas computes none of them and adds no assessment of them.</p>"
+    "<p>Every count and statistic in the study tables below is an upstream study's, "
+    "republished as published; the atlas computes none of them. "
+    '<a href="../methods.html#rare-variants">How to read these results</a>.</p>'
 )
 
 # Rendered only when a gene carries rows from more than one study. Rendered
@@ -537,51 +547,19 @@ _MIRRORED_NOTICE: Final = (
 # the original conditional was added to fix. It is a statement of policy now,
 # true whether the page shows one study or three, and `shared_cohorts` still
 # names an actual overlap where one exists.
+#
+# The spec's approved short form since 2026-10-26 (D50, P7), made explicit about
+# what would double-count: the spec's "those sharing a collection would count"
+# left the pooling implicit. The full sentence, with how a gene page names an
+# overlap, is on `methods.html#rare-variants`.
 _POOLING_NOTICE: Final = (
-    "<p>The atlas computes <strong>no pooled statistic across studies</strong>. "
-    "Where two studies draw on the same sample collection they describe partly the same "
-    "children, so combining their results would count those children twice; any overlap "
-    "between the studies below is named where it occurs.</p>"
+    "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
+    "two that share a sample collection would count the same children twice.</p>"
 )
 
-# What the numbers do not say. Every clause was measured; see `_burden_section`.
-#
-# The absent-cell sentence used to assert a *mechanism*: "no variant of that
-# class was seen in either group, so there was nothing to compare and the study
-# reported no row for it." That was measured over PMID:42230622 alone -- 0 of
-# its 1,192 rows have no carrier on either side -- and it is false for the other
-# two studies now rendering tables beside it. PMID:34324492 tests one
-# consequence class by construction, and PMID:40127276 **observed 14,364
-# synonymous variants** (its own Dataset S4) and still published no synonymous
-# row, because its gene-level table covers only damaging classes. A reader told
-# "no variant of that class was seen" would conclude that study found none.
-#
-# So the sentence now says only what is true of every study: an absent cell is
-# something the study did not report, and why is the study's own rule.
-_BURDEN_PREAMBLE: Final = (
-    "<p><code>cases</code> and <code>controls</code> each show <em>observed / total</em>, "
-    "and <strong>every cell names what it counted</strong> &mdash; carriers, alleles, or "
-    "de novo mutations. The three are not interchangeable: a study counting alleles "
-    "counts a person with two qualifying variants twice, and its denominator is roughly "
-    "twice the number of people sequenced. "
-    "A consequence class or case group with no row is one the study "
-    "<strong>did not report</strong>, which is not a null result and does not always mean "
-    "no such variant was seen &mdash; studies differ in which classes their gene-level "
-    "tables cover.</p>"
-)
-
-# Rendered only where a synonymous row is actually on the page. Rendered
-# unconditionally it told a reader to weigh a negative control that 2 of the 3
-# published studies do not provide: 69 of the 290 published rows are synonymous
-# and every one comes from PMID:42230622.
-_SYNONYMOUS_NOTICE: Final = (
-    "<p>The <strong>synonymous</strong> row is that study's own negative control &mdash; "
-    "synonymous variants should show no enrichment. Read it on the same uncorrected "
-    "scale as the rows above it: a <em>strongly</em> enriched synonymous row is a "
-    "warning about that gene's comparison, while a nominally significant one is what a "
-    "scan of this size produces by chance. <strong>Only a study that publishes one has "
-    "it</strong>; a table with no synonymous row offers no such check.</p>"
-)
+# `_BURDEN_PREAMBLE` and `_SYNONYMOUS_NOTICE` sat here until 2026-10-26: the
+# rare-variant reading notes every gene page folded under "How to read these
+# numbers". They moved, with their histories, to `methods._RARE_VARIANTS` (D50).
 
 _CITATION_HEADERS: Final = ("id", "title", "year")
 
@@ -1784,8 +1762,14 @@ def _burden_section(
       It is sorted last within each stratum so it reads as what it is -- the row
       that says whether to believe the two above it. 69 of the 290 published
       rows are synonymous and every one is from PMID:42230622, so
-      `_SYNONYMOUS_NOTICE` is conditional: a page with no such row must not
+      `_SYNONYMOUS_NOTICE` was conditional: a page with no such row must not
       promise a check it cannot offer.
+
+    The last two bullets' sentences left the page on 2026-10-26 (D50): they
+    were the folded reading notes, identical on every page, and are now on
+    `methods.html#rare-variants` (`methods._RARE_VARIANTS`), stated once with
+    their conditions in their own words. The first stays, as the pooling
+    caption and the `shared_cohorts` notice.
 
     Returns `""` for a gene with no burden rows rather than an empty section:
     unlike the validity section, whose empty group is a sentence stating that no
@@ -1856,9 +1840,11 @@ def _burden_section(
         # particular as anything on the page, and what earns the fold is not
         # that it repeats but that the picture directly above it is drawn from
         # exactly these rows. Where no row is plottable there is no picture, so
-        # the table is the only record and stays in plain sight -- 3 published
-        # genes are in that state (KLF13, CFC1, MYH11), and folding away the
-        # only figures they have would be evidence loss dressed as tidiness.
+        # the table is the only record and stays in plain sight -- every
+        # PMID:34324492 block is in that state (77 pages, measured 2026-10-26;
+        # for KLF13, CFC1, HRAS and MYH11 it is the only study), and folding
+        # away the only figures it has would be evidence loss dressed as
+        # tidiness.
         figures = (
             f'<details class="study-figures"><summary>every figure from this study'
             f"</summary>{table}</details>"
@@ -1898,12 +1884,6 @@ def _burden_section(
     # undermining the caveats that *are* live.
     pooling = _POOLING_NOTICE if len({row.study for row in rows}) > 1 else ""
 
-    # Conditional for the same reason as `pooling` and `_composite_note`: a page
-    # whose tables carry no synonymous row must not tell a reader to weigh one.
-    synonymous = (
-        _SYNONYMOUS_NOTICE if any(row.consequence_class == "synonymous" for row in rows) else ""
-    )
-
     matrix = _evidence_matrix(rows, families, axes, publications)
 
     # THE FOLD RULE. A caveat may fold if it is *general* -- true on every gene
@@ -1911,22 +1891,21 @@ def _burden_section(
     # *particular* -- it fired because of this gene's data and changes what a
     # reader concludes about this gene.
     #
-    # Folded here: the units glossary, what an absent cell means, and the
-    # synonymous negative control. All three are identical on all 91 pages that
-    # carry a burden table, and
-    # none is lost -- the unit word is still in every cell and the matrix
-    # renders `not tested` as its own state.
+    # The general reading notes -- the units glossary, what an absent cell means,
+    # and the synonymous negative control -- were folded here under "How to read
+    # these numbers", identical on all 118 pages carrying a rare-variant section.
+    # They moved to `methods.html#rare-variants` on 2026-10-26 (D50), which
+    # `_MIRRORED_NOTICE` links; none is lost -- the unit word is still in every
+    # cell and the matrix renders `not tested` as its own state.
     #
-    # Outside the fold, always: `_MIRRORED_NOTICE` (one line, and it is the
-    # atlas's claim about itself), the `shared_cohorts` non-independence notice,
-    # the own-lab disclosure, and every row's `method_note` footnote -- which is
-    # where PMID:34324492's thoracic-aortic-aneurysm contamination reaches a
-    # reader. `test_every_particular_caveat_survives_outside_the_fold` is what
-    # stops one of those being tidied inside later.
-    reading_notes = (
-        '<details class="reading-notes"><summary>How to read these numbers'
-        "</summary>" + _BURDEN_PREAMBLE + synonymous + "</details>"
-    )
+    # What stays visible is unchanged, outside every fold: `_MIRRORED_NOTICE`
+    # (one line, and it is the atlas's claim about itself), the pooling caption,
+    # the `shared_cohorts` non-independence notice, the own-lab disclosure, the
+    # method line's multiple-testing clause, and every row's `method_note`
+    # footnote -- which is where PMID:34324492's thoracic-aortic-aneurysm
+    # contamination reaches a reader.
+    # `test_every_particular_caveat_survives_outside_the_fold` is what stops one
+    # of those being tidied inside later.
 
     return (
         '<h2 id="rare-variants">Rare-variant association</h2>'
@@ -1940,7 +1919,6 @@ def _burden_section(
         # there being more than one study to pool.
         + (_POOLING_NOTICE if matrix else pooling)
         + shared
-        + reading_notes
         + "".join(blocks)
         + _cohort_notes(rows, cohorts)
     )
@@ -1980,14 +1958,21 @@ def _disclosure(study: str, publications: Mapping[str, Publication]) -> str:
     says nothing, and a stale claim that it is unconditional invites someone to
     make it one. This sentence read "one of the three" until 2026-08-06, which
     contradicted this docstring's own opening paragraph two screens up.
+
+    **One sentence since 2026-10-26 (D50)**; `methods.html#rare-variants` says
+    the rest. The spec's approved short form ended "nothing added", and that is
+    false where it sits: measured on a build of 4233eca, 113 of the 190 own-lab
+    study blocks also carry the atlas's own Bonferroni arithmetic
+    (`_method_line`'s `0.05 / tests_reported`) and a forest plot the atlas drew
+    from the study's rows. It keeps the hedge the sentence it replaced had: no
+    *assessment* added.
     """
     publication = publications.get(study)
     if publication is None or not publication.own_lab:
         return ""
     return (
-        '<p class="disclosure">Declaration: this study is by an author of this atlas. '
-        "Its numbers are republished here exactly as published, and this atlas adds no "
-        "assessment of them.</p>"
+        '<p class="disclosure">Declaration: this study is by an author of this atlas; '
+        "republished as published, no assessment added.</p>"
     )
 
 
@@ -2083,7 +2068,11 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
     if publication is not None and publication.tests_reported:
         total = publication.tests_reported
         threshold = 0.05 / total
-        correction = f" This study reported {total:,} such comparisons."
+        # "{total:,} such comparisons" until 2026-10-26: "such" pointed back at
+        # the design clause, which renders after this one and folded under "How
+        # this study counted", so its antecedent was a sentence the reader had
+        # not met.
+        correction = f" This study reported {total:,} comparisons in all."
         if uncorrected:
             correction += (
                 f" Where it published no corrected p, judge the raw one against the whole "
@@ -2091,9 +2080,15 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
                 f"many is p &lt; {threshold:.2g}."
             )
         else:
+            # Names the statistic, not "the corrected p column" (P9, 2026-10-26):
+            # where the study has a forest plot that column is folded under "every
+            # figure from this study", and the plot names the same number `q`
+            # where it is a false-discovery rate (`_statistic`). True with a
+            # forest and without one.
             correction += (
-                " The <strong>corrected p</strong> column carries the study's own "
-                "correction over all of them; read it rather than the raw p."
+                " Its <strong>corrected p</strong> (shown as <em>q</em> where it is a "
+                "false-discovery rate) carries the study's own correction over all of them; "
+                "read it rather than the raw p."
             )
     elif uncorrected:
         correction = " p-values are <strong>uncorrected</strong> as published."
@@ -2475,12 +2470,18 @@ _STRATUM_UNION: Final[tuple[str, tuple[str, ...]]] = (
     ("syndromic", "nonsyndromic"),
 )
 
-# What a page says instead of drawing an empty frame (D42). Measured 2026-08-20
-# on a real build: 3 published genes -- KLF13, CFC1, MYH11 -- carry only
-# PMID:34324492's CNV rows, which publish no effect measure of any kind, and a
-# fourth (CRIPTO) carries no burden row at all and so reaches this section
-# never. An empty axis under a heading naming a study asserts that the study
-# measured something and found it to be nothing, which is not what happened.
+# What a page says instead of drawing an empty frame (D42). An empty axis under
+# a heading naming a study asserts that the study measured something and found
+# it to be nothing, which is not what happened.
+#
+# It renders in PMID:34324492's block on **every** page carrying that study,
+# because its CNV rows publish no effect measure of any kind -- not only on the
+# genes whose *only* rows are that study's. This comment said "3 published
+# genes -- KLF13, CFC1, MYH11" (measured 2026-08-20) until 2026-10-26, which
+# counted the second set and read as the first. Measured that day on a build of
+# 4233eca: **77 pages**, one block each, all PMID:34324492; 4 of them (KLF13,
+# CFC1, HRAS, MYH11) carry no other study. CRIPTO carries no burden row at all
+# and reaches this section never.
 _NO_EFFECT_MEASURE: Final = (
     '<p class="method">This study publishes <strong>no effect measure</strong> for this '
     "gene &mdash; no odds ratio, enrichment or rate ratio &mdash; so there is nothing to "
@@ -2621,7 +2622,7 @@ def _mark_class(row: BurdenRow, glyph: str) -> str:
     A synonymous row that *does* survive is drawn muted rather than in the
     result colour, because it is the study's own negative control and a
     surviving one is a warning about the comparison rather than a finding
-    (`_SYNONYMOUS_NOTICE` says the rest). No published row is in that state
+    (`methods.html#rare-variants` says the rest). No published row is in that state
     today -- all 261 published synonymous rows come from the study that
     publishes no correction -- so the branch is exercised by its test rather
     than by the corpus. Hollowness is what may not be traded away here: it
@@ -2857,8 +2858,8 @@ def _forest_caption(
 ) -> str:
     """The key. Every clause names a mark that is actually on this panel.
 
-    Conditional clause by clause, for the reason `_composite_note` and
-    `_SYNONYMOUS_NOTICE` are conditional and `_POOLING_NOTICE` had to be
+    Conditional clause by clause, for the reason `_composite_note` is
+    conditional (and `_SYNONYMOUS_NOTICE` was) and `_POOLING_NOTICE` had to be
     reworded when it moved (CLAUDE.md section 4.27): a sentence's truth
     conditions travel with its position, and a legend entry for a glyph the
     reader cannot see sends them hunting for it.
@@ -2967,16 +2968,16 @@ def _forest_caption(
                 "this study published for this gene. "
             )
     if any(row.consequence_class == "synonymous" for row in rows):
-        # Not the words "negative control", deliberately. That teaching is
-        # `_SYNONYMOUS_NOTICE`'s and it is behind the fold, where
-        # `test_the_general_reading_notes_are_folded_out_of_the_way` asserts it
-        # stays; a caption repeating the phrase on all 94 pages would satisfy
-        # that test on the notice's behalf and unfold nothing. What this clause
-        # owes the reader is what the *muting* means, which nothing else says.
+        # What this clause owes the reader is what the *muting* means, which
+        # nothing else on the page says. Why a synonymous row calibrates the
+        # others is `methods.html#rare-variants`'s, so the clause links it. It
+        # pointed at "<em>How to read these numbers</em>, above" until
+        # 2026-10-26, a fold that left the page that day (D50) -- on 113 pages
+        # it would have pointed at nothing.
         parts.append(
             "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, "
-            "drawn apart from the results it calibrates; <em>How to read these numbers</em>, "
-            "above, says why."
+            "drawn apart from the results it calibrates; "
+            '<a href="../methods.html#rare-variants">How to read these results</a> says why.'
         )
     return f"<figcaption>{''.join(parts).strip()}</figcaption>"
 
@@ -3062,6 +3063,13 @@ def _composite_note(rows: Sequence[BurdenRow]) -> str:
     component. Rendered unconditionally it would assert a decomposition that
     does not exist for the two studies whose tables carry no `damaging` row at
     all, which is the defect `_POOLING_NOTICE` was made conditional for.
+
+    **One sentence since 2026-10-26 (D50, P8).** Its second -- the composite is
+    shown because the study defines its findings by it and its p-value is not
+    derivable from the other two -- is general, true of every block that
+    carries the note, and moved to `methods.html#rare-variants`. The forest's
+    union tag stays in its key, and the row's `method_note` footnote, which is
+    mirror data, is unchanged.
     """
     consequences = {row.consequence_class for row in rows}
     if "damaging" not in consequences or not consequences & {"lof", "missense_damaging"}:
@@ -3070,8 +3078,7 @@ def _composite_note(rows: Sequence[BurdenRow]) -> str:
         '<p class="notice-inline">The <strong>damaging (LOF + missense)</strong> rows are '
         "the <strong>union</strong> of the loss-of-function and damaging-missense rows "
         "below them, not a third independent result &mdash; the same variants are counted "
-        "in both. They are shown because this study defines its findings by the composite, "
-        "and because its p-value is not derivable from the other two.</p>"
+        "in both.</p>"
     )
 
 
@@ -3304,7 +3311,7 @@ _EXPRESSION_READING_NOTES: Final = (
 # Conditional on the section actually showing more than one placement.
 # Rendered on a page with at most one, this would warn a reader against
 # comparing figures the page does not even lay out side by side -- the same
-# reason `_composite_note` and `_SYNONYMOUS_NOTICE` are conditional on a row
+# reason `_composite_note` is (and `_SYNONYMOUS_NOTICE` was) conditional on a row
 # that could earn them actually being on the page.
 _PERCENTILE_COMPARABILITY_NOTICE: Final = (
     "<p>Percentiles on this page are <strong>not comparable across organs or across "

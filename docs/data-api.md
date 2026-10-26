@@ -264,6 +264,12 @@ page can link the paragraph it shortens.
   groups, which of ClinGen's own GenCC copies are listed, and that a record for
   a disease outside this atlas's remit is not shown. Every gene page's validity
   table opens with a one-sentence short form of that last point and links here.
+- `#rare-variants` says how to read a gene page's rare-variant results: that
+  the counts and statistics in its study tables are the studies' own, that no
+  statistic is pooled across studies, what each count unit means and what an
+  absent row does not mean, the synonymous negative control, and what a
+  damaging composite row is. A gene page keeps one-line forms of the first two
+  and links here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1371,6 +1377,21 @@ ClinGen or GenCC record for any other disease — and links
 a record for a disease outside scope. A curated gene's page
 follows it with the curated evidence — each assertion, its evidence items with
 their class, strength and summary, and the publications that evidence cites.
+
+The rare-variant section opens with one line attributing every count and
+statistic in its study tables to the upstream study, linking
+[`methods.html#rare-variants`](#methodshtml). The line is scoped to the study
+tables because the evidence matrix beneath it shows tallies the atlas derives
+(how many rows a cell summarises). The reading notes this section folded before
+this release — the count units, what an absent row means, the synonymous
+negative control — are on that page now, as is why a damaging composite row is
+shown. What stays visible, outside every fold: under the matrix, that no
+statistic is pooled across studies; any overlap between the gene's studies; on
+a block from a study by an author of this atlas, a one-line declaration; each
+study's number of comparisons, where `publications.json` records one
+(`tests_reported`), and how to read its p-values against them; where
+a block has a damaging composite, that it is the union of the two rows below
+it; and every row's `method_note` footnote.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:

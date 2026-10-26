@@ -1,12 +1,13 @@
 # tests/unit/test_build_methods.py
 """`methods.html`: what every gene page assumes, written once (D50).
 
-Every sentence on this page was moved off a gene page, and the move is where it
-could go false: a sentence's truth conditions travel with its position
-(CLAUDE.md section 4.27). So each one is pinned here against a **literal**,
-sliced to its own section, never against the constant that produced it
-(section 4.38) -- and the phrases the move retired are asserted absent from the
-whole page, because a pasted old constant is how they would come back.
+Every sentence on this page was moved off a gene page, or states in full what a
+gene page now says in one line, and the move is where it could go false: a
+sentence's truth conditions travel with its position (CLAUDE.md section 4.27).
+So each one is pinned here against a **literal**, sliced to its own section,
+never against the constant that produced it (section 4.38) -- and the phrases
+the move retired are asserted absent from the whole page, because a pasted old
+constant is how they would come back.
 """
 
 from __future__ import annotations
@@ -264,6 +265,83 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
     )
 
 
+def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
+    """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
+
+    Five paragraphs, each pinned whole. The first two are the full forms of the
+    two notices a gene page keeps in one line (`pages._MIRRORED_NOTICE`, which
+    links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
+    "How to read these numbers" notes; the last was the second sentence of its
+    composite note. Each was re-read for a page with no table on it: "In each
+    study's table" anchors what the units sentence describes, "the rows above
+    it" became "beside it" and "a scan of this size" became "that size".
+
+    Recorded decisions that moved with them:
+
+    * **The absent-cell sentence must not say why a row is absent.** Moved from
+      `test_the_section_says_what_a_missing_row_means_without_asserting_why`.
+      Until 2026-08-05 it asserted "no variant of that class was seen in either
+      group" -- measured over PMID:42230622 alone, and false for the other two
+      studies: PMID:34324492 tests one consequence class by construction, and
+      PMID:40127276 observed 14,364 synonymous variants (its Dataset S4) and
+      published no synonymous row. That phrase is asserted absent from this page
+      by `test_no_sentence_the_move_retired_comes_back_here`, and from the gene
+      page by `test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page`.
+    * **The negative control carries its own condition.** Moved from
+      `test_the_synonymous_negative_control_is_explained_only_where_one_exists`.
+      On a gene page it rendered only where a synonymous row did, because 2 of
+      the 3 studies publish none (every synonymous row is PMID:42230622's); here
+      it is stated once, with that condition in its own words ("Only a study
+      that publishes one has it").
+    * **The pooling paragraph is policy, in the present tense about nothing.**
+      "these cohorts overlap" sent a one-study page's reader hunting for a
+      second study; it is asserted absent here too.
+
+    **Three clauses are narrower than the plan's text, each measured 2026-10-26
+    on a real build of 4233eca** (`methods._RARE_VARIANTS` records the detail):
+    "in a gene page's rare-variant section" became "in a gene page's study
+    tables", because the evidence matrix in that section shows tallies the atlas
+    derives ("n = N" on 86 pages, "N rows" on 48); "republished exactly as
+    published" lost "exactly", because 376 of the 1,210 published raw p-values
+    render rounded to three significant figures; and the units sentence says
+    what a de novo row's `controls` cell shows, because 108 of them on 36 pages
+    read "N expected", not observed / total.
+    """
+    section = _section(page, "rare-variants")
+    assert section.startswith('<h2 id="rare-variants">Rare-variant association</h2><p>')
+    paragraphs = re.findall(r"<p>(.*?)</p>", section, re.S)
+    assert paragraphs == [
+        "Every count and statistic in a gene page's study tables is an upstream study's, "
+        "republished as published. The atlas computes none of them and adds no assessment "
+        "of them; where a study is by an author of this atlas, its block says so.",
+        "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
+        "studies draw on the same sample collection they describe partly the same children, "
+        "so combining their results would count those children twice; a gene page names any "
+        "overlap between its studies where it occurs.",
+        "In each study's table, <code>cases</code> and <code>controls</code> each show "
+        "<em>observed / total</em> (for a de novo row, <code>controls</code> is instead the "
+        "count the study's mutation model expected), and <strong>every cell names what it "
+        "counted</strong> &mdash; carriers, alleles, or de novo mutations. The three are not "
+        "interchangeable: a study counting alleles counts a person with two qualifying "
+        "variants twice, and its denominator is roughly twice the number of people "
+        "sequenced. A consequence class or case group with no row is one the study "
+        "<strong>did not report</strong>, which is not a null result and does not always "
+        "mean no such variant was seen &mdash; studies differ in which classes their "
+        "gene-level tables cover.",
+        "The <strong>synonymous</strong> row is a study's own negative control &mdash; "
+        "synonymous variants should show no enrichment. Read it on the same uncorrected scale "
+        "as the rows beside it: a <em>strongly</em> enriched synonymous row is a warning about "
+        "that gene's comparison, while a nominally significant one is what a scan of that size "
+        "produces by chance. <strong>Only a study that publishes one has it</strong>; a table "
+        "with no synonymous row offers no such check.",
+        "A <strong>damaging (LOF + missense)</strong> row is the <strong>union</strong> of "
+        "the study's loss-of-function and damaging-missense rows, not a third independent "
+        "result &mdash; the same variants are counted in both. It is shown because a study "
+        "that defines its findings by the composite publishes a p-value for it that is not "
+        "derivable from the other two.",
+    ]
+
+
 @pytest.mark.parametrize(
     "retired",
     [
@@ -280,6 +358,13 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
         # The gene page's copy notice (`pages._CLINGEN_COPY_NOTICE`): "here" and
         # "the panel record above" name a table this page does not have (D50).
         "listed here only",
+        # The refuted mechanism for an absent row (2026-08-05): false for two of
+        # the three studies.
+        "no variant of that class was seen in either group",
+        # Present tense about a second study a one-study page does not have.
+        "these cohorts overlap",
+        # The tables round to three significant figures (2026-10-26).
+        "exactly as published",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -> None:

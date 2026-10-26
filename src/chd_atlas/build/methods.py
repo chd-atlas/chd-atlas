@@ -27,8 +27,9 @@ never "listed here" or "the panel record above".
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
-unique to each, as one label-chip-gloss triple per rung; and the phrases the
-move retired as absent from the whole page.
+unique to each, as one label-chip-gloss triple per rung; `#validity` and
+`#rare-variants` whole, as literals; and the phrases the move retired as absent
+from the whole page.
 
 Written through `Emitter.write_text`, for the reason `pages.py` gives: `Json`'s
 union includes `str`, so `write_json` would type-check and publish the page as a
@@ -125,6 +126,63 @@ _VALIDITY: Final = (
     "a gene page may not be every classification the gene has.</p>"
 )
 
+# How to read a gene page's rare-variant section (2026-10-26, D50). The page
+# keeps a one-line short form of the first two paragraphs (`pages._MIRRORED_NOTICE`
+# and `pages._POOLING_NOTICE`) and links here; the last three were the page's
+# folded reading notes and its composite note's second sentence, and left it.
+#
+# Narrower than the text this was drafted from, each measured 2026-10-26 on a
+# real build of 4233eca:
+#
+# * "Every count and statistic in a gene page's rare-variant section" -> "in a
+#   gene page's study tables". The evidence matrix in that section shows tallies
+#   the atlas derives -- "n = N" in a cell on 86 pages, "N rows" on 48 -- and
+#   each PMID:42230622 block carries the atlas's own Bonferroni arithmetic
+#   (`0.05 / 138,609`); neither is an upstream study's number.
+# * "republished exactly as published" -> "as published". The tables round to
+#   three significant figures: 376 of the 1,210 published raw p-values render
+#   rounded (PMID:40127276's 0.00583259259259259 reads 0.00583). Each gene's
+#   JSON carries them in full.
+# * The units sentence said `cases` and `controls` "each show observed / total".
+#   A de novo row's `controls` cell is the mutation model's expected count
+#   (`pages._controls`): 108 cells on 36 pages read "0.0358 expected" and the
+#   like. It says so.
+_RARE_VARIANTS: Final = (
+    '<h2 id="rare-variants">Rare-variant association</h2>'
+    "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
+    "republished as published. The atlas computes none of them and adds no assessment "
+    "of them; where a study is by an author of this atlas, its block says so.</p>"
+    # was pages._POOLING_NOTICE in full; "the studies below" -> "its studies"
+    "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
+    "studies draw on the same sample collection they describe partly the same children, "
+    "so combining their results would count those children twice; a gene page names any "
+    "overlap between its studies where it occurs.</p>"
+    # was pages._BURDEN_PREAMBLE; "In each study's table," anchors what it describes
+    "<p>In each study's table, <code>cases</code> and <code>controls</code> each show "
+    "<em>observed / total</em> (for a de novo row, <code>controls</code> is instead the "
+    "count the study's mutation model expected), and <strong>every cell names what it "
+    "counted</strong> &mdash; carriers, alleles, or de novo mutations. The three are not "
+    "interchangeable: a study counting alleles counts a person with two qualifying "
+    "variants twice, and its denominator is roughly twice the number of people "
+    "sequenced. A consequence class or case group with no row is one the study "
+    "<strong>did not report</strong>, which is not a null result and does not always "
+    "mean no such variant was seen &mdash; studies differ in which classes their "
+    "gene-level tables cover.</p>"
+    # was pages._SYNONYMOUS_NOTICE; "above it" -> "beside it", "this size" -> "that size"
+    "<p>The <strong>synonymous</strong> row is a study's own negative control &mdash; "
+    "synonymous variants should show no enrichment. Read it on the same uncorrected scale "
+    "as the rows beside it: a <em>strongly</em> enriched synonymous row is a warning about "
+    "that gene's comparison, while a nominally significant one is what a scan of that size "
+    "produces by chance. <strong>Only a study that publishes one has it</strong>; a table "
+    "with no synonymous row offers no such check.</p>"
+    # was the second sentence of pages._composite_note
+    "<p>A <strong>damaging (LOF + missense)</strong> row is the <strong>union</strong> of "
+    "the study's loss-of-function and damaging-missense rows, not a third independent "
+    "result &mdash; the same variants are counted in both. It is shown because a study "
+    "that defines its findings by the composite publishes a p-value for it that is not "
+    "derivable from the other two.</p>"
+)
+
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
@@ -145,6 +203,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         + SCOPE_RULE
         + grade_key()
         + _VALIDITY
+        + _RARE_VARIANTS
     )
     emitter.write_text(
         METHODS_PAGE,

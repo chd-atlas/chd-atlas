@@ -1430,60 +1430,17 @@ def test_two_studies_sharing_a_cohort_are_declared_not_independent(
     assert "Deciphering Developmental Disorders (DDD)" in page
 
 
-def test_the_section_says_what_a_missing_row_means_without_asserting_why(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """The sentence that is the difference between a table and a trap -- and the
-    mechanism it must NOT assert.
-
-    The burden matrix is sparse, and a reader meeting a gap will read it as "not
-    tested" unless told. So the page says an absent cell is one the study did not
-    report.
-
-    **It must not say why.** Until 2026-08-05 it asserted "no variant of that
-    class was seen in either group, so there was nothing to compare" -- measured
-    over PMID:42230622 alone, where 0 of 1,192 rows have no carrier on either
-    side. That is false for the other two studies now rendering tables beside it:
-    PMID:34324492 tests one consequence class by construction, and PMID:40127276
-    observed 14,364 synonymous variants (its own Dataset S4) and published no
-    synonymous row because its gene-level table covers only damaging classes. A
-    reader told "no variant of that class was seen" would conclude that study
-    found none.
-    """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    section = page[page.index(_RARE_VARIANT_HEADING) :]
-
-    assert "did not report" in section
-    assert "does not always mean" in section
-    # The refuted mechanism, in the exact words that were wrong.
-    assert "no variant of that class was seen in either group" not in section
-
-
-def test_the_synonymous_negative_control_is_explained_only_where_one_exists(
-    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
-) -> None:
-    """Conditional, for the reason `_POOLING_NOTICE` and `_composite_note` are.
-
-    A reader who does not know the synonymous row is a negative control reads a
-    null result as a null finding rather than as the calibration check it is --
-    so where one exists, the page says so.
-
-    Where none exists, the page must not tell a reader to weigh one. Measured
-    2026-08-05: 69 of the 290 published burden rows are synonymous and **every
-    one comes from PMID:42230622**; the other two studies publish no negative
-    control at all. Rendered unconditionally, this paragraph promised a check
-    that two of the three tables on the page cannot offer.
-    """
-    without = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="lof")])
-    assert "negative control" not in without
-
-    with_syn = _burden_page(
-        tmp_path / "syn",
-        facts_uncurated,
-        [_burden_row(consequence_class="lof"), _burden_row(consequence_class="synonymous")],
-    )
-    assert "negative control" in with_syn
-    assert "uncorrected" in with_syn
+# `test_the_section_says_what_a_missing_row_means_without_asserting_why` and
+# `test_the_synonymous_negative_control_is_explained_only_where_one_exists` sat
+# here until 2026-10-26, pinning the rare-variant reading notes a gene page
+# folded under "How to read these numbers". The notes moved to
+# `methods.html#rare-variants` (D50) and both tests' positives and recorded
+# decisions moved with them, to
+# `test_rare_variants_states_what_every_gene_page_folded_or_shortened` in
+# `test_build_methods.py`. The refuted mechanism ("no variant of that class was
+# seen in either group") is asserted absent on both pages: there by
+# `test_no_sentence_the_move_retired_comes_back_here`, here by
+# `test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page`.
 
 
 def test_the_page_names_how_many_tests_the_study_ran(
@@ -1515,6 +1472,11 @@ def test_the_page_names_how_many_tests_the_study_ran(
     assert "138,609" in method
     assert "3.6e-07" in method
     assert "judge the raw one against the whole scan" in method
+    # "138,609 such comparisons" until 2026-10-26: its antecedent, the design
+    # clause, renders after it and folded under "How this study counted", so
+    # "such" pointed at a sentence the reader had not met. Now self-contained.
+    assert "This study reported 138,609 comparisons in all." in method
+    assert "such comparisons" not in page
 
 
 def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
@@ -1584,9 +1546,24 @@ def test_a_study_by_an_author_of_this_atlas_says_so(
     line applies, so a stale version of it is worse than none -- it describes a
     corpus that no longer exists and invites the conclusion that the disclosure
     is unconditional.
+
+    **Shortened to one sentence on 2026-10-26 (D50)**, and pinned whole, sliced
+    to its own element; `methods.html#rare-variants` says the rest. The spec's
+    approved short form ended "nothing added", and that is false where it sits:
+    measured on a real build of 4233eca, 113 of the 190 own-lab study blocks
+    also carry the atlas's own Bonferroni arithmetic (`0.05 / 138,609`) and
+    draw a forest plot from the study's rows. It keeps the hedge the sentence
+    it replaced had: no *assessment* added.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    assert "this study is by an author of this atlas" in page
+    disclosure = re.search(r'<p class="disclosure">.*?</p>', page, re.S)
+    assert disclosure, "an own-lab study's block carries no disclosure"
+    assert disclosure.group(0) == (
+        '<p class="disclosure">Declaration: this study is by an author of this atlas; '
+        "republished as published, no assessment added.</p>"
+    )
+    for text in (page, html.unescape(page)):
+        assert "nothing added" not in text
 
     outside = _PUBLICATION.model_copy(update={"own_lab": False})
     other = _burden_page(
@@ -1712,9 +1689,21 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     and it belongs there whenever the matrix does, one study or three. Folding
     it while introducing the thing it guards against would have been the worst
     available pairing.
+
+    **Shortened to the spec's approved short form on 2026-10-26 (D50, P7)**,
+    made explicit about what would double-count: the spec's "those sharing a
+    collection would count" left the pooling implicit. Pinned whole, sliced to
+    the section; the full sentence, with how a gene page names an overlap, is on
+    `methods.html#rare-variants`, where "these cohorts overlap" is asserted
+    absent too.
     """
     one = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
     assert "no pooled statistic across studies" in one
+    assert (
+        "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
+        "two that share a sample collection would count the same children twice.</p>"
+        in _burden_section_text(one)
+    )
     # Immediately after the matrix, not four paragraphs above it.
     assert one.index("</table>") < one.index("no pooled statistic across studies")
     # **And it must be true of a one-study page.** It used to assert "these
@@ -1899,14 +1888,56 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
     and the advice to judge against the whole scan. PMID:34324492 corrects every
     row, so that same advice would point them at the column they should *not* be
     reading. The block says whichever is true of its own rows.
+
+    **The corrected branch names no column since 2026-10-26 (P9).** It said
+    "The corrected p column carries the study's own correction", and where the
+    study has a forest plot that column is folded under "every figure from this
+    study" while the plot names the same number `q` or `corrected p`. It now
+    names the statistic, with the `q` it is shown as where it is a
+    false-discovery rate (`_statistic`), and is pinned identical on a block with
+    a forest and on one without, so it cannot come to depend on either layout.
     """
+    read_corrected = (
+        " Its <strong>corrected p</strong> (shown as <em>q</em> where it is a false-discovery "
+        "rate) carries the study's own correction over all of them; read it rather than the "
+        "raw p.</p>"
+    )
     corrected = _burden_page(
         tmp_path,
         facts_uncurated,
         [_burden_row(pvalue_adjusted=0.991, pvalue_adjustment="bonferroni")],
     )
-    assert "read it rather than the raw p" in corrected
+    assert "<svg" in _burden_section_text(corrected), "this fixture must draw a forest"
+    assert (
+        '<p class="method">This study reported 138,609 comparisons in all.' + read_corrected
+        in corrected
+    )
     assert "judge the raw one against the whole scan" not in corrected
+
+    unplotted = _burden_page(
+        tmp_path / "unplotted",
+        facts_uncurated,
+        [
+            _burden_row(
+                study="PMID:34324492",
+                variant_class="cnv_deletion",
+                effect=None,
+                effect_measure=None,
+                effect_bound=None,
+                ci_low=None,
+                ci_high=None,
+                pvalue_adjusted=0.991,
+                pvalue_adjustment="familywise_permutation",
+            )
+        ],
+        publications=_OTHER_PUBLICATIONS,
+    )
+    assert "<svg" not in _burden_section_text(unplotted), "this fixture must draw no forest"
+    assert (
+        '<p class="method">This study reported 11,515 comparisons in all.' + read_corrected
+        in unplotted
+    )
+    assert "corrected p</strong> column" not in corrected + unplotted
 
     plain = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
     assert "judge the raw one against the whole scan" in plain
@@ -2028,6 +2059,16 @@ def test_the_composite_row_is_named_as_a_union_of_the_two_below_it(
 
     with_composite = _burden_page(tmp_path, facts_uncurated, composite)
     assert "union</strong> of the loss-of-function" in with_composite
+    # One sentence since 2026-10-26 (D50, P8), pinned whole and sliced to the
+    # section. Why the composite is shown at all -- its p-value is not derivable
+    # from its components' -- moved to `methods.html#rare-variants`.
+    assert (
+        '<p class="notice-inline">The <strong>damaging (LOF + missense)</strong> rows are '
+        "the <strong>union</strong> of the loss-of-function and damaging-missense rows "
+        "below them, not a third independent result &mdash; the same variants are counted "
+        "in both.</p>" in _burden_section_text(with_composite)
+    )
+    assert "not derivable from the other two" not in with_composite
 
     without = _burden_page(tmp_path / "b", facts_uncurated, components)
     assert "union</strong> of the loss-of-function" not in without
@@ -2053,6 +2094,13 @@ def test_every_particular_caveat_survives_outside_the_fold(
     0.05 and 3 survive Bonferroni over the study's own 138,609 comparisons --
     so `_method_line` returns it separately from the design clause, which does
     fold. Reuniting them would bury it one release after it was added.
+
+    The pooling caveat's wording became the spec's approved short form on
+    2026-10-26 ("count the same children twice", D50, P7); the rule -- visible
+    outside every fold -- is unchanged. The scan-size assertion is pinned to the
+    method line's own words since the same day: the card's no-correction line
+    also carries "138,609" ("judge its results against its scan of 138,609
+    tests"), so the bare number would pass with the method line folded away.
     """
     rows = [
         _burden_row(consequence_class="lof"),
@@ -2074,31 +2122,72 @@ def test_every_particular_caveat_survives_outside_the_fold(
     # The atlas's claim about itself.
     assert "computes none of them" in unfolded
     # The relocated pooling caption -- it qualifies the matrix directly above it.
-    assert "count those children twice" in unfolded
+    assert "count the same children twice" in unfolded
     # A row's own method note: this is where the TAA contamination, which is not
     # congenital heart disease, reaches a reader at all.
     assert "thoracic aortic aneurysm" in unfolded
-    # The multiple-testing denominator.
+    # The multiple-testing denominator, in the method line's own words.
     assert "138,609" in unfolded
+    assert "138,609 comparisons in all" in unfolded
 
 
-def test_the_general_reading_notes_are_folded_out_of_the_way(
+def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
     """The other half of the rule, so "fold everything" fails as loudly as
     "fold nothing".
 
-    These three paragraphs are identical on all 23 pages and teach how to read
-    the table rather than saying anything about this gene. Nothing is lost by
-    folding them: the unit word is still in every count cell, and the matrix
+    These paragraphs are identical on every page and teach how to read the
+    table rather than saying anything about this gene. Nothing is lost by
+    moving them: the unit word is still in every count cell, and the matrix
     renders `not tested` as its own state rather than as a gap.
+
+    **They left the gene page on 2026-10-26 (D50)**, and this test was named
+    `test_the_general_reading_notes_are_folded_out_of_the_way` until then: they
+    were folded under "How to read these numbers" on all 118 pages with a
+    rare-variant section, and are now on `methods.html#rare-variants`, where
+    `test_build_methods.py` pins them. What stays on the page is the section's
+    one-line attribution, scoped to the study tables and linking there -- the
+    evidence matrix beside it shows tallies the atlas derives ("n = N" on 86
+    pages and "N rows" on 48, measured on a build of 4233eca), so "every count
+    and statistic below" was false of the matrix -- and the pooling caption
+    beneath the matrix (`test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional`).
+
+    The moved paragraphs are asserted absent from the **whole** page, in both
+    apostrophe spellings, by a phrase unique to each, not by "negative
+    control": the forest key may name the synonymous row's role, and a
+    negative on that phrase would fail on a caption it was never about. The
+    fixture is a synonymous row, so the forest's muted clause renders, and it
+    must point at the notes where they now are rather than at a fold that has
+    left the page.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="synonymous")])
-    unfolded = re.sub(r"<details.*?</details>", "", page, flags=re.S)
+    section = _burden_section_text(page)
 
-    for general in ("every cell names what it counted", "negative control"):
-        assert general in page, f"{general!r} must still be on the page"
-        assert general not in unfolded, f"{general!r} must be behind the fold"
+    assert section.startswith(
+        "<p>Every count and statistic in the study tables below is an upstream study's, "
+        "republished as published; the atlas computes none of them. "
+        '<a href="../methods.html#rare-variants">How to read these results</a>.</p>'
+    )
+    assert '<details class="reading-notes"><summary>How to read these numbers' not in section
+    figure = _forest_figures(section)[0]
+    assert (
+        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, drawn "
+        "apart from the results it calibrates; "
+        '<a href="../methods.html#rare-variants">How to read these results</a> says why.' in figure
+    )
+    for text in (page, html.unescape(page)):
+        for moved in (
+            "every cell names what it counted",
+            "synonymous variants should show no enrichment",
+            "Only a study that publishes one has it",
+            "How to read these numbers",
+            # The refuted mechanism for an absent row (2026-08-05).
+            "no variant of that class was seen in either group",
+            "every count and statistic below",
+            "Every count and statistic below",
+        ):
+            assert moved not in text, f"{moved!r} is back on the gene page"
 
 
 def test_the_matrix_names_an_untested_design_rather_than_leaving_a_blank(
@@ -3226,10 +3315,11 @@ def test_a_forest_never_replaces_the_figures_it_summarises(
     assert "<table" in folded.group(0)
     assert "5 carriers / 1,471" in folded.group(0)
     assert "OR 2.45 (95% CI 1.2–8.1)" in folded.group(0)
-    # A section-wide `<details` check would not be enough: the reading notes
-    # and the how-this-study-counted block are both `<details>` a few lines
-    # above (CLAUDE.md section 4.19). Nor is `"<table" not in unfolded`: the
-    # evidence matrix is a table too, and it is outside the fold on purpose.
+    # A section-wide `<details` check would not be enough: the how-this-study-
+    # counted block is a `<details>` a few lines above, and the section's
+    # reading notes were one until 2026-10-26 (CLAUDE.md section 4.19). Nor is
+    # `"<table" not in unfolded`: the evidence matrix is a table too, and it is
+    # outside the fold on purpose.
     # Asserted on a count only this study's own table renders -- the matrix
     # cell carries the effect and one statistic and no count at all.
     unfolded = re.sub(r"<details.*?</details>", "", section, flags=re.S)
