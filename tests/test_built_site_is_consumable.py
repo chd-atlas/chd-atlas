@@ -63,6 +63,10 @@ def _advertised(site: Path) -> list[tuple[str, str]]:
         for modality in bundle["omics"].values():
             for shard in modality["shards"]:
                 references.append((entry["bundle"], shard))
+        for dataset in bundle["expression_profile"]["datasets"]:
+            # None on a corpus mid-curation, which advertises nothing.
+            if dataset["quantile_shard"] is not None:
+                references.append((entry["bundle"], dataset["quantile_shard"]))
 
     for shard in _read(site, "variants/index.json")["shards"]:
         references.append(("variants/index.json", shard))
@@ -91,10 +95,12 @@ def test_every_path_the_site_advertises_resolves(site: Path) -> None:
     The floors are asserted so the sweep cannot pass by finding nothing, which
     is how a loop over an empty collection reports success. They are floors
     rather than exact counts so that curating more data strengthens this test
-    instead of breaking it. Two of the five sources contribute nothing today —
+    instead of breaking it. Two of the six sources contribute nothing today —
     no gene carries omics summaries and no variant shard exists in the committed
     corpus — so those loops are currently unexercised, and the floors are
-    deliberately not raised to hide that.
+    deliberately not raised to hide that. The bundles' floor is met by their
+    `expression_profile` percentile grids alone, which reached no sweep of the
+    JSON until 2026-10-26, although the gene pages link them.
     """
     references = _advertised(site)
     by_source: dict[str, int] = {}
@@ -104,6 +110,8 @@ def test_every_path_the_site_advertises_resolves(site: Path) -> None:
     assert by_source.get("manifest.json", 0) >= 8
     assert by_source.get("genes/index.json", 0) >= 1
     assert by_source.get("search/index.json.gz", 0) >= 3
+    bundles = [source for source in by_source if source.startswith("genes/HGNC_")]
+    assert sum(by_source[source] for source in bundles) >= 1
 
     for source, relative in references:
         assert site.joinpath(*relative.split("/")).is_file(), (
@@ -1064,6 +1072,111 @@ def test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is(site:
         cell = re.findall(r"<td>(.*?)</td>", rows[0], re.S)[2]
         bare = confidence or "—"
         assert cell == (f"{bare} {chip}" if entry["gene"] in flagged else bare), entry["gene"]
+
+
+def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list_its_disease(
+    site: Path,
+) -> None:
+    """The Orphanet warrants reach the gene pages, not only `scope.json` (D55, issue #8).
+
+    `build_site` derives the warrants once and hands them to `build_scope` and
+    to `build_gene_pages`. The unit suites hand `build_gene_pages` warrants of
+    their own or none, so a runner that stopped threading them left them green:
+    measured 2026-10-26, `scope_warrants={}` in `build_site` passed all 1,297
+    tests while the pages carrying "is in scope because Orphanet records" went
+    from 27 to 0 and the card's scope line from 21 to 0, and `scope.json` still
+    published all 36 warrants. PTPN11's Noonan grade then sits on a CHD atlas
+    with nothing saying why Noonan counts, and reads as a grade for heart
+    disease.
+
+    Read from `scope.json` and each bundle, never pinned:
+
+    * the validity section carries one note per distinct Orphanet-scoped
+      disease among the bundle's records, in disease-id order, and nothing
+      else on the page does -- a note for a disease the gene has no record
+      for is a warrant stated about nothing the page lists. Each names its
+      disease by the registry's label (the labels are threaded separately, and
+      without them the note names a bare MONDO id) and states the code, the
+      syndrome a subtype inherits from, and every phenotype at the band
+      `scope.json` publishes, so the page and the registry state one warrant;
+    * the card's scope line appears exactly where every disease the headline
+      grade is for is Orphanet-scoped, names those diseases, and names the
+      syndrome a subtype's frequency was recorded for.
+
+    Both sides of each "exactly where" must be exercised (CLAUDE.md section
+    4.30), and the subtype branch too, or it is measuring nothing.
+    """
+    orphanet = {term["id"]: term for term in _read(site, "scope.json")["terms"] if term["orphanet"]}
+    assert orphanet, "scope.json publishes no Orphanet warrant; this measures nothing"
+    entries = _read(site, "genes/index.json")["genes"]
+    noted = carded = subtype_notes = subtype_cards = 0
+    for entry in entries:
+        bundle = _read(site, entry["bundle"])
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        start = page.index("<h2>Mirrored gene&ndash;disease validity</h2>")
+        section = page[start : page.index("<h2", start + 1)]
+        records = bundle["validity"]["records"]
+
+        diseases = sorted({record["disease"] for record in records} & orphanet.keys())
+        notes = [
+            note
+            for note in re.findall(r'<p class="notice-inline">(.*?)</p>', section)
+            if "is in scope because Orphanet records" in note
+        ]
+        assert page.count("is in scope because Orphanet records") == len(notes), entry["gene"]
+        assert len(notes) == len(diseases), (entry["gene"], diseases)
+        for disease, note in zip(diseases, notes, strict=True):
+            term = orphanet[disease]
+            label = html.escape(term["label"])
+            assert note.startswith(f"<strong>{label} is in scope because"), (entry["gene"], note)
+            assert note.endswith(
+                f"The classifications below for {label} are for the syndrome as a whole, "
+                "not for heart disease."
+            ), (entry["gene"], note)
+            warrant = term["orphanet"]
+            assert warrant["code"] in note, (entry["gene"], disease)
+            if warrant["via"] == "subtype":
+                subtype_notes += 1
+                assert f"of {html.escape(warrant['name'])}</strong>" in note, entry["gene"]
+                assert warrant["omim"] in note, entry["gene"]
+            for phenotype in warrant["phenotypes"]:
+                stated = (
+                    f"{html.escape(phenotype['label'])} at "
+                    f"<em>{html.escape(phenotype['frequency'])}</em>"
+                )
+                assert stated in note, (entry["gene"], disease, phenotype["hpo"])
+        noted += bool(notes)
+
+        headline = bundle["headline_confidence"]
+        graded = [
+            record
+            for record in records
+            if headline is not None
+            and record["source"] == "clingen"
+            and record["classification"] == headline
+        ]
+        scoped = bool(graded) and all(record["disease"] in orphanet for record in graded)
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        lines = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
+        assert page.count('class="card-scope"') == len(lines), entry["gene"]
+        assert len(lines) == int(scoped), (entry["gene"], lines)
+        if scoped:
+            carded += 1
+            line = lines[0]
+            for record in graded:
+                assert html.escape(record["disease_label"]) in line, (entry["gene"], line)
+            recorded_for = line[line.index("30% of cases") :]
+            warrants = [orphanet[record["disease"]]["orphanet"] for record in graded]
+            if all(warrant["via"] == "direct" for warrant in warrants):
+                assert recorded_for == "30% of cases.", (entry["gene"], line)
+            for warrant in warrants:
+                if warrant["via"] == "subtype":
+                    subtype_cards += 1
+                    assert html.escape(warrant["name"]) in recorded_for, (entry["gene"], line)
+    assert 0 < noted < len(entries), f"{noted} of {len(entries)} pages carry an Orphanet note"
+    assert 0 < carded < len(entries), f"{carded} of {len(entries)} cards carry a scope line"
+    assert subtype_notes, "no page notes a subtype's warrant; that branch measures nothing"
+    assert subtype_cards, "no card names a subtype's syndrome; that branch measures nothing"
 
 
 def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
