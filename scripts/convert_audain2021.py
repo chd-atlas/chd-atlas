@@ -72,10 +72,15 @@ double counting design decision D33 forbids, arriving through the one route the
 overlap machinery cannot see.
 
 The CNV part does not have that problem, and the difference is the point. S2
-Table's ~190 sources are mostly single-case reports plus four collections this
-atlas will never curate as studies in their own right, so aggregating them
-creates no future double count. The de novo part aggregates two studies this
-atlas intends to carry individually.
+Table lists 189 case sources for 7,958 cases (measured 2026-10-26; this
+paragraph said "~190 sources are mostly single-case reports plus four
+collections" until then): the four collections registered as this study's case
+cohorts hold 4,242, 105 single-case sources hold 105, 69 sources of 2 to 49
+cases hold 471, and 11 unregistered sources of 50 or more hold 3,140. None is a
+CNV study this atlas carries, so aggregating them puts no deletion in the
+mirror twice. The de novo part aggregates two studies this atlas intends to
+carry individually. What the unregistered sources cost is visibility, not a
+double count; see the comment on `CASE_COHORTS`.
 
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
@@ -87,6 +92,11 @@ deletion data, against 7,958 and 14,082 for CNVs of any type. The deletion
 figures are the ones this analysis was computed on, so they are the ones the
 mirror carries -- the same rule applied to PMID:42230622, whose abstract
 likewise quotes a larger set than its statistics used.
+
+**Unresolved since 2026-10-26.** The article's methods say the permutation test
+was run on a post-QC set of 6,746 cases and 14,024 controls, which is neither
+S1 pair. The mirror still carries 7,107 and 14,040 until the study's authors
+say which set PLINK counted; see the comment on `METHOD_NOTE`.
 """
 
 from __future__ import annotations
@@ -102,9 +112,13 @@ from convert_burden import gene_symbols, read_sheet
 STUDY: Final = "PMID:34324492"
 SOURCE: Final = "audain2021_s6"
 
-# S2/S3 Tables. The ~190 single-case PMID sources are not registered: they are
-# individual published case reports, not collections, and a registry entry per
-# one would bury the four that carry the cohort-overlap signal.
+# S2/S3 Tables. Only four of S2's 189 case sources are registered, and they hold
+# 4,242 of its 7,958 cases (53%). This comment called the rest "~190
+# single-case PMID sources" until 2026-10-26; measured from S2 that day, 105 of
+# the other 185 are single cases (105 individuals), 69 hold 2 to 49 (471 in all)
+# and 11 hold 50 or more (3,140 in all). The unregistered sources are named on
+# no row, so `shared_cohorts` cannot report an overlap between one of them and
+# a study curated later: check S2 before curating another CHD cohort.
 CASE_COHORTS: Final = "decipher;isca;signature;taa_cases"
 CONTROL_COHORTS: Final = "gain_controls;ottawa_controls;wtccc_controls"
 
@@ -112,11 +126,27 @@ CONTROL_COHORTS: Final = "gain_controls;ottawa_controls;wtccc_controls"
 N_CASES: Final = 7107
 N_CONTROLS: Final = 14040
 
+# Renders unfolded directly under "N carriers / 7,107" on every gene page that
+# carries this study. It read "777 sporadic thoracic aortic aneurysm probands
+# (of 7,958 contributing individuals)" until 2026-10-26, which put all 777 in
+# the case count printed above it. Measured 2026-10-26: S2 Table gives the
+# series as 777 of 7,958; S8 Table's CHD+TAA case count equals S6's for all 528
+# of its genes, and 144 of them have a TAA-only carrier, so the series is in
+# the analysis. How many of the 777 are is stated nowhere read -- S1, S2, S3,
+# S6, S8, S10, S11 and the article's text and table captions.
+#
+# The note deliberately names no case count of its own. `N_CASES` is S1
+# Table's deletion column, but the article's methods say the permutation test
+# ran "on the filtered set": "6,746 cases (3,929 harbouring CNV deletions) and
+# 14,024 controls (12,585 harbouring CNV deletions)". Which figure is this
+# row's denominator is unresolved, so the note does not repeat one.
 METHOD_NOTE: Final = (
-    "Cases combine congenital heart disease with 777 sporadic thoracic aortic "
-    "aneurysm probands (of 7,958 contributing individuals); the study reports "
-    "the CHD-only contribution separately for significant genes. A carrier is "
-    "an individual with a rare deletion (MAF below 0.01) overlapping the gene."
+    "Cases combine congenital heart disease with a series of 777 sporadic "
+    "thoracic aortic aneurysm probands among the study's 7,958 cases; the study "
+    "does not report how many of the 777 are in this row's case set. The study "
+    "reports the CHD-only contribution separately for significant genes. A "
+    "carrier is an individual with a rare deletion (MAF below 0.01) overlapping "
+    "the gene."
 )
 
 
