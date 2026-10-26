@@ -43,9 +43,9 @@ times (CLAUDE.md section 4.29).
   `corpus.assertions` — the genes carrying evidence authored here, 1 in the
   committed corpus. It is derived once and shared with the sentence that names
   them, so the figure and the list cannot disagree. Both rows are shown because
-  91 of the 92 published genes carry no assertion at all: a single "genes"
+  118 of the 119 published genes carry no assertion at all: a single "genes"
   figure would read as coverage this site does not have.
-- `len(validity)` is neither of those — every gene either mirror curates, 154 in
+- `len(validity)` is neither of those — every gene either mirror curates, 185 in
   the committed corpus. It is kept, but under "Where this data comes from" and
   labelled so it cannot be read as what this site browses.
 
@@ -96,7 +96,13 @@ from chd_atlas.corpus import Corpus
 # literal because there is no data source for it to drift out of sync with; a
 # wrong repository link is a code review problem, not a silent-evidence-loss
 # one.
-_REPOSITORY_URL = "https://github.com/enriquea/chd-atlas"
+#
+# Two constants, not one. The front page names the project by its organization,
+# but a link to a file must go through the repository: measured 2026-10-23,
+# `https://github.com/chd-atlas/blob/main/docs/data-api.md` answers 404 while the
+# same path under `chd-atlas/chd-atlas` answers 200.
+_ORGANIZATION_URL = "https://github.com/chd-atlas"
+_REPOSITORY_URL = "https://github.com/chd-atlas/chd-atlas"
 
 # A caption that told a reader to wait for something that had already happened.
 #
@@ -203,6 +209,7 @@ def _render(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    combined_results: int,
 ) -> str:
     assertion_count = len(corpus.assertions)
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
@@ -214,9 +221,12 @@ def _render(
     # so the hero note can state the gate it actually has. It said "every gene
     # here is published on an upstream expert panel's classification" until
     # 2026-08-06, which the widening made false for the 16 genes no panel has
-    # graded -- read from `admitting_grade`, the same function the headline and
-    # `admitted_by.classification` come from, so the front page cannot claim a
-    # split the bundles contradict.
+    # graded -- read from `admitting_grade`, which is what
+    # `admitted_by.classification` publishes, so the front page cannot claim a
+    # split the bundles contradict. (This said the headline came from the same
+    # function too; it does not -- `derive.gene_facts` takes `strongest()` over
+    # the in-scope ClinGen records -- though the two agree on every published
+    # gene, measured 2026-10-26.)
     panel_graded_count = sum(
         1 for gene in published if gene in validity and admitting_grade(validity[gene]) is not None
     )
@@ -245,7 +255,12 @@ def _render(
     stats = "".join(
         (
             _stat("Genes published", _number(published_gene_count)),
-            _stat("Burden statistics", _number(census.rows)),
+            _stat("Rare-variant statistics", _number(census.rows)),
+            # Directly under the statistics it combines. "Within-study" is in
+            # the label because "combined burden results" alone, on the front
+            # page of an atlas that refuses to pool studies (D33), reads as
+            # exactly the pooling it refuses.
+            _stat("Within-study combined rare-variant results", _number(combined_results)),
             _stat("Independent datasets", _number(census.families)),
             # Beside "Independent datasets" rather than at the end, because the
             # two answer the same reader's question one level apart: how many
@@ -253,7 +268,7 @@ def _render(
             # sample collections those group. Both are published, and
             # `cohorts.json` is where the caveats on each live.
             _stat("Sample collections", _number(len(corpus.cohorts))),
-            _stat("Genes with burden evidence", _number(census.genes)),
+            _stat("Genes with rare-variant evidence", _number(census.genes)),
             # Immediately after the burden figures, for the reason this pair
             # exists at all: a whole developmental-expression layer landed
             # across Tasks 1-14 with nothing on this page naming it, which is
@@ -270,12 +285,24 @@ def _render(
             _stat("Genes the atlas has curated", _number(len(curated_genes))),
             _stat("Functional evidence records", _number(len(corpus.functional))),
             _stat("Publications cited", _number(len(corpus.publications))),
+            # Every term `scope.json` publishes, whichever authority's warrant
+            # admits it: a manifest key, so the one-census test requires a card.
+            _stat("Disease terms in scope", _number(len(corpus.chd_scope))),
             _stat("Phenotype terms (HPO)", _number(len(corpus.phenotypes))),
             _stat("Featured manuscripts", _number(len(corpus.featured))),
             _stat("Omics datasets", _number(len(corpus.datasets))),
         )
     )
 
+    # "Where this data comes from" named Orphanet zero times until 2026-10-26,
+    # while the syndromes its frequencies bring into scope are the only route in
+    # for some published genes (26 of 119 drop when those terms are removed,
+    # measured that day) and `sources.json` records both Orphadata products as
+    # CC-BY-4.0, attribution required. The
+    # citation is Orphadata's own requested form (`mirrors/sources.yaml`); its
+    # "Data version" is the release `sources.json` pins by sha256, which this
+    # page points to rather than restating a date that would go stale on the
+    # next refresh.
     body = f"""  <h1>CHD Atlas</h1>
   <p class="tagline">Curated evidence linking genes, variants and proteins to congenital
     heart disease.</p>
@@ -287,29 +314,32 @@ def _render(
       <div class="figure"><span class="figure-value">{_number(census.families)}</span>
         <span class="figure-label">independent datasets</span></div>
       <div class="figure"><span class="figure-value">{_number(census.rows)}</span>
-        <span class="figure-label">burden statistics</span></div>
+        <span class="figure-label">rare-variant statistics</span></div>
     </div>
     <p class="hero-note">Every gene here is published on an upstream authority's
       assessment, never one this atlas authored: {_number(panel_graded_count)} on a ClinGen
       expert panel's classification, {_number(published_gene_count - panel_graded_count)} on
       two or more Gene Curation Coalition submitters agreeing where no panel disputes it.
-      Rare-variant burden statistics are reported per independent cohort family, and none is
+      Rare-variant statistics are reported per independent cohort family, and none is
       pooled across them.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
 
   <h2>What this is</h2>
   <p>A curator reads the primary literature and mirrors upstream reference sources —
-    ClinGen, GenCC, HPO — to build a static, queryable record of the evidence behind a
-    gene's association with congenital heart disease. There is no server: every page
-    below is built ahead of time, and every payload behind one is a JSON file a client
+    ClinGen, GenCC, HPO, Orphanet — to build a static, queryable record of the evidence
+    behind a gene's association with congenital heart disease. There is no server: every
+    page below is built ahead of time, and every payload behind one is a JSON file a client
     fetches and filters itself.</p>
 
   <h2>What's published</h2>
   <dl class="stats">{stats}</dl>
   <p>{_plural(assertion_count, "curated gene-disease assertion")} so far: {asserted}.</p>
-  <p>A <strong>burden statistic</strong> is one study's rare-variant test of one gene under
-    one design. An <strong>independent dataset</strong> is a cohort family rather than a
+  <p>A <strong>rare-variant statistic</strong> is one study's rare-variant test of one gene
+    under one design: a case-control burden test of rare SNVs and indels or of copy-number
+    variants, or a de novo enrichment test, which are different analyses and are named as
+    such on each gene's page. An
+    <strong>independent dataset</strong> is a cohort family rather than a
     paper: two studies drawing on the same sample collection describe the same people and
     count once. How many datasets agree about a gene is shown on every row of the browse
     page, and it is a count of evidence — never a verdict on the gene.</p>
@@ -320,8 +350,15 @@ def _render(
     <strong>GenCC</strong>; phenotype terms and their synonyms are mirrored from the
     <strong>Human Phenotype Ontology</strong>. The atlas authors no validity classification
     of its own — every classification on this site is an upstream panel's or submitter's,
-    republished with its provenance intact. <a href="sources.json">sources.json</a> carries
-    the licence and attribution terms each of these is mirrored under.</p>
+    republished with its provenance intact. <strong>Orphanet</strong>'s phenotype
+    annotations decide whether a syndrome a curator nominates is in scope on how often it
+    carries a structural heart malformation; its cardiovascular annotations and its mappings
+    to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
+    Free access data from Orphanet. &copy; INSERM 1999. Available on
+    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
+    date or a checksum, and carries the licence and attribution terms each of these is
+    mirrored under.</p>
   <dl>
     <dt>{_MIRRORED_ROW_LABEL}</dt>
     <dd>{mirrored_gene_count}</dd>
@@ -337,7 +374,7 @@ def _render(
       and a checksum for every file in it.</li>
     <li><a href="sources.json"><code>sources.json</code></a> — what the atlas mirrors, and
       on whose terms.</li>
-    <li><a href="{_REPOSITORY_URL}">{html.escape(_REPOSITORY_URL)}</a> — source, curation
+    <li><a href="{_ORGANIZATION_URL}">{html.escape(_ORGANIZATION_URL)}</a> — source, curation
       workflow and the full published API documentation.</li>
   </ul>
 
@@ -357,6 +394,7 @@ def build_landing(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    combined_results: int,
     emitter: Emitter,
 ) -> None:
     """Emit `index.html`.
@@ -390,7 +428,14 @@ def build_landing(
     with no default for the identical reason: a whole evidence layer has landed
     with this page never touched before (CLAUDE.md section 4.29's burden
     precedent), and a silently-defaulted zero is exactly how that happens again.
+
+    `combined_results` is `burden.combined_census`'s return, the same integer
+    `write_manifest` publishes as `counts.burden_combined`, and it has no default
+    for the same reason. The 2.14 spec first left this page unchanged; the
+    one-census test refused that, because this page is documented as stating
+    every key of `counts`.
     """
     emitter.write_text(
-        LANDING, _render(corpus, symbols, validity, published, census, profile_census)
+        LANDING,
+        _render(corpus, symbols, validity, published, census, profile_census, combined_results),
     )

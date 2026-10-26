@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 from ruamel.yaml import YAML
 
+from chd_atlas.build.burden import load_burden
+from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import CohortFile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -96,3 +99,65 @@ def test_the_committed_registry_parses_and_covers_every_cited_cohort() -> None:
         "pcgc",
         "gnomad_controls",
     }
+
+
+@pytest.fixture(scope="module")
+def corpus() -> Corpus:
+    """The committed curation, loaded the way `runner.build_site` loads it."""
+    loaded, issues = load_curation(REPO_ROOT)
+    assert issues == [], issues
+    return loaded
+
+
+def test_the_gnomad_caveat_is_held_to_the_denominators_it_describes(corpus: Corpus) -> None:
+    """`gnomad_controls` says its allele denominators sometimes exceed twice its samples.
+
+    It read "run as high as 271,354, which is above twice that figure on 22 of
+    the 90 rows mirrored here" until 2026-10-26: true when it was written and
+    false once the mirror widened with the gene registry. Measured that day,
+    123 PMID:40127276 rows cite this collection, all counting alleles, 36 of
+    them above twice 133,743, the largest 271,396 -- which RAF1's page printed
+    beside the sentence giving the maximum as 271,354. Reworded so no count in
+    it can expire; this holds what is left to the mirror.
+
+    The figure is read from the description rather than written here, so a
+    reworded figure is checked against the data too. A mirror in which no
+    denominator exceeds it fails, and that is the point: "the two are not
+    reconcilable" then has lost its reason and the caveat must be rewritten.
+    """
+    description = {cohort.id: cohort for cohort in corpus.cohorts}["gnomad_controls"].description
+    stated = re.search(r"states this control set as ([\d,]+) samples", description)
+    assert stated, "the description no longer states a sample count to check against"
+    assert "denominators it publishes are ALLELE counts, and some exceed twice that" in description
+
+    rows = [
+        row
+        for rows in load_burden(REPO_ROOT).values()
+        for row in rows
+        if row.study == "PMID:40127276" and "gnomad_controls" in row.control_cohorts
+    ]
+    assert rows, "no row cites gnomad_controls; this guard would pass vacuously"
+    assert {row.count_unit for row in rows} == {"alleles"}
+    samples = int(stated.group(1).replace(",", ""))
+    assert max(row.n_controls or 0 for row in rows) > 2 * samples
+
+
+def test_taa_cases_says_no_scope_term_is_an_aortic_aneurysm_and_none_is(corpus: Corpus) -> None:
+    """`taa_cases` tells a reader this atlas's scope "lists no aortic aneurysm".
+
+    Nothing tied that to `curation/chd_scope.yaml` (review, 2026-10-26), and the
+    list is one nomination away from making it false: SCP007 reports
+    aneurysm-osteoarthritis syndrome as a term that would qualify on Orphanet's
+    frequencies if a curator nominated it, beside Loeys-Dietz and Marfan
+    syndromes. Measured that day: no scope term's label contains "aneurysm".
+
+    Checked on the label, which is what the sentence is about: a Loeys-Dietz
+    term, whose label does not say "aneurysm", would not make it false as
+    written, though a curator admitting one should reread it. The phrase is
+    asserted present rather than tested for, so rewording the description fails
+    here until this check is re-pointed at whatever the new wording claims.
+    """
+    description = {cohort.id: cohort for cohort in corpus.cohorts}["taa_cases"].description
+    assert "outside this atlas's scope, which lists no aortic aneurysm" in description
+    assert corpus.chd_scope, "no scope terms loaded; this guard would pass vacuously"
+    assert [term.label for term in corpus.chd_scope if "aneurysm" in term.label.lower()] == []

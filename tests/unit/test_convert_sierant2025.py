@@ -15,25 +15,34 @@ what proves it fires.
 
 from __future__ import annotations
 
+import html
 import sys
+import zipfile
 from pathlib import Path
 
 import polars as pl
 import pytest
 
-from chd_atlas.tables import BURDEN, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from burden_mirror import COMBINED_ORDER, COMBINED_SORT_KEY, merge_study  # noqa: E402
 from convert_sierant2025 import (  # noqa: E402
+    _BAND_ROW,
     _BLOCKS,
+    _EXPECTED_BANDS,
     _EXPECTED_HEADERS,
     _HEADER_ROW,
     GENE_COLUMN,
+    SHEET,
     _case_control_row,
+    _check_bands,
     _check_layout,
+    _combined_row,
     _de_novo_row,
+    convert,
 )
 
 STUDY = "PMID:40127276"
@@ -88,10 +97,12 @@ def test_every_gene_carries_both_arms_for_all_three_consequence_classes(
     study and a stratum -- so if `origin` were dropped from the mirror's sort key
     the pair would collide, and one of the two would be the row that survived.
 
-    Measured 2026-08-05: 30 registered genes x 3 consequences x 2 arms = 180.
+    Measured 2026-10-25: 41 registered panel genes x 3 consequences x 2 arms =
+    246. (30 genes and 180 rows until the registry widened from 154 genes to 185
+    for the Orphanet-scoped syndromes.)
     """
-    assert burden.height == 180
-    assert burden["gene"].n_unique() == 30
+    assert burden.height == 246
+    assert burden["gene"].n_unique() == 41
     assert set(burden["consequence_class"].unique()) == set(_BLOCKS)
 
     per_gene = burden.group_by("gene").len()["len"].unique().to_list()
@@ -99,7 +110,7 @@ def test_every_gene_carries_both_arms_for_all_three_consequence_classes(
 
     de_novo = burden.filter(pl.col("comparator") == "mutation_model")
     case_control = burden.filter(pl.col("comparator") == "control_cohort")
-    assert de_novo.height == case_control.height == 90
+    assert de_novo.height == case_control.height == 123
 
 
 def test_the_two_arms_count_different_things_and_say_so(burden: pl.DataFrame) -> None:
@@ -142,7 +153,7 @@ def test_the_composite_row_is_the_sum_of_its_two_components(burden: pl.DataFrame
         for row in burden.iter_rows(named=True)
     }
     genes = sorted({gene for gene, _, _ in counts})
-    assert len(genes) == 30
+    assert len(genes) == 41
 
     for gene in genes:
         for comparator in ("mutation_model", "control_cohort"):
@@ -211,7 +222,7 @@ def test_no_committed_row_from_this_study_is_unbounded_or_carries_an_interval(
 
     Both `Inf` genes are unregistered, so every committed row from this study has
     a finite effect. And the study publishes no confidence intervals for either
-    arm, which is why `ci_low` and `ci_high` are null on all 180 -- not because
+    arm, which is why `ci_low` and `ci_high` are null on all 246 -- not because
     they were dropped in transcription. BUR014 would report a half-interval, and
     BUR015 an interval qualifying nothing; neither fires, and this says why.
     """
@@ -229,7 +240,7 @@ def test_the_corrected_p_is_the_studys_benjamini_hochberg_and_never_its_local_fd
 
     Each arm carries a Benjamini-Hochberg FDR, which is a step-up adjusted p and
     is never smaller than the p it corrects -- BUR018 asserts exactly that, and
-    it holds on all 180 rows.
+    it holds on all 246 rows.
 
     The sheet also carries a JL-FDR combining the two arms. **That one is a
     local false discovery rate, not an adjusted p**, and measured over the 248
@@ -422,7 +433,7 @@ def test_a_header_row_too_short_to_hold_the_layout_is_refused_by_name() -> None:
 
 
 def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
-    """`_BLOCKS` is 36 bare integers, and a transposition among them is silent.
+    """`_BLOCKS` is 42 bare integers, and a transposition among them is silent.
 
     Point the damaging block's `dnm_obs` at column 30 -- the loss-of-function
     column -- and every gate stays green: the value is a real observed count, the
@@ -447,8 +458,8 @@ def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
     against the real sheet on every run, so the two halves meet.
     """
     used = [index for block in _BLOCKS.values() for index in block.values()]
-    assert len(used) == 36
-    assert len(set(used)) == 36, "two blocks read the same column"
+    assert len(used) == 42
+    assert len(set(used)) == 42, "two blocks read the same column"
 
     role_label = {
         "obs": "Obs",
@@ -467,3 +478,237 @@ def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
                 f"{consequence}.{key} points at column {index}, whose header is "
                 f"{_EXPECTED_HEADERS[index]!r} and not {role_label[role]!r}"
             )
+
+
+# The note every combined row carries, written out rather than imported so a
+# change to `COMBINED_NOTE` has to be made here too, deliberately. Its fourth
+# sentence said the meta p "does not reproduce as Fisher's method" until
+# 2026-10-26, on every gene -- including WDR5, all three of whose meta p-values
+# are within 10% of Fisher's. Pinned twice: on the row the converter builds
+# (a wrong converter) and on the committed mirror (a stale one).
+_COMBINED_NOTE = (
+    "The study's own meta-analysis of its de novo and case-control arms, by the "
+    "joint local false discovery rate method (Jiang & Yu 2017, PMID:28011772). The "
+    "local FDR is not a corrected p-value and can be smaller than the p beside it. "
+    "The meta-analysis p is the study's own, transcribed as printed; for many of the "
+    "study's genes it does not reproduce as Fisher's method on the two printed arm "
+    "p-values. The study's genome-wide threshold is p < 2.6e-6."
+)
+
+
+def test_the_combination_is_read_from_its_own_columns_never_from_fishers() -> None:
+    """Driven through `_combined_row` on a synthetic record (CLAUDE.md §4.23).
+
+    The JL-FDR block and the Fisher block both end in `P-Val`, `FDR`, so a
+    transposed index is the plausible defect: the row would publish Fisher's
+    case-control p as the combination's and every gate would pass. Every cell
+    here differs, so reading any neighbour fails. The row's note is pinned to
+    `_COMBINED_NOTE` here too.
+    """
+    record = [""] * 70
+    record[GENE_COLUMN] = "KMT2D"
+    ix = _BLOCKS["lof"]
+    record[ix["cc_p"]] = "5.4935e-4"
+    record[ix["cc_fdr"]] = "1.2385e-2"
+    record[ix["meta_p"]] = "1.6582e-38"
+    record[ix["meta_fdr"]] = "2.6973e-34"
+
+    row = _combined_row("HGNC:7133", "lof", record, ix)
+
+    assert (row["pvalue"], row["local_fdr"]) == ("1.6582e-38", "2.6973e-34")
+    assert row["combines"] == "mutation_model;control_cohort"
+    assert row["method"] == "joint_local_fdr"
+    assert row["method_note"] == _COMBINED_NOTE
+    assert (row["study"], row["gene"], row["consequence_class"]) == (STUDY, "HGNC:7133", "lof")
+    assert (row["cohort_stratum"], row["lesion_group"]) == ("all", "")
+    assert tuple(row) == COMBINED_ORDER == BURDEN_COMBINED.column_names
+    assert BURDEN_COMBINED.sort_key == COMBINED_SORT_KEY
+
+
+# Row 6 of the real workbook at the indices `_EXPECTED_BANDS` checks, written out
+# so a change to the constant has to be made twice deliberately.
+_REAL_BANDS = {
+    23: "Fisher's Exact",
+    27: "JL-FDR",
+    42: "Fisher's Exact",
+    46: "JL-FDR",
+    61: "Fisher's Exact",
+    65: "JL-FDR",
+}
+
+
+def test_a_workbook_whose_fisher_and_jl_fdr_bands_are_swapped_is_refused() -> None:
+    """The leaf labels cannot tell the two blocks apart; the band row can.
+
+    `_check_layout` reads row 7 only, where both the Fisher block and the
+    JL-FDR block read `P-Val`, `FDR`. A supplement that swapped them would pass
+    it and transcribe Fisher's p as the combination. `_check_bands` reads row 6.
+    """
+    assert _BAND_ROW == 6
+    assert _EXPECTED_BANDS == _REAL_BANDS
+    good = [""] * 70
+    for index, label in _REAL_BANDS.items():
+        good[index] = label
+    _check_bands(good)  # the real band row: no exception
+
+    swapped = list(good)
+    swapped[23], swapped[27] = good[27], good[23]
+    with pytest.raises(SystemExit) as raised:
+        _check_bands(swapped)
+    assert "band row" in str(raised.value)
+    assert "column 23" in str(raised.value)
+
+
+# The real workbook's namespace: strict OOXML, which a reader assuming the
+# transitional one reads as zero rows (`convert_burden.read_sheet_rows`).
+_STRICT = "http://purl.oclc.org/ooxml/spreadsheetml/main"
+
+
+def _column_letters(index: int) -> str:
+    letters = ""
+    index += 1
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(ord("A") + remainder) + letters
+    return letters
+
+
+def _workbook(path: Path, rows: list[list[str]]) -> Path:
+    """The smallest xlsx `read_sheet_rows` accepts: `rows` as inline strings on `SHEET`."""
+    data = "".join(
+        f'<row r="{number}">'
+        + "".join(
+            f'<c r="{_column_letters(index)}{number}" t="inlineStr">'
+            f"<is><t>{html.escape(value)}</t></is></c>"
+            for index, value in enumerate(row)
+            if value
+        )
+        + "</row>"
+        for number, row in enumerate(rows, start=1)
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr(
+            "xl/workbook.xml",
+            f'<workbook xmlns="{_STRICT}" '
+            'xmlns:r="http://purl.oclc.org/ooxml/officeDocument/relationships">'
+            f'<sheets><sheet name="{html.escape(SHEET)}" sheetId="1" r:id="rId1"/></sheets>'
+            "</workbook>",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+        )
+        archive.writestr(
+            "xl/worksheets/sheet1.xml",
+            f'<worksheet xmlns="{_STRICT}"><sheetData>{data}</sheetData></worksheet>',
+        )
+    return path
+
+
+def test_convert_refuses_a_workbook_whose_header_or_band_row_has_moved(tmp_path: Path) -> None:
+    """`convert` calls both layout guards; the tests calling them directly prove they work.
+
+    The workbook is gitignored (`local/`), so `convert` had never run in a
+    test: measured 2026-10-26 at c034dd6, deleting its `_check_bands` call
+    survived every converter test, and its `_check_layout` call was unguarded
+    the same way. Driven here through a synthetic workbook read by the
+    converter's own reader: the real layout converts -- each combined row
+    reading its own consequence's JL-FDR columns -- and a band row with
+    Fisher and JL-FDR swapped, or a header row with one column inserted, is
+    refused before a row is built.
+    """
+    bands = [""] * 70
+    for index, label in _REAL_BANDS.items():
+        bands[index] = label
+    header = [""] * 70
+    for index, label in _REAL_HEADER.items():
+        header[index] = label
+    # Every cell distinct, so a value read from the wrong column shows.
+    record = [f"0.{index:03d}" for index in range(70)]
+    record[GENE_COLUMN] = "TBX5"
+    unregistered = [*record[:GENE_COLUMN], "NOT-REGISTERED", *record[GENE_COLUMN + 1 :]]
+    symbols = {"TBX5": "HGNC:11604"}
+
+    def sheet(bands: list[str], header: list[str]) -> list[list[str]]:
+        return [[] for _ in range(_BAND_ROW)] + [bands, header, record, unregistered]
+
+    rows, combined, _ = convert(_workbook(tmp_path / "real.xlsx", sheet(bands, header)), symbols)
+    assert [row["gene"] for row in rows] == ["HGNC:11604"] * 6
+    assert [(row["consequence_class"], row["pvalue"], row["local_fdr"]) for row in combined] == [
+        ("damaging", "0.027", "0.028"),
+        ("lof", "0.046", "0.047"),
+        ("missense_damaging", "0.065", "0.066"),
+    ]
+
+    swapped = list(bands)
+    swapped[23], swapped[27] = bands[27], bands[23]
+    with pytest.raises(SystemExit, match="band row"):
+        convert(_workbook(tmp_path / "swapped.xlsx", sheet(swapped, header)), symbols)
+
+    shifted = header[:7] + ["Obs"] + header[7:]
+    with pytest.raises(SystemExit, match="does not match the layout"):
+        convert(_workbook(tmp_path / "shifted.xlsx", sheet(bands, shifted)), symbols)
+
+
+def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
+    """123 = the 41 registered panel genes x 3 consequence classes (90 = 30 x 3 until 2026-10-25).
+
+    Reads the committed mirror, so it catches a *stale* mirror rather than a
+    converter defect (the direct test above does that). Every combined row must
+    sit over the two arm rows it combines -- BUR020 checks that in the
+    validator; this pins that the converter wrote one per pair and no more, and
+    that every row carries the current `_COMBINED_NOTE`, so a converter edited
+    without being re-run fails here.
+    """
+    combined, issues = read_table(REPO_ROOT / "mirrors" / "burden_combined.tsv", BURDEN_COMBINED)
+    assert combined is not None, issues
+    arms, _ = read_table(REPO_ROOT / "mirrors" / "burden.tsv", BURDEN)
+    assert arms is not None
+    mine = arms.filter(pl.col("study") == STUDY)
+    assert combined.height == mine.height // 2 == 123
+    assert set(combined["method"].unique()) == {"joint_local_fdr"}
+    notes = combined.filter(pl.col("study") == STUDY)["method_note"].unique().to_list()
+    assert notes == [_COMBINED_NOTE]
+    assert combined.filter(pl.col("local_fdr") < pl.col("pvalue")).height > 0, (
+        "the local FDR is below its own p for about half the panel; if no row "
+        "shows that, the columns were read from a corrected-p block"
+    )
+
+
+def test_rewriting_the_combined_mirror_keeps_another_studys_rows_in_its_layout(
+    tmp_path: Path,
+) -> None:
+    """`merge_study` keeps every other study's combined rows, in the combined layout.
+
+    It defaults to `burden.tsv`'s column order, and the combined mirror has only
+    ever held this study's rows, so nothing exercised the path where a kept row
+    is laid out by the `order` the caller passed. Measured 2026-10-26 at
+    c034dd6: laying kept rows out by `ORDER` regardless survived the release
+    review's mutation set; on a mirror holding a second study it raises
+    `KeyError: 'combines'`, so this converter could not be re-run once any
+    other study's combination had landed.
+    """
+    other = dict.fromkeys(COMBINED_ORDER, "")
+    other.update(
+        {
+            "study": "PMID:1",
+            "gene": "HGNC:2",
+            "cohort_stratum": "all",
+            "consequence_class": "lof",
+            "combines": "mutation_model;control_cohort",
+            "method": "joint_local_fdr",
+            "pvalue": "0.5",
+            "local_fdr": "0.9",
+            "source": "another_study",
+        }
+    )
+    header = "\t".join(COMBINED_ORDER)
+    kept = "\t".join(other[column] for column in COMBINED_ORDER)
+    out = tmp_path / "burden_combined.tsv"
+    out.write_text(f"{header}\n{kept}\n", encoding="utf-8")
+    mine = {**other, "study": STUDY, "gene": "HGNC:1", "pvalue": "0.01", "source": "s"}
+
+    assert merge_study(out, STUDY, [mine], COMBINED_ORDER, COMBINED_SORT_KEY) == (1, 1)
+    written = "\t".join(mine[column] for column in COMBINED_ORDER)
+    assert out.read_text(encoding="utf-8").splitlines() == [header, written, kept]

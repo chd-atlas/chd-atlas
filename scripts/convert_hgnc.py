@@ -11,8 +11,9 @@ so a refresh is a reviewable diff rather than a silent change under a build.
 
 With no third argument the keep set is every gene named by a row of
 `mirrors/clingen_gene_validity.tsv` or `mirrors/gencc_submissions.tsv` whose
-disease is listed in `curation/chd_scope.yaml` -- 154 genes as committed. The
-registry is deliberately wider than what the site publishes (23 genes under
+disease is listed in `curation/chd_scope.yaml` -- 185 genes as committed (154
+until the Orphanet scope path widened the keep set on 2026-10-25). The
+registry is deliberately wider than what the site publishes (119 genes under
 D21), because it is a lookup table rather than published content: widening the
 gate later must not require re-mirroring.
 
@@ -35,17 +36,28 @@ Two columns need a rule, and both were measured against the live file rather
 than assumed:
 
 `mane_select` is published by HGNC as "ENST00000405440.7|NM_181486.4" for all
-154 in-scope genes. The mirror carries the RefSeq half, which is what the
+185 in-scope genes (re-measured 2026-10-25). The mirror carries the RefSeq half, which is what the
 committed TBX5 row already holds and what a variant's `mane_transcript` is
 written against.
 
-`uniprot_ids` carries more than one accession for exactly one of the 154 --
-RBM10, "P0DW28|P98175" -- and RBM10 is one of the 23 genes D21 publishes, so
-this is live. `UNIPROT_PATTERN` rejects a pipe, so the pair cannot be one cell.
-The first is taken. Publishing null instead would drop the gene out of every
-accession-keyed join with nothing raised, which is worse: a wrong accession
-fails to match and can be found, a null looks like a gene with no protein.
-`tests/unit/test_convert_hgnc.py` pins the choice.
+`uniprot_ids` carries more than one accession for exactly one of the 185 --
+RBM10, "P0DW28|P98175" (re-measured 2026-10-25 over the 2026-10-16 complete
+set) -- and RBM10 is a gene D21 publishes. `UNIPROT_PATTERN` rejects a pipe, so
+the mirror needs one, and HGNC's order is alphabetical rather than a ranking.
+Until 2026-10-25 the first was taken, which mirrored P0DW28: MINAS-60, a
+130-aa microprotein from an alternative reading frame inside RBM10, not
+RBM10's own 930-aa P98175. That was tolerable while the column fed only
+accession-keyed joins over mirrors that do not exist. Since schema 2.17 it is
+the gene's published `identity.uniprot`, and what `build/identity.py` builds
+the gene page's UniProt link from, so a wrong accession is a false published
+claim -- and a well-formed one fails no check.
+
+So the choice is a human's, never a position's. `_UNIPROT_OVERRIDES` pins
+RBM10 to P98175 with the UniProt evidence beside it; any other multi-valued
+cell refuses the conversion, naming the gene and its accessions; and a pin
+whose accession HGNC no longer lists for that gene refuses too. Null is not a
+fallback either: it would read as a gene with no protein.
+`tests/unit/test_convert_hgnc.py` pins all three.
 """
 
 from __future__ import annotations
@@ -90,10 +102,45 @@ _ORDER = (
 
 _SCOPE_ID = re.compile(r"^\s*- id: (MONDO:\d+)", re.M)
 
+# The gene's own protein, for every kept gene whose `uniprot_ids` lists more
+# than one accession. HGNC orders the list alphabetically, not by which protein
+# is the gene's, so position decides nothing; each entry is a human reading
+# UniProt, and carries what they read.
+_UNIPROT_OVERRIDES: dict[str, str] = {
+    # RBM10. UniProt REST, 2026-10-25: P98175 is RBM10_HUMAN, "RNA-binding
+    # protein 10", reviewed, 930 aa, gene RBM10. P0DW28 is MNS60_HUMAN,
+    # "Ribosome biogenesis inhibitor MINAS-60", reviewed, 130 aa, also gene
+    # RBM10 -- "the product of an alternative open reading frame (alt-ORF) of
+    # transcripts coding for the RBM10 (AC P98175) protein". HGNC lists both,
+    # "P0DW28|P98175", so first-of-list mirrored the microprotein.
+    "HGNC:9896": "P98175",
+}
 
-def _first(column: str) -> pl.Expr:
-    """The first pipe-separated value of a cell, or the cell itself."""
-    return pl.col(column).str.split("|").list.first()
+
+def _uniprot(wanted: pl.DataFrame) -> pl.Expr:
+    """The one UniProt accession each kept gene mirrors, refusing any it cannot know.
+
+    A multi-valued cell with no `_UNIPROT_OVERRIDES` entry raises: a new one
+    must reach a human, because the only rule a script has is position, and
+    position is how RBM10 published the wrong protein. An override whose
+    accession HGNC no longer lists for that gene raises too, so a stale pin
+    cannot publish a mapping the authority has withdrawn. Checked before
+    anything is written, so a refused refresh leaves the committed mirror alone.
+    """
+    for gene, symbol, cell in wanted.select("hgnc_id", "symbol", "uniprot_ids").rows():
+        listed = cell.split("|") if cell is not None else []
+        pinned = _UNIPROT_OVERRIDES.get(gene)
+        if pinned is not None and pinned not in listed:
+            raise ValueError(
+                f"{gene} ({symbol}): the pinned UniProt accession {pinned} is not among "
+                f"those HGNC lists ({cell}); re-read UniProt and update _UNIPROT_OVERRIDES"
+            )
+        if pinned is None and len(listed) > 1:
+            raise ValueError(
+                f"{gene} ({symbol}) lists {len(listed)} UniProt accessions ({cell}); "
+                f"pin the gene's own protein in _UNIPROT_OVERRIDES, with the evidence"
+            )
+    return pl.col("hgnc_id").replace_strict(_UNIPROT_OVERRIDES, default=pl.col("uniprot_ids"))
 
 
 def _refseq(column: str) -> pl.Expr:
@@ -128,7 +175,7 @@ def convert(source: Path, out: Path, keep: Collection[str]) -> int:
             pl.col("ensembl_gene_id").alias("ensembl_gene"),
             pl.col("entrez_id").alias("ncbi_gene"),
             pl.col("location").alias("locus"),
-            _first("uniprot_ids").alias("uniprot"),
+            _uniprot(wanted).alias("uniprot"),
             _refseq("mane_select").alias("mane_select"),
         )
         .select(_ORDER)

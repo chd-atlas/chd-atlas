@@ -30,18 +30,26 @@ Measured 2026-08-06 across the 68 committed terms: 13 are used by ClinGen's
 Congenital Heart Disease GCEP, 10 by another ClinGen expert panel, 45 by GenCC
 submitters, and **0 by no authority at all**. Every term already had an external
 warrant; only the field recording it was wrong.
+
+**A second path since 2026-10-25 (issue #8 part 1):** `ORPHANET_PHENOTYPE_FREQUENCY`,
+for syndromes where structural CHD is frequent but not part of the diagnosis. Its
+warrant is Orphanet's own frequency annotation, checked by SCP006 against the
+mirrors (`orphanet_scope.py`). Measured 2026-10-25 across the 105 committed terms:
+13 ClinGen CHD panel, 11 other ClinGen panel (NOTCH1-related AOS spectrum disorder
+joined, under the Hereditary Cardiovascular Disease panel), 45 GenCC submitter, and
+36 Orphanet frequency.
 """
 
 from __future__ import annotations
 
 from datetime import date
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from chd_atlas.duplicates import duplicates
-from chd_atlas.identifiers import DiseaseId
+from chd_atlas.identifiers import DiseaseId, OrphaId
 
 # Non-blank after stripping: a value of all whitespace passes a bare
 # `min_length` and renders as nothing, which is worse than an absent field
@@ -66,11 +74,25 @@ class ScopeAuthority(StrEnum):
     Disorders, CHD7 by Hearing Loss, KDM6A and KMT2D by SCID-CID.
     `GENCC_SUBMITTER` is a body submitting through GenCC -- an aggregator, so
     `attributed_to` must name the submitter and never GenCC itself.
+
+    `ORPHANET_PHENOTYPE_FREQUENCY` (added 2026-10-25, issue #8 part 1) is the one
+    class whose warrant is a *frequency* rather than a curation. Orphanet does
+    not curate a syndrome as CHD; it records how often a structural heart
+    phenotype occurs in it, and `orphanet_scope.py` admits the syndrome when
+    that is `Frequent (79-30%)` or stronger. It is for syndromes where CHD is
+    common but not part of the diagnosis -- Noonan, Costello, Adams-Oliver --
+    and it requires `ScopeEntry.orphanet`, which SCP006 checks against the
+    mirrors.
     """
 
     CLINGEN_CHD_PANEL = "clingen_chd_panel"
     CLINGEN_EXPERT_PANEL = "clingen_expert_panel"
     GENCC_SUBMITTER = "gencc_submitter"
+    ORPHANET_PHENOTYPE_FREQUENCY = "orphanet_phenotype_frequency"
+
+
+# `attributed_to` for `ORPHANET_PHENOTYPE_FREQUENCY`, which names one body only.
+ORPHANET: Final = "Orphanet"
 
 
 class ScopeEntry(BaseModel):
@@ -100,7 +122,27 @@ class ScopeEntry(BaseModel):
     # submitter is ClinGen itself (measured 2026-08-06: 111 rows, 109 genes), so
     # a row naming the aggregator hides which body actually made the call.
     attributed_to: _NonBlankStr
+    # The Orphanet disorder whose annotation is the warrant -- the term's own,
+    # or its parent syndrome's for a numbered subtype. Required for, and only
+    # for, `ORPHANET_PHENOTYPE_FREQUENCY`.
+    orphanet: OrphaId | None = None
     admitted_on: date
+
+    @model_validator(mode="after")
+    def orphanet_code_matches_the_warrant(self) -> ScopeEntry:
+        frequency = self.admitted_by is ScopeAuthority.ORPHANET_PHENOTYPE_FREQUENCY
+        if frequency and self.orphanet is None:
+            raise ValueError(f"{self.id}: an Orphanet frequency warrant must name its ORPHA code")
+        if not frequency and self.orphanet is not None:
+            raise ValueError(
+                f"{self.id}: `orphanet` is only for the Orphanet frequency warrant; "
+                f"'{self.admitted_by.value}' is checked against the validity mirrors instead"
+            )
+        if frequency and self.attributed_to != ORPHANET:
+            raise ValueError(
+                f"{self.id}: an Orphanet frequency warrant is attributed to {ORPHANET!r}"
+            )
+        return self
 
 
 class ChdScopeFile(BaseModel):

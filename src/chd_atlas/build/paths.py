@@ -118,8 +118,14 @@ SOURCES: Final = "sources.json"
 # The sample collections every burden row names by bare id. Published because a
 # consumer reading `case_cohorts: ["taa_cases"]` out of a bundle otherwise gets
 # the numbers with none of the caveats that qualify them -- and `taa_cases` is
-# 777 probands who do not have congenital heart disease.
+# 777 thoracic aortic aneurysm probands, a condition outside this atlas's scope.
 COHORTS: Final = "cohorts.json"
+# The CHD scope registry, and for each term the authority it is attributed to.
+# Published because a bundle names a disease by bare MONDO id, and since the
+# Orphanet scope path (2026-10-25) the reason a syndrome counts as CHD can be a
+# frequency Orphanet records rather than a curation -- which a reader of the
+# JSON has no other way to learn.
+SCOPE: Final = "scope.json"
 
 # The site's front door, not identifier-based like `gene_bundle_path` — there is
 # exactly one, so nothing here builds it from a value. Named as a constant
@@ -133,3 +139,10 @@ LANDING: Final = "index.html"
 # because `pages.py` writes it and `landing.py` links to it, and nothing in code
 # ties a written path to a path a payload promised.
 GENE_INDEX_PAGE: Final = "genes/index.html"
+
+# The site's reading notes: what every gene page assumes, written once (D50).
+# `methods.py` writes it here. The shared nav and the gene pages' short forms
+# link to it in literal markup, as the nav links `genes/index.html`, so what
+# ties those links to this file is the real-build link sweep in
+# `tests/test_built_site_is_consumable.py`, fragments included.
+METHODS_PAGE: Final = "methods.html"

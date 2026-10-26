@@ -31,6 +31,15 @@ PMID_PATTERN: Final = r"^PMID:\d+$"
 # be ambiguous.
 COHORT_ID_PATTERN: Final = r"^[a-z0-9]+(_[a-z0-9]+)*$"
 COHORT_LIST_PATTERN: Final = r"^[a-z0-9]+(_[a-z0-9]+)*(;[a-z0-9]+(_[a-z0-9]+)*)*$"
+# Orphanet's own spelling of its codes (`ORPHA:648`). MONDO's SSSOM writes
+# `Orphanet:648`; `convert_orphanet.py` normalises to this one form, so every
+# mirror and curated file spells an Orphanet code the same way.
+ORPHA_PATTERN: Final = r"^ORPHA:\d+$"
+OMIM_PATTERN: Final = r"^OMIM:\d+$"
+HPO_PATTERN: Final = r"^HP:\d{7}$"
+# A MONDO exact match's target in `mirrors/mondo_xrefs.tsv`: an Orphanet code or
+# an OMIM entry, the two the Orphanet scope rule follows.
+XREF_TARGET_PATTERN: Final = r"^(ORPHA|OMIM):\d+$"
 # Official UniProt accession grammar, with an optional isoform suffix.
 UNIPROT_PATTERN: Final = (
     r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$"
@@ -39,6 +48,7 @@ UNIPROT_PATTERN: Final = (
 HgncId = NewType("HgncId", Annotated[str, StringConstraints(pattern=HGNC_PATTERN)])
 Pmid = NewType("Pmid", Annotated[str, StringConstraints(pattern=PMID_PATTERN)])
 CohortId = NewType("CohortId", Annotated[str, StringConstraints(pattern=COHORT_ID_PATTERN)])
+OrphaId = NewType("OrphaId", Annotated[str, StringConstraints(pattern=ORPHA_PATTERN)])
 Doi = NewType("Doi", Annotated[str, StringConstraints(pattern=r"^10\.\d{4,9}/\S+$")])
 Pmcid = NewType("Pmcid", Annotated[str, StringConstraints(pattern=r"^PMC\d+$")])
 PhenotypeId = NewType(

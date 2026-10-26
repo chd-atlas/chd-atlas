@@ -1,0 +1,764 @@
+# tests/unit/test_build_methods.py
+"""`methods.html`: what every gene page assumes, written once (D50).
+
+Every sentence on this page was moved off a gene page, or states in full what a
+gene page now says in one line, and the move is where it could go false: a
+sentence's truth conditions travel with its position (CLAUDE.md section 4.27).
+So each one is pinned here against a **literal**, sliced to its own section,
+never against the constant that produced it (section 4.38) -- and the phrases
+the move retired are asserted absent from the whole page, because a pasted old
+constant is how they would come back.
+"""
+
+from __future__ import annotations
+
+import html
+import re
+from pathlib import Path
+from typing import Final
+
+import pytest
+
+from chd_atlas.build.burden import BurdenRow, cohort_registry, load_burden
+from chd_atlas.build.emit import Emitter
+from chd_atlas.build.methods import build_methods
+from chd_atlas.build.paths import METHODS_PAGE
+from chd_atlas.corpus import load_curation
+from chd_atlas.models.cohort import Cohort
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(scope="module")
+def page(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The page as built, with no cohorts: only `#cohorts` reads them, and
+    `cohort_page` below builds it with a registry."""
+    root = tmp_path_factory.mktemp("methods")
+    build_methods(Emitter(root=root), cohorts={})
+    return (root / METHODS_PAGE).read_text(encoding="utf-8")
+
+
+# Inserted out of id order, because `burden.cohort_registry` returns the YAML's
+# order and the section must sort. Insertion order is not seed-dependent, so a
+# dropped sort fails here under every PYTHONHASHSEED (CLAUDE.md section 4.42),
+# and the names sort differently from the ids (D, G, U against c, d, u), so a
+# sort on the name fails too. Every curated field a reader sees carries a
+# character that must be escaped.
+_REGISTRY: Final = {
+    "ukbb": Cohort(
+        id="ukbb",
+        name="UK Biobank & partners",
+        description="Adults recruited at 40-69.",
+        url="https://example.org/ukbb?a=1&b=2",
+    ),
+    "ddd": Cohort(
+        id="ddd",
+        name="Deciphering Developmental Disorders (DDD)",
+        description="Enriched for <b>syndromic</b> CHD & more.",
+    ),
+    "cnchd": Cohort(id="cnchd", name="German Competence Network", description="German registry."),
+}
+
+
+@pytest.fixture(scope="module")
+def cohort_page(tmp_path_factory: pytest.TempPathFactory) -> str:
+    """The page as built from a three-cohort registry."""
+    root = tmp_path_factory.mktemp("methods-cohorts")
+    build_methods(Emitter(root=root), cohorts=_REGISTRY)
+    return (root / METHODS_PAGE).read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def registry() -> dict[str, Cohort]:
+    """The committed registry, loaded the way `runner.build_site` loads it."""
+    corpus, issues = load_curation(REPO_ROOT)
+    assert issues == [], issues
+    return cohort_registry(corpus.cohorts)
+
+
+@pytest.fixture(scope="module")
+def real_page(tmp_path_factory: pytest.TempPathFactory, registry: dict[str, Cohort]) -> str:
+    """The page as built from the committed registry: `#cohorts` as published.
+
+    The fixtures above build it with no cohorts or three invented ones, so
+    nothing a curator wrote reached any check on this page until 2026-10-26 --
+    when the published page was found carrying a retired phrase ("the same
+    children") from `pcgc`'s description.
+    """
+    root = tmp_path_factory.mktemp("methods-real")
+    build_methods(Emitter(root=root), cohorts=registry)
+    return (root / METHODS_PAGE).read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def mirrored() -> list[BurdenRow]:
+    """Every row of the committed burden mirror."""
+    rows = [row for rows in load_burden(REPO_ROOT).values() for row in rows]
+    assert rows, "no burden rows loaded; every check on them would pass vacuously"
+    return rows
+
+
+def _section(page: str, anchor: str) -> str:
+    """One section: from its `<h2 id=...>` to the next `<h2`, or to `</main>`.
+
+    `</main>` rather than the end of the page (2026-10-26), so the last section
+    can be pinned whole without the shell's closing tags -- or the newline the
+    shell puts before them -- in its literal.
+    """
+    start = page.index(f'<h2 id="{anchor}">')
+    ends = [i for i in (page.find("<h2", start + 1), page.find("</main>", start)) if i != -1]
+    return (page[start : min(ends)] if ends else page[start:]).rstrip("\n")
+
+
+def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
+    """P1: one page at the root, named for what a reader comes to it for.
+
+    `root=""` is what makes its own nav resolve from the site root; a page
+    rendered with `"../"` would point every visitor's "Genes" link above the
+    deploy root.
+    """
+    assert METHODS_PAGE == "methods.html"
+    assert "<title>How to read this atlas — CHD Atlas</title>" in page
+    assert "<h1>How to read this atlas</h1>" in page
+    assert '<a href="genes/index.html">Genes</a>' in page
+    assert '<a href="methods.html">How to read this atlas</a>' in page
+    assert '<h2 id="scope">' in page
+    # The page's own account of what it holds (CLAUDE.md section 4.29: a
+    # summary that omits what the page publishes passes every other check).
+    # The cohort list joined it on 2026-10-26, and the same day it stopped
+    # claiming the list is every collection a study "draws on": it is what the
+    # rows name (`test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`).
+    assert (
+        "<p>What every gene page assumes, written once: which genes are here and what each "
+        "classification means, how the validity records are listed, how to read the "
+        "rare-variant results, and every sample collection the "
+        "rare-variant results name.</p>"
+    ) in page
+
+
+def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
+    """The rule both page kinds stated in full until 2026-10-26, and now link to (D50).
+
+    Moved from `pages._SCOPE_RULE`, which was pinned by
+    `test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas` and,
+    for its Orphanet clause, by
+    `test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups`.
+    Those tests' recorded decisions travel with it:
+
+    * **Both warrants, or the sentence describes a gate the site does not
+      have.** Stating only the ClinGen half would tell a reader that every gene
+      here was graded by an expert panel; 21 of the 119 were not (measured
+      2026-10-26), and they are the ones whose provenance most needs stating.
+    * **The negative is the load-bearing half.** The rule used to say a gene is
+      definitive "for a disease in this atlas's CHD scope", which told 24
+      published pages that this atlas decides what counts as congenital heart
+      disease. It does not; scope is a selection among terms external
+      authorities already use. Without the negative a future edit could
+      restore the old sentence beside the new one and satisfy every positive.
+    * **Sliced to the section, because page-wide the fragments could not
+      fail.** The grade key's `ungraded` gloss carries "two or more Gene
+      Curation Coalition submitters classify it Limited or better" in the same
+      section's `<dl>`, so the slice is the rule's own `<p>`: rewriting the
+      rule to state a **one**-submitter gate survived all 796 tests when the
+      check was page-wide (measured 2026-08-06, CLAUDE.md section 4.19).
+
+    Its last clause said the disease "is shown beside the gene", true on a gene
+    page and on the gene index and unanchored here, so it now names both
+    places -- and only for a gene a ClinGen panel graded: the 21 genes admitted
+    on submitter agreement have no panel-named disease to show (2026-10-26).
+    The full literal pins the wording; the fragments beside it are the
+    claims any rewording must keep, so a deliberate edit to the literal is not
+    also a silent edit to the gate it describes.
+
+    **Its first part names a list, never a property of a disease**
+    (2026-10-26). It read "for a disease that an external authority treats as
+    congenital heart disease (or in which Orphanet records a structural heart
+    malformation in at least 30% of cases)", which reads as a sufficient
+    condition the build does not apply: SCP007 lists 239 unnominated terms
+    that would qualify on Orphanet's frequencies, FLNA's periventricular
+    nodular heterotopia among them, and Orphanet's own GenCC submissions name
+    Ebstein anomaly, which is not a scope term. So the fragments now include
+    what a term needs to be listed and that a qualifying disease is not in
+    scope until it is; the retired clause is asserted absent from the whole
+    page by `test_no_sentence_the_move_retired_comes_back_here`. Its ontology
+    clauses are held to the set the build computes by
+    `test_orphanet_scope.py::test_the_structural_set_the_build_applies_is_the_one_methods_html_states`.
+    """
+    section = _section(page, "scope")
+    rule = re.search(r'<p class="scope-rule">.*?</p>', section, re.S)
+    assert rule, "#scope carries no scope-rule element"
+    sentence = rule.group(0)
+    assert sentence == (
+        '<p class="scope-rule">A gene is published here when an external authority already '
+        "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
+        "panel</strong> classifies it <strong>Limited or better</strong> for a disease in scope "
+        "here, or <strong>two or more Gene Curation Coalition submitters</strong> classify it "
+        "Limited or better for one and no ClinGen panel disputes it. A disease is in scope when "
+        "it is one of the terms this atlas lists, and a term is listed only if an external "
+        "authority treats it as congenital heart disease, or if a curator nominates a syndrome "
+        "and <strong>Orphanet records a structural heart malformation in at least 30% of its "
+        "cases</strong> (for a subtype, of the syndrome it belongs to); a disease that would "
+        "qualify is not in scope until it is listed. Here a structural heart malformation is a "
+        "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
+        "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
+        "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
+        "ductus arteriosus. The branches kept still hold some findings that are not "
+        "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
+        "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
+        "arch, are not counted. "
+        "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
+        "is any gene: every scope term names the authority it came from "
+        "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
+        "page names the authority that admitted the gene. A classification is not the same "
+        "as definitive for congenital heart disease: for many of these genes the disease "
+        "graded is a syndrome of which a cardiac lesion is one feature, and for a gene a "
+        "ClinGen panel graded, the disease the panel named is shown beside the gene, on "
+        "its page and in the gene index.</p>"
+    )
+    for claim in (
+        "Limited or better",
+        "two or more Gene Curation Coalition submitters</strong> classify it Limited or better",
+        "no ClinGen panel disputes it",
+        "a term is listed only if an external authority treats it as congenital heart disease",
+        "if a curator nominates a syndrome and <strong>Orphanet records",
+        "a disease that would qualify is not in scope until it is listed",
+        "No disease is in scope on this atlas's own judgement",
+        "not the same as definitive for congenital heart disease",
+        "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)",
+    ):
+        assert claim in sentence, f"the scope rule no longer says {claim!r}"
+
+
+def test_scope_glosses_every_rung_as_one_label_chip_and_gloss(page: str) -> None:
+    """The grade key, open, under the rule (P3). Moved from both page kinds (D50).
+
+    Moved from `test_both_page_kinds_gloss_every_grade_they_can_render`, with its
+    recorded decisions: a colour ramp with no key is a ranking the reader has to
+    guess at, and since 2026-08-06 the site renders four rungs and an ungraded
+    state -- `limited`, a panel saying the case is not yet made, is the
+    plurality. Each rung's gloss is checked by a distinctive phrase rather than
+    in full, so this fails when a rung stops being explained and not when a
+    comma moves.
+
+    **The label, the chip class and the gloss are asserted as one triple, and
+    that is the whole point of this test.** It checked only that seven phrases
+    appeared *somewhere on the page* until 2026-08-06, which says nothing about
+    which rung each is attached to. Measured that day: painting `moderate` with
+    `strong`'s chip -- inverting the colour ramp mid-ladder -- **survived all 796
+    tests**, as did swapping two glosses. Scoped to the key's `<dl>`, because
+    these words also occur in the scope rule above it (section 4.19).
+
+    **Rendered open, not folded** (P3). On a gene page the key was a collapsed
+    `<details>` because it was not what the page was for; here it is. Asserted
+    on the whole page since 2026-10-26: `_section` began stopping at the next
+    `<h2`, and a slice of `#scope` alone would let a fold appear anywhere below
+    it -- nothing on this page is meant to be folded.
+    """
+    section = _section(page, "scope")
+    assert "<details" not in page, "a fold on the page that exists to be read"
+    key = re.search(r'<div class="grade-key">.*?</div>', section, re.S)
+    assert key, "#scope carries no grade key"
+    legend = re.search(r"<dl>(.*?)</dl>", key.group(0), re.S)
+    assert legend, "the grade key carries no rows"
+
+    # (label a reader sees, chip class that colours it, phrase unique to its gloss)
+    rungs = (
+        ("definitive", "chip-definitive", "upheld over time"),
+        ("strong", "chip-strong", "without the years of replication"),
+        ("moderate", "chip-moderate", "several unrelated probands"),
+        ("limited", "chip-limited", "not yet made"),
+        ("no known association", "chip-warn", "found no evidence of a relationship"),
+        (
+            "not classified",
+            "chip-ungraded",
+            "two or more Gene Curation Coalition submitters classify it Limited or better",
+        ),
+    )
+    pairs = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", legend.group(1), re.S)
+    assert len(pairs) == len(rungs), f"the key glosses {len(pairs)} rungs, expected {len(rungs)}"
+    for (label, chip, gloss), (dt, dd) in zip(rungs, pairs, strict=True):
+        assert chip in dt, f"{label} is not chipped {chip} -- got {dt}"
+        assert f">{label}<" in dt, f"expected the label {label}, got {dt}"
+        assert gloss in dd, f"{label} is not glossed by {gloss!r}"
+
+
+def test_scope_states_where_a_dispute_is_listed_without_pointing_below(page: str) -> None:
+    """The dispute paragraph, reworded for a page with no validity table on it (P3).
+
+    Moved from `test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays`.
+    The sentence went false once already, when Costello and CFC syndrome entered
+    scope on 2026-10-25: it read "No gene here was disputed or refuted by an
+    expert panel for a disease an external authority treats as congenital heart
+    disease", and ClinGen's RASopathy panel disputes six published genes for
+    those two syndromes -- PTPN11's page carried the denial beside two
+    `Disputed` rows.
+
+    **Reworded again on the move (2026-10-26, D50).** It said "the record is in
+    the table below", which was false on the gene index (no validity table) and
+    is false here; it now names the gene's validity table. "This page is not a
+    complete account" became "a gene page", for the same reason.
+
+    **And its condition named one path of two.** "Where that disease is one an
+    external authority treats as congenital heart disease" excluded the
+    Orphanet path -- and Costello and cardiofaciocutaneous syndrome, the
+    diseases all six disputed genes (BRAF, KRAS, MAP2K1, PTPN11, RAF1, SOS1) are
+    disputed for, are in scope only through it (`admitted_by:
+    orphanet_phenotype_frequency`). It now reads "in scope here, by either path
+    above", which `test_the_key_follows_the_rule_its_dispute_sentence_points_back_to`
+    keeps true.
+    """
+    section = _section(page, "scope")
+    key = re.search(r'<div class="grade-key"><p>(.*?)</p>', section, re.S)
+    assert key, "#scope carries no grade-key paragraph"
+    assert key.group(1) == (
+        "Every classification on this site is mirrored from the authority that made it. "
+        "The rung names are "
+        '<a href="https://clinicalgenome.org/curation-activities/gene-disease-validity/">'
+        "ClinGen&#x27;s</a>, glossed here from their Gene-Disease Validity SOP; Gene "
+        "Curation Coalition submitters grade on the same ladder, and also use "
+        "<em>Supportive</em>, which asserts an association without grading its evidence "
+        "and which this atlas maps to no rung. "
+        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
+        "may still have disputed the same gene for a different disease. Where that disease "
+        "is in scope here, by either path above, the record is in that gene&#x27;s validity "
+        "table, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries a "
+        "<em>conflicting evidence</em> flag. Where it is not, the record "
+        "is not shown: a gene page lists only records for diseases in this atlas&#x27;s "
+        "remit, so it is not a complete account of what ClinGen has said about the gene."
+    )
+
+
+def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
+    """How the validity table is listed, in full; each gene page links it (D50).
+
+    A gene page's validity intro says only records for in-scope diseases are
+    listed, and links here for the rest: the two groups, which of ClinGen's own
+    GenCC copies are listed, and what is not shown at all.
+
+    The copy sentence describes `pages._repeats_the_panel`, read 2026-10-26: a
+    copy is hidden only when a panel record matches it on disease, mapped grade,
+    inheritance (in the page's vocabulary) and calendar date, and a copy with no
+    date matches nothing -- so it is listed where any of the four differs, where
+    it has no date, or where there is no panel record to match.
+
+    **Two clauses differ from the plan's text, each forced by a measurement**
+    (2026-10-26, on the committed mirrors and a real build):
+
+    * "Each gene's JSON keeps every record" read, beside the next paragraph's
+      "that record is not shown", as though the JSON held the out-of-scope
+      records. It holds none: 591 bundle records, 0 for a disease outside
+      scope (`validity.gene_validity` drops them before a gene is keyed). It
+      does hold every copy -- all 121 -- so it now says that.
+    * "so a gene page is not every classification the gene has" was false for
+      43 of the 119 published genes, which have no ClinGen or GenCC record for
+      any disease outside scope. It says "may not be", as the gene page does.
+
+    **Reworded after review, 2026-10-26.** Its opening sentence ("Every
+    classification in this atlas is an upstream panel's or submitter's,
+    republished with its provenance intact") repeated the grade key's first
+    sentence two paragraphs up, so it is written once, in the key. "the
+    ClinGen expert panel's own records" became "ClinGen expert panels'", and
+    "A panel may have classified" became "A panel or submitter": the scope
+    filter drops GenCC rows too, and most out-of-scope records are GenCC's (76
+    published genes have one, against 27 with an out-of-scope ClinGen record).
+
+    **The third paragraph glosses the card's two warning chips (2026-10-26).**
+    `sources disagree` rendered on six pages with no title and was mentioned 0
+    times on this page, and on all six ClinGen and GenCC agree on every
+    gene-disease pair they both classify: the flag is per gene, by the owner's
+    decision, and fires because one source disputes the gene for one disease
+    while the other supports it for another. Each clause is read off the code
+    (`vocab.has_conflicting_evidence`, `validity._has_source_discordance`), and
+    the paragraph states what the per-gene flag permits rather than narrowing
+    the flag.
+    """
+    section = _section(page, "validity")
+    assert section == (
+        '<h2 id="validity">Mirrored validity records</h2>'
+        "<p>A gene page lists its classifications in two groups: ClinGen expert panels' own "
+        "records first, then other curators' submissions to the Gene Curation Coalition "
+        "(GenCC). ClinGen also submits its own classifications to GenCC; a gene page lists "
+        "such a copy only where its mapped grade, date, inheritance or disease differs from "
+        "the panel's own record, or where it carries no date or has no panel record to "
+        "match. Each gene's JSON keeps every copy, listed or not.</p>"
+        "<p>Only records for diseases in this atlas's remit are listed. A panel or submitter "
+        "may have classified the same gene for a disease outside it, and that record is not "
+        "shown, so a gene page may not be every classification the gene has.</p>"
+        "<p>A gene page's card may carry two flags beside its grade. <em>conflicting "
+        "evidence</em> means that among the gene's records for diseases in scope, at least one "
+        "is <em>Disputed</em> or <em>Refuted</em> and at least one classifies the gene Limited "
+        "or better, whoever made each and whatever disease each is for; the gene index marks "
+        "the same genes beside their confidence. <em>sources disagree</em> is narrower: a "
+        "record that disputes or refutes the gene and one that classifies it Limited or better "
+        "come from different sources, one a ClinGen expert panel's own record and the other a "
+        "submission to GenCC (ClinGen's own copies count as GenCC's here). It too is a flag on "
+        "the gene, not on a disease: the two records may be for different diseases, and the "
+        "two sources may agree on every disease they both classify. Neither flag counts a "
+        "<em>No Known Disease Relationship</em> record on either side, nor GenCC's "
+        "<em>Supportive</em>, which grades no evidence.</p>"
+    )
+    # Written once on this page, in the grade key.
+    assert page.count("Every classification on this site is mirrored") == 1
+    assert "Every classification in this atlas is an upstream" not in page
+
+
+def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
+    """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
+
+    Eight paragraphs, each pinned whole. The first two are the full forms of the
+    two notices a gene page keeps in one line (`pages._MIRRORED_NOTICE`, which
+    links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
+    "How to read these numbers" notes; the fifth was the second sentence of its
+    composite note; the sixth says what `all cases` is; the last two are below.
+    Each was re-read for a page with no table on it: "In each study's table"
+    anchors what the units sentence describes, and "the rows above it" became
+    "beside it".
+
+    Recorded decisions that moved with them:
+
+    * **The absent-cell sentence must not say why a row is absent.** Moved from
+      `test_the_section_says_what_a_missing_row_means_without_asserting_why`.
+      Until 2026-08-05 it asserted "no variant of that class was seen in either
+      group" -- measured over PMID:42230622 alone, and false for the other two
+      studies: PMID:34324492 tests one consequence class by construction, and
+      PMID:40127276 observed 14,364 synonymous variants (its Dataset S4) and
+      published no synonymous row. That phrase is asserted absent from this page
+      by `test_no_sentence_the_move_retired_comes_back_here`, and from the gene
+      page by `test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page`.
+    * **The negative control carries its own condition.** Moved from
+      `test_the_synonymous_negative_control_is_explained_only_where_one_exists`.
+      On a gene page it rendered only where a synonymous row did, because 2 of
+      the 3 studies publish none (every synonymous row is PMID:42230622's); here
+      it is stated once, with that condition in its own words ("Only a study
+      that publishes one has it").
+    * **The pooling paragraph is policy, in the present tense about nothing.**
+      "these cohorts overlap" sent a one-study page's reader hunting for a
+      second study; it is asserted absent here too.
+
+    **Three clauses are narrower than the plan's text, each measured 2026-10-26
+    on a real build of 4233eca** (`methods._RARE_VARIANTS` records the detail):
+    "in a gene page's rare-variant section" became "in a gene page's study
+    tables", because the evidence matrix in that section shows tallies the atlas
+    derives ("n = N" on 86 pages, "N rows" on 48); "republished exactly as
+    published" lost "exactly", because 376 of the 1,210 published raw p-values
+    render rounded to three significant figures; and the units sentence says
+    what `controls` shows on a row tested against a mutation model, because 108
+    such cells on 36 pages read "N expected", not observed / total.
+
+    **Reworded after review, the same day.** "children" became "people": a
+    shared collection may be an adult control cohort. The overlap clause says
+    what the page can know -- collections its studies share *as this atlas has
+    recorded them* -- because `shared_cohorts` sees only shared registered ids,
+    and two studies may share individuals no record names. The synonymous
+    paragraph lost "the same uncorrected scale" (true of one study, stated in
+    general) and "a scan of that size" (no antecedent here). The units
+    parenthesis keys on what `pages._controls` keys on: the comparator, not the
+    variant's origin.
+
+    **Pinned whole, not paragraph by paragraph.** A `re.findall(r"<p>...")`
+    over the section skips any `<p class=...>` or `<details>` appended to it:
+    measured in review, a composite note, a disclosure and a "How to read these
+    numbers" fold appended to this section all passed.
+
+    **Two paragraphs were added with the forest key's fold (2026-10-26,
+    D57)**: the key each forest plot now folds behind "How to read this
+    chart", stated once in general, and what a block with no effect measure
+    shows instead of a plot. Every mark clause was measured against a real
+    build of 9f24190 before it was written in general: all 29 right arrows
+    are odds ratios with 0 control carriers and a published lower bound; all
+    257 left arrows have 0 case carriers; every plotted study either corrects
+    every row or none. One clause is narrower than the plan's text: "contains
+    other rows in the same panel" was false for 10 union-tagged rows, on 10
+    panels, that contain exactly one other drawn row -- "at least one other
+    row", as each panel's own key says.
+
+    **Three changes after review (2026-10-26).** The composite paragraph
+    explained `damaging` and nothing said what the `all cases` case group is,
+    though a forest key says it in one clause; the sixth paragraph does, in
+    general, and `test_an_all_cases_row_is_the_union_of_the_case_groups_its_
+    study_splits` holds it to the mirror. "these have none" had no antecedent
+    nearer than "a forest plot", so it names this atlas's. And the muted row was
+    singular, while every panel that draws one draws three -- one synonymous row
+    per case group, 113 panels on a real build -- so it is "one of a study's
+    synonymous rows".
+
+    **One sentence added the same day**, when a marker's fill began reading
+    `concordance.survives_own_correction` for every row but a synonymous one:
+    a depleted row that cleared its correction is drawn hollow, and "a hollow
+    marker is a row that did not" survive is false of it. Latent: 0 published
+    rows are in that state.
+
+    **Two clauses narrowed after a later review (2026-10-26).** That sentence
+    said "a row", and a synonymous row that survived its correction is drawn
+    filled and muted, not hollow, so it says "a non-synonymous row". And the
+    case-group paragraph called an unsplit study's `all cases` its "whole case
+    set", a denominator equivalence no study's rows bear out (PMID:34324492's
+    count 7,107 of its 7,958 cases); it now says only that the group is not a
+    subgroup, and the old phrase is asserted absent.
+    """
+    expected = [
+        "Every count and statistic in a gene page's study tables is an upstream study's, "
+        "republished as published. The atlas computes none of them and adds no assessment "
+        "of them; where a study is by an author of this atlas, its block says so.",
+        "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
+        "studies draw on the same sample collection they describe partly the same people, "
+        "so combining their results would count those people twice; a gene page names any "
+        "sample collection its studies share, as this atlas has recorded them.",
+        "In each study's table, <code>cases</code> and <code>controls</code> each show "
+        "<em>observed / total</em> (for a row tested against a mutation model, "
+        "<code>controls</code> is instead the count that model expected), and <strong>every "
+        "cell names what it counted</strong> &mdash; carriers, alleles, or de novo mutations. "
+        "The three are not interchangeable: a study counting alleles counts a person with two "
+        "qualifying variants twice, and its denominator is roughly twice the number of people "
+        "sequenced. A consequence class or case group with no row is one the study "
+        "<strong>did not report</strong>, which is not a null result and does not always "
+        "mean no such variant was seen &mdash; studies differ in which classes their "
+        "gene-level tables cover.",
+        "The <strong>synonymous</strong> row is a study's own negative control &mdash; "
+        "synonymous variants should show no enrichment. Read it on the same scale as the rows "
+        "beside it: a <em>strongly</em> enriched synonymous row is a warning about that "
+        "gene's comparison, while a nominally significant one is what a scan over thousands "
+        "of genes produces by chance. <strong>Only a study that publishes one has "
+        "it</strong>; a table with no synonymous row offers no such check.",
+        "A <strong>damaging (LOF + missense)</strong> row is the <strong>union</strong> of "
+        "the study's loss-of-function and damaging-missense rows, not a third independent "
+        "result &mdash; the same variants are counted in both. It is shown because a study "
+        "that defines its findings by the composite publishes a p-value for it that is not "
+        "derivable from the other two.",
+        "Where a study splits its cases into <strong>syndromic</strong> and "
+        "<strong>non-syndromic</strong> groups, its <strong>all cases</strong> group is "
+        "likewise the union of the two, and an <strong>all cases</strong> row is not a result "
+        "independent of theirs. Where a study does not split its cases, <strong>all "
+        "cases</strong> is its only case group: every case the row counts, not a subgroup.",
+        "A forest plot shows each row's effect and interval on a logarithmic axis. A "
+        "<strong>filled</strong> marker is a row that survived its own study's correction for "
+        "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
+        "study published no correction at all &mdash; the atlas computes none of its own. A "
+        "non-synonymous row that survived its correction without pointing to enrichment in "
+        "cases is drawn hollow too: it is not evidence for the gene. A forest plot usually "
+        "ends in a summary diamond; this atlas's have none, because no pooled estimate is "
+        "computed anywhere on this site. A <strong>hatched</strong> bar "
+        "means no interval was published for that row, not a wide one. An arrow to the "
+        "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
+        "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
+        "<strong>left</strong> is an effect of zero &mdash; no case carried the variant "
+        "&mdash; which a logarithmic axis has no position for. A row tagged "
+        "<strong>union</strong> contains at least one other row in the same panel and is not "
+        "an independent finding. A <strong>muted</strong> row is one of a study's synonymous "
+        "rows, drawn apart from the results it calibrates.",
+        "A study that publishes <strong>no effect measure</strong> for a gene &mdash; no "
+        "odds ratio, enrichment or rate ratio &mdash; has nothing to place on an effect axis, "
+        "so its block shows its counts and p-values in a table instead of a plot.",
+    ]
+    assert _section(page, "rare-variants") == (
+        '<h2 id="rare-variants">Rare-variant association</h2>'
+        + "".join(f"<p>{paragraph}</p>" for paragraph in expected)
+    )
+
+
+def test_an_all_cases_row_is_the_union_of_the_case_groups_its_study_splits(
+    mirrored: list[BurdenRow],
+) -> None:
+    """`#rare-variants`'s case-group sentence, held to the mirror it generalises.
+
+    It says, of every study, that `all cases` is the union of `syndromic` and
+    `non-syndromic` where the study splits its cases, and its only case group --
+    not a subgroup -- where it does not. Measured on the committed mirror
+    (2026-10-26): all three studies publish `all`; only PMID:42230622 splits,
+    into 1,471 syndromic and 2,405 non-syndromic cases; and on all 470 cells
+    where it publishes all three strata, the `all` row's cases and carriers are
+    the sum of the other two's and its controls are theirs. A study that arrives
+    with a third case group, or an `all` that is not the sum, makes the sentence
+    false, and fails here rather than on a reader.
+    """
+    strata: dict[str, set[str]] = {}
+    cells: dict[tuple[object, ...], dict[str, BurdenRow]] = {}
+    for row in mirrored:
+        strata.setdefault(row.study, set()).add(row.cohort_stratum)
+        cell = (row.study, row.gene, row.variant_class, row.consequence_class, row.origin)
+        key = (*cell, row.lesion_group, row.count_unit, row.maf_max, row.comparator)
+        assert row.cohort_stratum not in cells.setdefault(key, {}), f"two rows share {key}"
+        cells[key][row.cohort_stratum] = row
+    for study, found in strata.items():
+        assert found in ({"all"}, {"all", "syndromic", "nonsyndromic"}), (study, found)
+    split = [cell for cell in cells.values() if cell.keys() == {"all", "syndromic", "nonsyndromic"}]
+    assert split, "no study splits its cases; the sentence's first half is untested"
+    for cell in split:
+        whole, parts = cell["all"], (cell["syndromic"], cell["nonsyndromic"])
+        assert whole.n_cases == sum(part.n_cases for part in parts), whole
+        assert whole.n_case_carriers == sum(part.n_case_carriers for part in parts), whole
+        assert all(part.n_controls == whole.n_controls for part in parts), whole
+
+
+def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -> None:
+    """Every cohort, with its curated description, once, for a reader (P4, 2026-10-26).
+
+    A gene page folds the notes of only the collections its own rows cite
+    (`pages._cohort_notes`) and ends the fold on a link here; this is the
+    whole registry, the records `cohorts.json` publishes for a program. The
+    fold stays on the gene page: CLAUDE.md section 9 forbids narrowing where a
+    cohort caveat reaches, and this list adds a place rather than moving one.
+
+    Pinned whole, as one literal. **Sorted by id**, because the registry
+    arrives in the YAML's order and a published list from a mapping is the
+    caller's to sort (CLAUDE.md section 9); the fixture's insertion order and
+    its names both disagree with id order, so a missing sort and a sort on the
+    wrong key both fail. **Escaped, every field**: names, descriptions and
+    urls are free text a curator types. The url is the cohort's public page,
+    so it is a link inside its own description rather than a bare string, and
+    a cohort without one gets nothing rather than an empty link.
+
+    The class on the `<dl>` is layout: the site's base `dl` is a two-column
+    grid sized to its widest label, which suits the grade key's chips and
+    would give a cohort's full name most of the line here. The link reads
+    "website" (2026-10-26): it leads to the collection's home page, and
+    "source" beside a description read as the citation for it.
+
+    The intro's numbers are pinned against the mirror and the registry by
+    `test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`; here
+    they are only the literal the fixture renders, since the intro is a
+    constant and the fixture's three cohorts are not the ones it counts.
+    """
+    assert _section(cohort_page, "cohorts") == (
+        '<h2 id="cohorts">Cohorts</h2>'
+        "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
+        "its curator recorded. A row may not name every collection its study drew on: the "
+        "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
+        "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
+        "partly the same people, and two that name none in common may still share people "
+        "this registry does not record. The same records are published as "
+        '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
+        '<dl class="cohort-list">'
+        "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"
+        "<dt>Deciphering Developmental Disorders (DDD) (<code>ddd</code>)</dt>"
+        "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
+        "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
+        '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
+        "website</a></dd>"
+        "</dl>"
+    )
+
+
+def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
+    real_page: str, registry: dict[str, Cohort], mirrored: list[BurdenRow]
+) -> None:
+    """`#cohorts`'s intro, on the published page, held to the rows it describes.
+
+    **It claimed a completeness the registry does not have** until 2026-10-26:
+    "every sample collection a rare-variant study in this atlas draws on". The
+    rows for PMID:34324492 name 4 collections, while that study's S2 Table
+    lists 189 case sources holding 7,958 cases, of which those 4 hold 4,242
+    (counted from the supplement's `s007.xlsx`, sheet "S2 Table": 189 source
+    rows summing to its "N" row, 7,958). A reader told the list is complete
+    concludes that two studies naming no collection in common share no people,
+    which the next sentence must not license. It now says what the list is --
+    every collection a row names -- and that a row may not name all its study
+    drew on.
+
+    Every figure in the sentence that the repository can check is checked:
+
+    * "every sample collection a rare-variant row ... names" describes the list
+      both ways: the registry is exactly the ids the mirror's rows cite;
+    * the 4 is that study's distinct case cohorts in the mirror;
+    * 4,242 is the sum of the counts those 4 descriptions open with (1,615,
+      1,221, 629 and 777), and 7,958 is the total `taa_cases` states.
+
+    189 is the supplement's alone; nothing committed carries it.
+    """
+    cited = {cohort for row in mirrored for cohort in (*row.case_cohorts, *row.control_cohorts)}
+    assert cited == set(registry)
+
+    named = sorted(
+        {cohort for row in mirrored if row.study == "PMID:34324492" for cohort in row.case_cohorts}
+    )
+    opening = [re.match(r"([\d,]+) ", registry[cohort].description) for cohort in named]
+    assert all(opening), f"a description for {named} does not open with its case count"
+    held = sum(int(match.group(1).replace(",", "")) for match in opening if match)
+    assert "777 of its 7,958 cases" in registry["taa_cases"].description
+
+    intro = re.search(r'<h2 id="cohorts">Cohorts</h2><p>(.*?)</p>', real_page, re.S)
+    assert intro, "the published page has no cohort intro"
+    assert (
+        f"the rows for PMID:34324492 name {len(named)} of the 189 case sources its S2 Table "
+        f"lists, and those {len(named)} hold {held:,} of its 7,958 cases."
+    ) in intro.group(1)
+    assert (len(named), held) == (4, 4242)
+
+
+@pytest.mark.parametrize("built", ["page", "real_page"])
+@pytest.mark.parametrize(
+    "retired",
+    [
+        # Told 24 pages this atlas decides what counts as CHD (2026-08-06).
+        "this atlas's CHD scope",
+        # False since Costello and CFC entered scope (2026-10-25).
+        "No gene here was disputed or refuted",
+        # False for 5 genes with an out-of-scope `Disputed` (2026-08-06).
+        "not published here at all",
+        # There is no table on this page (D50).
+        "the table below",
+        # A one-submitter gate is not the gate (2026-08-06).
+        "one or more Gene Curation",
+        # A property of a disease, read as a sufficient condition for scope:
+        # FLNA's periventricular nodular heterotopia has it and is not in
+        # scope (2026-10-26). Written to catch the scope rule's form, the grade
+        # key's and the card's alike.
+        "in which Orphanet records",
+        "in which <strong>Orphanet records",
+        # The gene page's copy notice (`pages._CLINGEN_COPY_NOTICE`): "here" and
+        # "the panel record above" name a table this page does not have (D50).
+        "listed here only",
+        # The refuted mechanism for an absent row (2026-08-05): false for two of
+        # the three studies.
+        "no variant of that class was seen in either group",
+        # Present tense about a second study a one-study page does not have.
+        "these cohorts overlap",
+        # The tables round to three significant figures (2026-10-26).
+        "exactly as published",
+        # A shared collection may be adult controls (2026-10-26).
+        "the same children",
+        # True of one study, stated in general (2026-10-26).
+        "uncorrected scale",
+        # `all cases` is not a study's denominator (2026-10-26): PMID:34324492's
+        # rows count 7,107 of its 7,958 cases, PMID:40127276's 3,887 trios or an
+        # allele total against 11,555 probands.
+        "whole case set",
+        # The forest key's own deictics: no panel and no study is in sight here,
+        # so its clauses are restated in general, never pasted (D57).
+        "in this panel",
+        "this study's",
+    ],
+)
+def test_no_sentence_the_move_retired_comes_back_here(
+    request: pytest.FixtureRequest, built: str, retired: str
+) -> None:
+    """Whole page, both spellings of an apostrophe (section 4.35).
+
+    A positive literal fails when a sentence is deleted; these fail when a
+    deleted one comes back, and coming back -- an old constant pasted onto the
+    page it was moved to -- is the failure nobody watches for. Checked on the
+    unescaped text too, because the page spells one apostrophe `'` and another
+    `&#x27;`, and a retired phrase must not pass by changing which.
+
+    **On the page as published, too** (2026-10-26). It ran only on a page built
+    with no cohorts, so it could not see `#cohorts` -- and the published page
+    carried "the same children", in `pcgc`'s description, the whole time. No
+    retired phrase is exempt from curated text: a curator's sentence on this
+    page is held to what this page may say.
+    """
+    page = request.getfixturevalue(built)
+    assert retired not in page
+    assert retired not in html.unescape(page)
+
+
+def test_the_key_follows_the_rule_its_dispute_sentence_points_back_to(page: str) -> None:
+    """The rule renders above the key, because the key says "by either path above".
+
+    The key's dispute sentence names no path; it points back at the rule, which
+    names both. Rendered above the rule -- or anywhere the rule is not above it
+    -- "above" points at nothing, the same defect "the table below" was.
+    """
+    section = _section(page, "scope")
+    rule = section.index('<p class="scope-rule">')
+    key = section.index('<div class="grade-key">')
+    assert rule < key, "the grade key renders before the rule it says is above it"

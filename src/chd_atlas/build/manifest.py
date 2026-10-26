@@ -235,7 +235,9 @@ from chd_atlas.corpus import Corpus
 #   carried it.
 # * a consumer that renders the chip without the grade's meaning turns
 #   `limited` -- a panel saying the case is not yet made -- into a weak yes.
-#   `render.grade_legend` is what the site itself does about this.
+#   The grade key is what the site itself does about this (`render.grade_key`,
+#   on `methods.html#scope` since 2.18; before it a folded `grade_legend` on
+#   every gene page and the gene index).
 # * `asserted_by.count` is a count of institutions, never a score. Eight
 #   authorities asserting a gene frequently means it sits on more commercial
 #   panels, not that it is eight times better supported. D12 applies: a rank
@@ -373,7 +375,50 @@ from chd_atlas.corpus import Corpus
 # for?", where showing both is the only honest answer and the reader picks.
 # Filtering ambiguous retired symbols out of the index to make the two agree
 # would make `MADH7` unfindable, which serves nobody.
-SCHEMA_VERSION: Final = "2.13"
+#
+# 2.14 adds `burden_combined` to every gene bundle and `burden_combined` to
+# `counts`: one study's own combination of two of its burden arms, from
+# `mirrors/burden_combined.tsv`. Additive, so MINOR: the key is always present,
+# `[]` where the gene has none. Measured on the committed corpus: 75 objects over
+# 25 published genes, all PMID:40127276's JL-FDR meta-analysis, against 90
+# mirrored rows for 30 registered genes. Its `local_fdr` is a local false
+# discovery rate -- smaller than its own `pvalue` for about half that study's
+# panel -- and a consumer must never present it as a corrected p.
+#
+# 2.15 publishes `scope.json` and adds `scope_terms` to `counts`: the CHD scope
+# registry, every term with the authority it is attributed to and, for a term
+# admitted on Orphanet's phenotype frequencies (issue #8 part 1), the warrant
+# re-derived from the mirrors. Additive, so MINOR: no field of 2.14 is removed
+# or reshaped. It lands with a population change -- 92 -> 119 genes, the
+# Orphanet-scoped syndromes (Noonan, Costello, Adams-Oliver, Myhre,
+# Rubinstein-Taybi and their kin) plus NOTCH1 on its own ClinGen term -- which
+# carries the display obligation: a Noonan grade is a grade for the syndrome,
+# and a consumer showing it must say why the syndrome counts, which is what
+# `scope.json`'s `orphanet` object is for.
+#
+# 2.16 adds `submitted_on` and `sgc_id` to every record of a bundle's
+# `validity.records`, `null` on a ClinGen record. Additive, so MINOR. Until it,
+# a GenCC classification published no date at all -- 470 of 591 records on
+# 2026-10-25 -- and no identifier: `(source, disease, moi, submitter)` is not
+# unique, and PKD1L1 publishes two Ambry submissions that share it.
+#
+# 2.17 adds `identity` to every gene bundle: the gene's approved name, locus,
+# Ensembl and NCBI Gene ids, UniProt accession and MANE Select transcript from
+# `mirrors/genes.tsv`, every key always present. Additive, so MINOR. All six
+# were mirrored for every published gene; before 2.17 `locus`, `ensembl_gene`,
+# `ncbi_gene`, `uniprot` and `mane_select` reached no published byte, and
+# `name` only search's `terms`.
+#
+# 2.18 adds `summary_caveat` to every record of `publications.json` (and so
+# to `featured.json`'s embedded publications), `null` where the curator
+# recorded none. Additive, so MINOR. It is the one sentence a gene page's
+# card prints beneath a study's results, and the gene index under its strip
+# legend; on the committed corpus only PMID:34324492 carries one, naming the
+# 777 thoracic aortic aneurysm probands in its case set.
+#
+# It also publishes `methods.html`, the site's reading notes: an HTML page,
+# additive in the sense 2.2 records, so no bump of its own.
+SCHEMA_VERSION: Final = "2.18"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is
@@ -494,6 +539,9 @@ def write_manifest(
         "functional": len(corpus.functional),
         "phenotypes": len(corpus.phenotypes),
         "publications": len(corpus.publications),
+        # The whole registry `scope.json` publishes: every disease term in
+        # scope, on whichever authority's warrant. 105 since 2026-10-25.
+        "scope_terms": len(corpus.chd_scope),
     }
     # A build count silently shadowing a corpus count would republish one figure
     # under another's name, and `sort_keys` would leave the output looking

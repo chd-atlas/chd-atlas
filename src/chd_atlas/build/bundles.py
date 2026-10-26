@@ -34,9 +34,10 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, cast
 
-from chd_atlas.build.burden import BurdenRow, burden_payload
+from chd_atlas.build.burden import BurdenRow, CombinedRow, burden_payload, combined_payload
 from chd_atlas.build.derive import GeneFacts, gene_facts
 from chd_atlas.build.emit import Emitter, Json
+from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, identity_payload
 from chd_atlas.build.omics import ModalitySummary
 from chd_atlas.build.paths import gene_bundle_path
 from chd_atlas.build.profiles import EMPTY_EXPRESSION_PROFILE, ExpressionProfile
@@ -147,9 +148,9 @@ def _expression_profile(profiles: Mapping[str, ExpressionProfile], gene: str) ->
 def _validity_record(record: ValidityRecord) -> dict[str, Json]:
     """One mirrored classification, JSON-ready.
 
-    Every record in the published array carries the same eleven keys, whichever
+    Every record in the published array carries the same thirteen keys, whichever
     source it came from. `sop`, `classification_date` and `gcep` are ClinGen-only
-    and `submitter` is GenCC-only on `ValidityRecord` itself (see its
+    and `submitter`, `submitted_on` and `sgc_id` are GenCC-only on `ValidityRecord` itself (see its
     docstring), and each is `null` on a record from the other source rather than
     left out of the object. The alternative — omitting a source's absent fields
     — would publish an array whose objects differ in shape, which is a trap for
@@ -173,6 +174,8 @@ def _validity_record(record: ValidityRecord) -> dict[str, Json]:
         "gcep": record.gcep,
         "report_url": record.report_url,
         "submitter": record.submitter,
+        "submitted_on": record.submitted_on,
+        "sgc_id": record.sgc_id,
     }
 
 
@@ -233,8 +236,8 @@ def _headline(gene: str, symbol: str, fact: GeneFacts) -> dict[str, Json]:
         "validity_state": fact.validity_state.value,
         # Written inside `_headline` for the same reason `has_conflicting_evidence`
         # is: the browse row and the page it opens must not be able to disagree
-        # about whether the atlas has curated a gene, and 91 of the 92
-        # published genes have not.
+        # about whether the atlas has curated a gene, and nearly every published
+        # gene has not (118 of 119, measured 2026-10-26).
         "atlas_curation": fact.atlas_curation.value,
         "has_conflicting_evidence": fact.has_conflicting_evidence,
         "has_source_discordance": fact.has_source_discordance,
@@ -260,6 +263,8 @@ def build_genes(
     burden: Mapping[str, Sequence[BurdenRow]],
     concordance: Mapping[str, Json],
     profiles: Mapping[str, ExpressionProfile],
+    combined: Mapping[str, Sequence[CombinedRow]] | None = None,
+    identities: Mapping[str, GeneIdentity] | None = None,
 ) -> dict[str, GeneFacts]:
     """Emit `genes/index.json` and one bundle per published gene, and return the facts.
 
@@ -279,9 +284,9 @@ def build_genes(
     an in-scope disease, plus the genes two or more GenCC submitters agree on
     that no ClinGen panel contests. It is passed to `gene_facts`, which keys on
     it, so this function writes exactly one bundle per member and the index lists
-    exactly the same set. 91 of the 92 published today carry no curated assertion
-    at all; `atlas_curation` is what says so, in the index row and the bundle
-    alike.
+    exactly the same set. Nearly all carry no curated assertion at all
+    (118 of 119, measured 2026-10-26); `atlas_curation` is what says so, in the
+    index row and the bundle alike.
 
     `symbols` comes from `mirrors/genes.tsv`, keyed on HGNC id. A gene absent
     from it keeps its HGNC id as its display label: the browse row and the page
@@ -301,6 +306,21 @@ def build_genes(
     applies: no external authority has admitted them under D21, so the atlas
     publishes no page for them. Their rows are still published in the shards
     those two modules wrote — the gene index simply does not link to them.
+
+    `combined` is `burden.load_combined`'s return. It defaults to `None` so a
+    caller that predates it publishes an empty `burden_combined` array rather
+    than failing.
+
+    `identities` is `runner._gene_identities`' return: `mirrors/genes.tsv`'s
+    identity columns (D52). A gene absent from it publishes an `identity`
+    object of six nulls, the shape every bundle carries -- the same "keep the
+    record, mark what is missing" fallback `symbols` applies. Defaulted, so a
+    caller that forgets it is not refused here: it publishes six nulls on every
+    bundle, which the API doc defines as "the registry holds no value", and
+    every unit test that passes `identities` itself stays green.
+    `test_every_published_bundle_carries_the_identity_its_registry_row_holds`
+    is what catches it, by comparing every bundle of a real build with
+    `mirrors/genes.tsv`.
 
     `profiles` is `gene_expression_profiles`' return (`build/profiles.py`):
     the derived percentile placement, tau and phase assignment for every gene
@@ -411,12 +431,15 @@ def build_genes(
             bundle,
             {
                 **headline,
+                # Who the gene is, from the registry row the symbol came from:
+                # name, locus and the ids its page links out by (D52).
+                "identity": identity_payload((identities or {}).get(gene, EMPTY_IDENTITY)),
                 # The full mirrored picture, alongside the flat fields
                 # `headline` already carries -- see `_validity`'s docstring for
                 # why both are published rather than one replacing the other.
                 "validity": _validity(gene_validity),
                 # Why this gene is published at all, as a payload rather than a
-                # rule a reader has to trust. `_SCOPE_RULE` tells every visitor
+                # rule a reader has to trust. `methods.SCOPE_RULE` tells a reader
                 # that no disease is in scope on this atlas's own judgement;
                 # this is what lets them check which authority admitted the gene
                 # in front of them. Kept beside `validity` rather than inside it
@@ -441,6 +464,10 @@ def build_genes(
                 # `omics` above. An absent key would make "no study reported
                 # this gene" indistinguishable from "the build dropped it".
                 "burden": burden_payload(burden.get(gene, ())),
+                # Always present, empty when the gene has none, for the reason
+                # `burden` is. A study's own combination of its arms -- never a
+                # pooling across studies -- whose `local_fdr` is not a corrected p.
+                "burden_combined": combined_payload((combined or {}).get(gene, ())),
                 # Always present, empty ({"datasets": []}) when no profile
                 # dataset's mirror covers this gene -- same rule as `omics`
                 # and `burden` above, for the same reason: an absent key

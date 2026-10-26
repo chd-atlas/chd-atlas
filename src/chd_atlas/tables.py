@@ -24,16 +24,21 @@ from chd_atlas.fs import list_dir
 from chd_atlas.identifiers import (
     COHORT_LIST_PATTERN,
     HGNC_PATTERN,
+    HPO_PATTERN,
     MODIFICATION_PATTERN,
     MONDO_PATTERN,
+    OMIM_PATTERN,
+    ORPHA_PATTERN,
     PMID_PATTERN,
     SEQUENCE_ONTOLOGY_PATTERN,
     UNIPROT_PATTERN,
+    XREF_TARGET_PATTERN,
 )
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.vocab import (
     BurdenComparator,
     CohortStratum,
+    CombinationMethod,
     ConsequenceClass,
     CountUnit,
     EffectBound,
@@ -218,14 +223,18 @@ def validate_table(path: Path, schema: TableSchema) -> list[ValidationIssue]:
             # rather than Python `re.fullmatch`. The two engines are not the same
             # implementation, so this is only safe because it has been measured,
             # not reasoned about: every value of every pattern-bearing column in
-            # every committed mirror (98,538 non-null values) plus an adversarial
+            # every committed mirror (212,113 non-null values, as pinned by the
+            # test below on 2026-10-25) plus an adversarial
             # synthetic set (trailing/embedded/leading newlines, case, leading
             # zeros, full-width and Arabic-Indic Unicode digits, stray `^`/`$`
             # characters, a 1,000-digit value) produced byte-identical offender
             # sets under both engines for every pattern used in this file —
             # `HGNC_PATTERN`, `MONDO_PATTERN`, `SEQUENCE_ONTOLOGY_PATTERN`,
-            # `MODIFICATION_PATTERN`, `UNIPROT_PATTERN`, and the inline
-            # `gencc_submissions.sgc_id` pattern. See
+            # `MODIFICATION_PATTERN`, `UNIPROT_PATTERN`, the PMID, cohort-list
+            # and Orphanet scope patterns (`ORPHA:`, `OMIM:`, `HP:` and the
+            # `ORPHA|OMIM` cross-reference target), and the inline
+            # `gencc_submissions.sgc_id` and `submitted_on` (ISO date prefix)
+            # patterns. See
             # `tests/unit/test_tables.py::test_polars_pattern_engine_agrees_with_python_re`.
             # `re.fullmatch` anchors both ends implicitly; `str.contains` does
             # not, but every pattern above already carries `^` and `$`, so no
@@ -437,7 +446,14 @@ GENCC_SUBMISSIONS = TableSchema(
         Column("moi", pl.String),
         Column("classification", pl.String, allowed=_GENCC_CLASSIFICATIONS),
         Column("submitter", pl.String),
-        Column("submitted_on", pl.String, nullable=True),
+        # Every GenCC value begins with an ISO calendar date (30,410 of 30,410
+        # measured); what follows varies. The column stays nullable on purpose: a
+        # third party's missing date must not fail the whole build. The pattern
+        # skips nulls, so `docs/data-api.md` promises the prefix for any
+        # non-null value only, and the gene page truncates to it. The trailing `.*$` is not
+        # decoration: the engine-agreement test compares `re.fullmatch` with
+        # `str.contains`, and a bare prefix pattern would disagree under it.
+        Column("submitted_on", pl.String, nullable=True, pattern=r"^\d{4}-\d{2}-\d{2}.*$"),
         Column("report_url", pl.String, nullable=True),
     ),
     # The submitter, and then its own row id -- see
@@ -636,6 +652,7 @@ _STATISTICAL_TESTS = frozenset(item.value for item in StatisticalTest)
 _COUNT_UNITS = frozenset(item.value for item in CountUnit)
 _PVALUE_ADJUSTMENTS = frozenset(item.value for item in PvalueAdjustment)
 _LESION_GROUPS = frozenset(item.value for item in LesionGroup)
+_COMBINATION_METHODS = frozenset(item.value for item in CombinationMethod)
 
 BURDEN = TableSchema(
     name="burden",
@@ -729,6 +746,101 @@ BURDEN = TableSchema(
     ),
 )
 
+# One study's own combination of two of its burden arms. Added 2026-10-24 for
+# PMID:40127276's JL-FDR meta-analysis, which `convert_sierant2025.py` declined to
+# put in `pvalue_adjusted` -- correctly, because it is not a corrected p.
+BURDEN_COMBINED = TableSchema(
+    name="burden_combined",
+    columns=(
+        Column("study", pl.String, pattern=PMID_PATTERN),
+        Column("gene", pl.String, pattern=HGNC_PATTERN),
+        # The burden partition minus what the arms differ in (`origin`,
+        # `maf_max`, `variant_class`, and the comparator itself) -- exactly what
+        # a combination spans. `lesion_group` stays so the paper's
+        # per-phenotype meta-analysis can land without a migration.
+        Column("cohort_stratum", pl.String, allowed=_COHORT_STRATA),
+        Column("lesion_group", pl.String, nullable=True, allowed=_LESION_GROUPS),
+        Column("consequence_class", pl.String, allowed=_CONSEQUENCE_CLASSES),
+        # The comparators of the arms combined, `;`-joined, in the order the page
+        # names them. Token *syntax* reuses `COHORT_LIST_PATTERN` rather than
+        # adding a pattern to the engine-agreement test; vocabulary and arity
+        # (at least two distinct comparators) are BUR021's.
+        Column("combines", pl.String, pattern=COHORT_LIST_PATTERN),
+        Column("method", pl.String, allowed=_COMBINATION_METHODS),
+        Column("pvalue", pl.Float64, minimum=0, maximum=1),
+        # A *local* false discovery rate, never a corrected p: measured over DS6
+        # it is smaller than its own p for 118, 135 and 129 of 248 genes by
+        # consequence class. Named for what it is so no renderer can file it
+        # under "corrected p".
+        Column("local_fdr", pl.Float64, minimum=0, maximum=1),
+        Column("method_note", pl.String, nullable=True),
+        Column("source", pl.String),
+    ),
+    # Gene first, then study, for the reason `BURDEN`'s key is: the file reads
+    # gene by gene, and `burden_mirror.merge_study` sorts both the same way.
+    sort_key=("gene", "study", "cohort_stratum", "lesion_group", "consequence_class"),
+)
+
+# The three mirrors the Orphanet scope rule reads (`orphanet_scope.py`), added
+# 2026-10-25 for issue #8. Each is wider than the rule needs, so changing the
+# rule never needs a re-mirror: product 4 is kept for the whole cardiovascular
+# branch, not only the structural subset the rule counts.
+#
+# Orphanet's frequency band names, verbatim from product 4. Measured 2026-10-25:
+# these six and no others over its 116,664 annotations.
+ORPHANET_FREQUENCIES: Final = frozenset(
+    {
+        "Obligate (100%)",
+        "Very frequent (99-80%)",
+        "Frequent (79-30%)",
+        "Occasional (29-5%)",
+        "Very rare (<4-1%)",
+        "Excluded (0%)",
+    }
+)
+# Product 1's mapping-relation codes, the token before each gloss. Measured: E
+# 3,781, BTNT 4,138, NTBT 797, ND 29 over 8,745 Orphanet-to-OMIM references.
+ORPHANET_RELATIONS: Final = frozenset({"E", "BTNT", "NTBT", "ND"})
+ORPHANET_VALIDATION: Final = frozenset({"Validated", "Not yet validated"})
+
+ORPHANET_PHENOTYPES = TableSchema(
+    name="orphanet_phenotypes",
+    columns=(
+        Column("orpha", pl.String, pattern=ORPHA_PATTERN),
+        Column("disorder_name", pl.String),
+        Column("hpo", pl.String, pattern=HPO_PATTERN),
+        Column("hpo_label", pl.String),
+        # Null when Orphanet gave no band; such an annotation never clears the
+        # rule's floor.
+        Column("frequency", pl.String, nullable=True, allowed=ORPHANET_FREQUENCIES),
+        Column("source", pl.String),
+    ),
+    # `frequency` is in the key because product 4 annotates 38 (orpha, hpo)
+    # pairs twice; both are transcribed and neither is chosen.
+    sort_key=("orpha", "hpo", "frequency"),
+)
+ORPHANET_OMIM = TableSchema(
+    name="orphanet_omim",
+    columns=(
+        Column("orpha", pl.String, pattern=ORPHA_PATTERN),
+        Column("omim", pl.String, pattern=OMIM_PATTERN),
+        Column("relation", pl.String, allowed=ORPHANET_RELATIONS),
+        Column("validation", pl.String, allowed=ORPHANET_VALIDATION),
+        Column("source", pl.String),
+    ),
+    sort_key=("orpha", "omim"),
+)
+MONDO_XREFS = TableSchema(
+    name="mondo_xrefs",
+    columns=(
+        Column("mondo", pl.String, pattern=MONDO_PATTERN),
+        # `skos:exactMatch` only; the converter drops every other predicate.
+        Column("target", pl.String, pattern=XREF_TARGET_PATTERN),
+        Column("source", pl.String),
+    ),
+    sort_key=("mondo", "target"),
+)
+
 TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
     schema.name: schema
     for schema in (
@@ -743,6 +855,10 @@ TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
         CLINGEN_VALIDITY,
         GENCC_SUBMISSIONS,
         BURDEN,
+        BURDEN_COMBINED,
+        ORPHANET_PHENOTYPES,
+        ORPHANET_OMIM,
+        MONDO_XREFS,
     )
 }
 
@@ -765,6 +881,12 @@ FLAT_TABLES: Final[dict[str, str]] = {
     # (study, stratum, maf) — a per-gene shard would make that the expensive
     # access pattern rather than the cheap one.
     "burden": "burden.tsv",
+    # Beside `burden`, not inside it: a combination is a statement about two
+    # rows already in that table, and folding it in would need a fake arm.
+    "burden_combined": "burden_combined.tsv",
+    "orphanet_phenotypes": "orphanet_phenotypes.tsv",
+    "orphanet_omim": "orphanet_omim.tsv",
+    "mondo_xrefs": "mondo_xrefs.tsv",
 }
 
 

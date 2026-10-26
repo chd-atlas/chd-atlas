@@ -22,7 +22,7 @@ from chd_atlas.tables import BURDEN, TABLE_SCHEMAS, read_table
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from convert_burden import _number  # noqa: E402
+from convert_burden import _number, write_mirror  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -81,8 +81,9 @@ def test_the_stratum_each_row_names_is_the_one_its_odds_ratio_was_computed_from(
     Checked here on the committed mirror rather than on the workbook, so it
     guards the artifact consumers actually read. Rows with no case carrier or no
     control carrier are skipped: their odds ratio is 0 or unbounded, which
-    carries no information about which pairing produced it. 860 of the 1,192
-    rows remain, and every one agrees to within 2%, the precision the paper
+    carries no information about which pairing produced it. 1,026 of the 1,438
+    rows remain (860 of 1,192 until the registry widened to 185 genes on
+    2026-10-25), and every one agrees to within 2%, the precision the paper
     published at.
     """
     checked = 0
@@ -95,7 +96,7 @@ def test_the_stratum_each_row_names_is_the_one_its_odds_ratio_was_computed_from(
         assert abs(expected - row["effect"]) <= max(0.02, 0.02 * expected), row
         checked += 1
 
-    assert checked == 860
+    assert checked == 1026
 
 
 def test_an_unbounded_odds_ratio_publishes_no_number_at_all(burden: pl.DataFrame) -> None:
@@ -103,8 +104,8 @@ def test_an_unbounded_odds_ratio_publishes_no_number_at_all(burden: pl.DataFrame
 
     It is accepted by Python's `json.loads` and rejected by `JSON.parse`, so a
     row carrying one would break every page while the manifest checksum still
-    verified. These 34 rows also hold the study's strongest results, so dropping
-    them was not an option either.
+    verified. These 37 rows (34 until 2026-10-25) also hold the study's
+    strongest results, so dropping them was not an option either.
 
     The biconditional is what matters: `effect_bound` is set on exactly the rows
     with no effect, and both directions are asserted. A converter that flagged
@@ -113,12 +114,12 @@ def test_an_unbounded_odds_ratio_publishes_no_number_at_all(burden: pl.DataFrame
     cell a reader would read as "not tested".
     """
     unbounded = burden.filter(pl.col("effect_bound").is_not_null())
-    assert unbounded.height == 34
+    assert unbounded.height == 37
     assert unbounded["effect_bound"].unique().to_list() == ["unbounded_above"]
-    assert unbounded["effect"].null_count() == 34
-    assert unbounded["ci_high"].null_count() == 34
+    assert unbounded["effect"].null_count() == 37
+    assert unbounded["ci_high"].null_count() == 37
     # ...and no other row has a null effect.
-    assert burden["effect"].null_count() == 34
+    assert burden["effect"].null_count() == 37
     # The lower bound survives: it is finite, and it is the whole result. TAB2's
     # syndromic row says the true odds ratio is at least 28.1.
     assert unbounded["ci_low"].null_count() == 0
@@ -135,8 +136,9 @@ def test_the_committed_mirror_covers_every_gene_the_site_publishes(
 
     **The matrix is sparse, and this docstring said otherwise until measured.**
     It claimed nine rows per gene -- three strata by three consequence classes.
-    Measured: of the 145 genes, 103 have 9 rows, 13 have 8, 24 have 6, 1 has 5
-    and 4 have 3; of the 23 published genes, 11 have 9, 8 have 8 and 4 have 6.
+    Measured 2026-10-25, over the 175 genes the 185-gene registry reaches: 125
+    have 9 rows, 13 have 8, 32 have 6, 1 has 5 and 4 have 3. (Over the first 145:
+    103, 13, 24, 1 and 4.)
 
     What a missing cell means is pinned by
     `test_a_missing_cell_means_no_carrier_rather_than_no_test` below, and the
@@ -146,21 +148,21 @@ def test_the_committed_mirror_covers_every_gene_the_site_publishes(
     would remove: synonymous variants are not a result, they are the study's own
     negative control, and a gene whose synonymous row is significant is a gene
     whose comparison is poorly calibrated. That they are the *most* numerous
-    class -- 435 against 345 loss-of-function -- is itself the point: a gene is
+    class -- 525 against 411 loss-of-function -- is itself the point: a gene is
     likelier to carry a synonymous variant than a truncating one, so the control
     is available almost everywhere the result is.
     """
     genes, _ = read_table(REPO_ROOT / "mirrors" / "genes.tsv", TABLE_SCHEMAS["genes"])
     assert genes is not None
 
-    assert burden.height == 1192
-    assert burden["gene"].n_unique() == 145
+    assert burden.height == 1438
+    assert burden["gene"].n_unique() == 175
     assert set(burden["gene"].to_list()) <= set(genes["hgnc_id"].to_list())
     assert burden["study"].unique().to_list() == ["PMID:42230622"]
     assert burden["consequence_class"].value_counts(sort=True).to_dicts() == [
-        {"consequence_class": "synonymous", "count": 435},
-        {"consequence_class": "missense_damaging", "count": 412},
-        {"consequence_class": "lof", "count": 345},
+        {"consequence_class": "synonymous", "count": 525},
+        {"consequence_class": "missense_damaging", "count": 502},
+        {"consequence_class": "lof", "count": 411},
     ]
     assert sorted(burden["cohort_stratum"].unique().to_list()) == [
         "all",
@@ -172,25 +174,25 @@ def test_the_committed_mirror_covers_every_gene_the_site_publishes(
 def test_a_missing_cell_means_no_carrier_rather_than_no_test(burden: pl.DataFrame) -> None:
     """The semantic the gene page's empty cells depend on.
 
-    The burden matrix is sparse: 42 of the 145 genes are missing at least one
+    The burden matrix is sparse: 50 of the 175 genes are missing at least one
     (stratum, consequence) cell. A reader meeting a blank will read it as
     "not tested" unless the page says otherwise, and "not tested" is a different
     and much weaker claim than "nobody carried one".
 
-    Zero of the 1,192 rows have no carrier in the cases *and* none in the
+    Zero of the 1,438 rows have no carrier in the cases *and* none in the
     controls. A 2x2 table of all zeros supports no test, so the study emitted no
     row for it -- which makes an absent cell mean exactly "no qualifying variant
     was seen in either group", and the renderer may say so.
 
-    The two one-sided cases are real rows and stay: 298 rows have no case
-    carrier (evidence against enrichment) and 34 have no control carrier (the
+    The two one-sided cases are real rows and stay: 375 rows have no case
+    carrier (evidence against enrichment) and 37 have no control carrier (the
     unbounded odds ratios, the strongest signal in the study).
     """
     assert burden.filter(
         (pl.col("n_case_carriers") == 0) & (pl.col("n_control_carriers") == 0)
     ).is_empty()
-    assert burden.filter(pl.col("n_case_carriers") == 0).height == 298
-    assert burden.filter(pl.col("n_control_carriers") == 0).height == 34
+    assert burden.filter(pl.col("n_case_carriers") == 0).height == 375
+    assert burden.filter(pl.col("n_control_carriers") == 0).height == 37
 
 
 def test_the_denominators_are_the_studys_post_qc_set_not_its_abstract(
@@ -213,3 +215,22 @@ def test_the_denominators_are_the_studys_post_qc_set_not_its_abstract(
     assert by_stratum == {"all": [3876], "syndromic": [1471], "nonsyndromic": [2405]}
     assert by_stratum["syndromic"][0] + by_stratum["nonsyndromic"][0] == by_stratum["all"][0]
     assert burden["n_controls"].unique().to_list() == [45082]
+
+
+def test_rewriting_this_study_keeps_every_other_studys_rows(tmp_path: Path) -> None:
+    """It wrote the whole file until 2026-10-25, deleting two studies' rows if run alone.
+
+    Driven through `write_mirror` on a mirror holding a row from another study,
+    which a test reading the committed mirror cannot exercise (§4.23).
+    """
+    from burden_mirror import ORDER
+
+    other = dict.fromkeys(ORDER, "")
+    other.update({"study": "PMID:40127276", "gene": "HGNC:1", "cohort_stratum": "all"})
+    out = tmp_path / "burden.tsv"
+    out.write_text("\t".join(ORDER) + "\n" + "\t".join(other[c] for c in ORDER) + "\n")
+    mine = {**other, "study": "PMID:42230622", "gene": "HGNC:2"}
+
+    assert write_mirror(out, [mine]) == (1, 1)
+    studies = [line.split("\t")[0] for line in out.read_text().splitlines()[1:]]
+    assert sorted(studies) == ["PMID:40127276", "PMID:42230622"]

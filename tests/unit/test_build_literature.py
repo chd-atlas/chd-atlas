@@ -159,6 +159,7 @@ def test_the_inline_publication_is_the_one_the_entry_cites(tmp_path: Path) -> No
         "cohort_size": None,
         "ancestry": [],
         "tests_reported": None,
+        "summary_caveat": None,
     }
 
 

@@ -145,8 +145,8 @@ def gene_facts(
     `validity_state`, `has_conflicting_evidence`, `has_source_discordance` and
     `confidence_by_lesion_group` -- comes from `validity`, and none of them from
     a curated assertion. A gene an expert panel has classified has exactly a
-    confidence to display, and 91 of the 92 genes published today have no
-    assertion at all.
+    confidence to display, and nearly every published gene has no assertion at
+    all (118 of 119, measured 2026-10-26).
 
     An asserted gene outside `published` gets no facts, so no bundle and no
     page. That is D37: a curator's assertion does not admit a gene to the

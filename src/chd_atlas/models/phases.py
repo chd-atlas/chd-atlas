@@ -24,10 +24,10 @@ against, and it produced a wrong row (it placed outflow tract septation at 7
 wpc; the numeric boundaries below place it only through 6.86 wpc). The table
 below is derived from the boundaries `curation/cardiac_phases.yaml` actually
 curates, verified against a real built page rather than trusted by
-arithmetic, and `heart_looping` is absent from every row on purpose -- it has
-no stated end (see `EndBasis.NOT_STATED` below) and `phases_for` excludes it
-from every match for exactly that reason, even though it is also
-biologically underway throughout this range:
+arithmetic. `heart_looping` is absent from every row because its end, 3.71
+wpc (`EndBasis.DERIVED` below), falls before the first of these stages. This
+paragraph said `phases_for` excluded it for having no stated end, which
+stopped being true on 2026-08-24, when that end was derived:
 
 | elapsed wpc | phases matched |
 |---|---|

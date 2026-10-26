@@ -72,6 +72,8 @@ from pathlib import Path
 from typing import Final
 from xml.etree import ElementTree as ET
 
+from burden_mirror import merge_study
+
 # The publication, the source registry entry, and the cohorts -- all four are
 # `curation/`- or `mirrors/`-side identifiers this script must agree with, so
 # they are named once here rather than spelled inline per row.
@@ -270,7 +272,7 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
     """Build the mirror rows, and the report lines describing what was dropped.
 
     `symbols` maps a gene symbol to its HGNC id. A symbol absent from it is
-    dropped -- the workbook covers 17,155 genes and this atlas registers 154 --
+    dropped -- the workbook covers 17,155 genes and this atlas registers 185 --
     and the report says how many, so a filter that silently matched nothing
     cannot look like a filter that worked.
     """
@@ -414,16 +416,27 @@ def main(argv: list[str]) -> int:
     root = Path(argv[2]) if len(argv) == 3 else Path.cwd()
 
     rows, report = convert(source, gene_symbols(root))
-    out.parent.mkdir(parents=True, exist_ok=True)
-    body = "\n".join("\t".join(row[name] for name in _ORDER) for row in rows)
-    out.write_text("\t".join(_ORDER) + "\n" + body + "\n", encoding="utf-8")
+    kept, written = write_mirror(out, rows)
 
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     for line in report:
         print(line)
-    print(f"wrote {out}")
+    print(f"wrote {written} row(s) for {STUDY}, keeping {kept} row(s) from other studies")
     print(f"sha256 of {source.name}: {digest}")
     return 0
+
+
+def write_mirror(out: Path, rows: list[dict[str, str]]) -> tuple[int, int]:
+    """Replace this study's rows in `out`, keeping every other study's. Returns (kept, written).
+
+    **This wrote the whole file until 2026-10-25**, long after the other two
+    converters had moved to `burden_mirror.merge_study`. Measured that day, when
+    the Orphanet scope work re-ran all three against a wider registry: run first,
+    it left only its own 1,438 rows, and only the order the converters happened to
+    be run in kept PMID:34324492's 121 and PMID:40127276's 246 from vanishing --
+    on a green build, since nothing checks that a study's rows are still present.
+    """
+    return merge_study(out, STUDY, rows)
 
 
 if __name__ == "__main__":

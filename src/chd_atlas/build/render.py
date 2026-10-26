@@ -74,7 +74,8 @@ STYLESHEET: Final = """
        are ordinal, so a ramp is what they mean; a second hue would invent an
        axis. `ungraded` is drawn as absence (outline, muted) rather than as the
        bottom of the ramp: no panel graded the gene, which is not a weaker grade
-       but a different question, and 16 of the 92 genes published are in it. */
+       but a different question, and every gene admitted on submitter
+       agreement is in it. */
     --grade-4: #1a7f37; --grade-4-fg: #ffffff;
     --grade-3: #4e9c66; --grade-3-fg: #ffffff;
     --grade-2: #a9d3b6; --grade-2-fg: #14301d;
@@ -119,6 +120,10 @@ STYLESHEET: Final = """
   }
   .notice p { margin: 0; }
   .scope-rule { color: var(--muted); font-size: 0.9rem; }
+  /* On methods.html the rule is the section's content, not a gloss beside a
+     gene: body colour and size there, and only there. The gene pages' and the
+     gene index's short form keeps the muted style above. */
+  h2#scope + .scope-rule { color: var(--fg); font-size: 1rem; }
   /* The burden section's four paragraph kinds. `.notice-inline` and
      `.provenance` were emitted by `pages.py` with no rule at all, so the single
      most important safety message this site can print -- "these two studies are
@@ -242,12 +247,18 @@ STYLESHEET: Final = """
 
   .reading-notes { margin: 1rem 0; }
   .reading-notes summary { cursor: pointer; color: var(--muted); }
-  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible {
+  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible,
+  .forest summary:focus-visible {
     outline: 2px solid var(--evidence); outline-offset: 2px;
   }
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
   .cohort-notes summary { cursor: pointer; color: var(--muted); }
   .cohort-notes li { margin: 0.5rem 0; }
+  /* `methods.html#cohorts`: each name above its description rather than beside
+     it, since the base `dl` grid sizes its label column to the widest label.
+     (0,1,1) against the base rule's (0,0,1). */
+  dl.cohort-list { display: block; }
+  .cohort-list dd { margin: 0.15rem 0 0.9rem; }
   dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1rem; margin: 0; }
   dt { color: var(--muted); }
   dd { margin: 0; overflow-wrap: break-word; }
@@ -272,8 +283,9 @@ STYLESHEET: Final = """
   }
   .chip-warn { background: var(--warn); color: #fff; }
   .grade-key { margin: 1rem 0; font-size: 0.9rem; }
-  .grade-key summary { cursor: pointer; color: var(--muted); }
-  .grade-key dt { margin-top: 0.5rem; }
+  /* A row gap rather than a margin on `dt`: the margin pushed each chip below
+     the first line of its own gloss, since `dd` had none. */
+  .grade-key dl { row-gap: 0.6rem; }
   .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; }
   @media (max-width: 46rem) { .layout { grid-template-columns: 1fr; } }
   .rail { font-size: 0.9rem; }
@@ -315,7 +327,7 @@ STYLESHEET: Final = """
      reintroduced a phrase that
      `test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional`
      asserts is absent from a one-study page -- and naming the class here would
-     put the very token a page-wide check greps for onto all 94 pages. Reason
+     put the very token a page-wide check greps for onto every page. Reason
      and class name both live in the module that emits the geometry. */
   .sparks {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
@@ -328,6 +340,8 @@ STYLESHEET: Final = """
   .spark figcaption { font-size: 0.6rem; color: var(--muted); }
   .forest { margin: 0.6rem 0; }
   .forest figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+  .forest figcaption p { margin: 0.25rem 0; }
+  .forest summary { cursor: pointer; color: var(--muted); }
 """
 
 # The one piece of client-side behaviour on the site, and a literal so it does
@@ -443,7 +457,7 @@ _SWATCH_GLYPHS: Final[dict[str, tuple[str, str]]] = {
 # tested it.
 EVIDENCE_POWER_CAVEAT: Final = (
     "<strong>No enrichment at these cohort sizes is not evidence against a gene</strong> "
-    "&mdash; burden tests routinely detect nothing for genes with overwhelming family and "
+    "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
     "functional evidence."
 )
 
@@ -504,10 +518,20 @@ GRADE_CHIP_KIND: Final[dict[str, str]] = {
 # statement of what a panel meant by it will supply their own meaning.
 #
 # `ungraded` is the state, not a rung: no expert panel has graded the gene for a
-# disease this atlas treats as CHD, and it is published on submitter agreement
-# instead. Drawn as an outline rather than as the bottom of the ramp, because
-# "nobody graded it" and "graded weakest" are different facts and the second is
-# not implied by the first.
+# disease in scope, and it is published on submitter agreement instead. Drawn as
+# an outline rather than as the bottom of the ramp, because "nobody graded it"
+# and "graded weakest" are different facts and the second is not implied by the
+# first.
+#
+# Its gloss said the gene was ungraded "for a disease an external authority
+# treats as congenital heart disease, or in which Orphanet records a structural
+# heart malformation in at least 30% of cases", and that two or more submitters
+# "independently assert it", until 2026-10-26. The first reads as a property
+# of a disease, and a disease is in scope only once a curator lists it
+# (`pages._CURATION_BY_AGREEMENT` records the gene it was false for); the
+# second is weaker than the gate, which counts a submitter only at `Limited` or
+# better (`validity.agreeing_records`) -- a `Supportive` submission asserts the
+# gene and counts for nothing.
 GRADE_GLOSS: Final[dict[str, str]] = {
     "definitive": (
         "repeatedly demonstrated in research and clinical settings and upheld over time, "
@@ -527,9 +551,9 @@ GRADE_GLOSS: Final[dict[str, str]] = {
         "a panel looked and found no evidence of a relationship to this disease"
     ),
     "ungraded": (
-        "no ClinGen expert panel has graded this gene for a disease this atlas treats as "
-        "congenital heart disease. It is published because two or more Gene Curation "
-        "Coalition submitters independently assert it, and the gene page names them"
+        "no ClinGen expert panel has graded this gene for any of the diseases in scope here. "
+        "It is published because two or more Gene Curation Coalition submitters classify it "
+        "Limited or better, and the gene page names them"
     ),
 }
 
@@ -543,15 +567,34 @@ _GRADE_KEY_ORDER: Final = (
 )
 
 
-def grade_legend() -> str:
-    """The validity-chip key, as a collapsed `<details>`.
+def grade_key() -> str:
+    """The validity-chip key, rendered open, for `methods.html#scope`.
 
-    Rendered on the browse page and on every gene page, from one constant, for
-    the reason `EVIDENCE_POWER_CAVEAT` is one constant: a key that exists on the
-    page a reader arrives at and not on the page they land on is a key that is
-    absent exactly when it is needed. Measured 2026-08-05 in the concordance
-    review, where the browse page carried the evidence legend and the gene page
-    did not.
+    It was `grade_legend()` until 2026-10-26: a collapsed `<details>` rendered on
+    the browse page and on every gene page, from one constant, for the reason
+    `EVIDENCE_POWER_CAVEAT` is one constant: a key that exists on the page a
+    reader arrives at and not on the page they land on is a key that is absent
+    exactly when it is needed. Measured 2026-08-05 in the concordance review,
+    where the browse page carried the evidence legend and the gene page did not.
+
+    **Moved to `methods.html#scope` on 2026-10-26 (D50).** Its dispute sentence
+    said "the record is in the table below", which was false on the gene index
+    (no validity table) and is false here; it now points at the gene's validity
+    table. "This page is not a complete account" became "a gene page" for the
+    same reason. Both page kinds still reach it: each carries the scope short
+    form, whose link names the key, and a gene page's card glosses its own
+    headline grade in the key's words (`GRADE_GLOSS`). Rendered open, because on
+    the page that exists to explain it the key is not a digression to fold.
+
+    **It must render after `methods.SCOPE_RULE`.** The dispute sentence's
+    condition read "Where that disease is one an external authority treats as
+    congenital heart disease", which named one path into scope of two: Costello
+    and cardiofaciocutaneous syndrome, the diseases the six disputed genes are
+    disputed for, are in scope only on Orphanet's phenotype frequencies. It now
+    reads "in scope here, by either path above" (2026-10-26), which points at
+    the rule rather than restating it -- so it is true only below the rule, and
+    `test_the_key_follows_the_rule_its_dispute_sentence_points_back_to` pins
+    that order.
 
     `disputed` and `refuted` are deliberately not listed. They are in
     `GRADE_CHIP_KIND` as a guard, but no gene headlined by either is published,
@@ -570,10 +613,28 @@ def grade_legend() -> str:
     sentence denying it. Hence the second half, which tells the reader the table
     is scope-filtered rather than complete.
 
+    **And then the in-scope half went false too, on 2026-10-25.** The sentence
+    read "No gene here was disputed or refuted by an expert panel for a disease an
+    external authority treats as congenital heart disease". The Orphanet scope
+    path brought Costello and cardiofaciocutaneous syndrome into scope, and
+    ClinGen's RASopathy panel disputes six published genes for them -- BRAF,
+    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, each Definitive for the syndrome it
+    is admitted on: Noonan syndrome or Noonan syndrome with multiple
+    lentigines, or cardiofaciocutaneous syndrome itself for BRAF and MAP2K1,
+    which the same panel disputes only for Costello syndrome.
+    PTPN11's page carried the denial beside its own `conflicting evidence` chip
+    and two `Disputed` rows. What stays true on every page is narrower and is
+    what the sentence now says: no gene is *headlined* by a contested grade (the
+    headline is the admitting record's, at `Limited` or better), an in-scope
+    dispute is listed in the table and sets `has_conflicting_evidence` (every
+    published gene has a supportive record, so the flag's other half always
+    holds), and an out-of-scope one is not shown.
+
     The qualifier deliberately avoids the phrase "this atlas's CHD scope", which
     `test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas`
-    asserts is absent from every page: it told 24 pages that this atlas decides
-    what counts as congenital heart disease, and it does not.
+    asserts is absent from both page kinds, and `test_build_methods.py` from
+    `methods.html`: it told 24 pages that this atlas decides what counts as
+    congenital heart disease, and it does not.
     """
     rows = "".join(
         f'<dt><span class="chip chip-{GRADE_CHIP_KIND.get(grade, "ungraded")}">'
@@ -582,7 +643,7 @@ def grade_legend() -> str:
         for grade in _GRADE_KEY_ORDER
     )
     return (
-        '<details class="grade-key"><summary>What these classifications mean</summary>'
+        '<div class="grade-key">'
         "<p>Every classification on this site is mirrored from the authority that made it. "
         "The rung names are "
         '<a href="https://clinicalgenome.org/curation-activities/gene-disease-validity/">'
@@ -590,12 +651,14 @@ def grade_legend() -> str:
         "Curation Coalition submitters grade on the same ladder, and also use "
         "<em>Supportive</em>, which asserts an association without grading its evidence "
         "and which this atlas maps to no rung. "
-        "<strong>No gene here was disputed or refuted by an expert panel for a disease "
-        "an external authority treats as congenital heart disease.</strong> A panel may "
-        "have disputed the same gene for some other disease: the records below are only "
-        "those for diseases in this atlas&#x27;s remit, so this page is not a complete "
-        "account of what ClinGen has said about the gene.</p>"
-        f"<dl>{rows}</dl></details>"
+        "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
+        "may still have disputed the same gene for a different disease. Where that disease "
+        "is in scope here, by either path above, the record is in that gene&#x27;s validity "
+        "table, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries a "
+        "<em>conflicting evidence</em> flag. Where it is not, the record "
+        "is not shown: a gene page lists only records for diseases in this atlas&#x27;s "
+        "remit, so it is not a complete account of what ClinGen has said about the gene.</p>"
+        f"<dl>{rows}</dl></div>"
     )
 
 
@@ -619,10 +682,14 @@ class Markup:
     because escaping cannot make a name safe, and the same reasoning applies to
     a cell that carries markup.
 
-    One caller today: `pages._dot_strip`, whose HTML is a fixed set of `<span>`
-    elements with class names from a literal map and `title` text escaped where
-    it is built. Nothing it interpolates comes from a mirror or from curation
-    unescaped.
+    As a table cell, two callers today, both in `build_gene_index_page` (the
+    forest plot's SVG text uses the type for the same obligation, outside any
+    table): `pages._dot_strip`,
+    whose HTML is a fixed set of `<span>` elements with class names from a
+    literal map and `title` text escaped where it is built; and a contested
+    gene's confidence cell, the grade (a vocabulary member, escaped anyway)
+    followed by a `chip`, which escapes its own label. Nothing either
+    interpolates comes from a mirror or from curation unescaped.
     """
 
     html: str
@@ -654,10 +721,16 @@ def _cell(value: Cell) -> str:
     return html.escape(value)
 
 
-def chip(text: str, kind: str = "") -> str:
-    """A small labelled pill. `kind` selects a `.chip-*` modifier class."""
+def chip(text: str, kind: str = "", title: str = "") -> str:
+    """A small labelled pill. `kind` selects a `.chip-*` modifier class.
+
+    `title`, when given, is the pill's tooltip, escaped like the label. For a
+    label too short to say what it measures: `sources disagree` is the one
+    caller today (`pages._SOURCE_DISCORDANCE_TITLE`).
+    """
     suffix = f" chip-{html.escape(kind)}" if kind else ""
-    return f'<span class="chip{suffix}">{html.escape(text)}</span>'
+    tooltip = f' title="{html.escape(title)}"' if title else ""
+    return f'<span class="chip{suffix}"{tooltip}>{html.escape(text)}</span>'
 
 
 def definition_list(items: Sequence[tuple[str, str]]) -> str:
@@ -733,7 +806,8 @@ def document(*, title: str, root: str, body: str, script: str = "") -> str:
     home = html.escape(root)
     nav = (
         f'<nav><a href="{home}index.html">CHD Atlas</a> &middot; '
-        f'<a href="{home}genes/index.html">Genes</a></nav>'
+        f'<a href="{home}genes/index.html">Genes</a> &middot; '
+        f'<a href="{home}methods.html">How to read this atlas</a></nav>'
     )
     notice = f'<div class="notice" role="note"><p>{RESEARCH_USE_NOTICE}</p></div>'
     return f"""<!doctype html>

@@ -121,6 +121,9 @@ def test_the_manifest_counts_every_record_kind_separately(tmp_path: Path) -> Non
         # them one value would let each be published under the other's name
         # undetected -- CLAUDE.md section 4.30.
         cohorts=("c",) * 11,
+        # 12: the scope registry `scope.json` publishes (schema 2.15), distinct
+        # from every other length so a cross-wire cannot pass.
+        chd_scope=("s",) * 12,
     )
     emitter = Emitter(root=tmp_path)
 
@@ -139,6 +142,7 @@ def test_the_manifest_counts_every_record_kind_separately(tmp_path: Path) -> Non
         "functional": 5,
         "phenotypes": 6,
         "publications": 7,
+        "scope_terms": 12,
         "genes": 8,
         "burden_rows": 9,
         "cohort_families": 10,
@@ -193,7 +197,7 @@ def test_the_manifest_publishes_five_keys_and_nothing_that_varies(
 
     manifest = _published(tmp_path)
     assert set(manifest) == {"schema_version", "source_commit", "status", "counts", "files"}
-    assert manifest["schema_version"] == "2.13" == SCHEMA_VERSION
+    assert manifest["schema_version"] == "2.18" == SCHEMA_VERSION
     assert manifest["status"] == "in-development" == STATUS
     assert manifest["source_commit"] == commit
     assert manifest["files"] == {}

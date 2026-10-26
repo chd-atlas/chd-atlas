@@ -627,30 +627,33 @@ def test_admission_provenance_names_the_one_warrant_that_admitted_the_gene(
     assert institutions.count("ClinGen") == 1, "ClinGen counted once, not once per source"
 
 
-def test_the_committed_mirrors_publish_ninety_two_genes_across_four_rungs(
+def test_the_committed_mirrors_publish_one_hundred_nineteen_genes_across_four_rungs(
     repository_validity: dict[str, GeneValidity],
 ) -> None:
     """A regression pin on the live corpus, not a restatement of the rule above.
 
-    **Pinned as a composition, not as a total.** 92 alone is one number that a
+    **Pinned as a composition, not as a total.** 119 alone is one number that a
     scope edit and a mirror refresh can move in opposite directions and leave
     unchanged, and it says nothing about which warrant admitted what. The split
     is what `docs/data-api.md`, `index.html`'s counts and every chip on the site
-    are written against: measured 2026-08-06, 76 genes carry a ClinGen record at
-    or above the floor and 16 are admitted on GenCC agreement alone.
+    are written against: measured 2026-10-25, 98 genes carry a ClinGen record at
+    or above the floor and 21 are admitted on GenCC agreement alone. (92 = 76 +
+    16 until the Orphanet scope path admitted Noonan, Costello, Adams-Oliver and
+    the other syndromes where CHD is frequent but not definitional, and NOTCH1's
+    own ClinGen term; issue #8.)
 
     The population was 23 until 2026-08-06 and every gene in it was ClinGen
     `Definitive`; those 23 are still here, which is what makes this a widening
     rather than a replacement.
     """
     published = published_genes(repository_validity)
-    assert len(published) == 92
+    assert len(published) == 119
 
     by_warrant = Counter(
         admission_provenance(repository_validity[gene])["admitted_by"]["authority"]  # type: ignore[index]
         for gene in published
     )
-    assert by_warrant == {"clingen": 76, "gencc_agreement": 16}
+    assert by_warrant == {"clingen": 98, "gencc_agreement": 21}
 
     by_grade = Counter(
         record.classification
@@ -658,8 +661,45 @@ def test_the_committed_mirrors_publish_ninety_two_genes_across_four_rungs(
         if (record := _admitting_clingen(repository_validity[gene])) is not None
     )
     assert by_grade == {
-        Classification.DEFINITIVE: 23,
-        Classification.LIMITED: 43,
-        Classification.MODERATE: 9,
+        Classification.DEFINITIVE: 42,
+        Classification.LIMITED: 45,
+        Classification.MODERATE: 10,
         Classification.STRONG: 1,
     }
+
+
+def test_a_gencc_record_carries_its_submission_date_and_id_and_a_clingen_one_neither() -> None:
+    """D51: the date a GenCC row renders, and the id that keys it, reach the record.
+
+    Both were read from the mirror and dropped here until schema 2.16, so every
+    GenCC row of every page rendered a blank date -- 470 of 591 on 2026-10-25.
+    `submitted_on` is carried verbatim, in the mirror's own shape; normalising
+    it for display is `pages._date`'s job.
+    """
+    clingen = _clingen_frame(_clingen_row())
+    gencc = _gencc_row(sgc_id="SGC-102815", submitted_on="2018-05-31 20:04:32")
+
+    records = gene_validity(clingen, _gencc_frame(gencc), in_scope={_GATA6_CHD})[_GATA6].records
+
+    panel = next(r for r in records if r.source is ValiditySource.CLINGEN)
+    submission = next(r for r in records if r.source is ValiditySource.GENCC)
+    assert submission.submitted_on == "2018-05-31 20:04:32"
+    assert submission.sgc_id == "SGC-102815"
+    assert panel.submitted_on is None
+    assert panel.sgc_id is None
+
+
+def test_two_submissions_tied_on_every_other_sort_field_order_by_sgc_id() -> None:
+    """PKD1L1 (HGNC:18053) is the published case: two Ambry Genetics submissions
+    for one disease and inheritance, which `(source, disease, moi, submitter)`
+    cannot order. Fed in both orders, so the result cannot be encounter order."""
+    rows = [
+        _gencc_row(sgc_id="SGC-104080", classification="Definitive"),
+        _gencc_row(sgc_id="SGC-101696", classification="Moderate"),
+    ]
+    for feed in (rows, rows[::-1]):
+        validity = gene_validity(_clingen_frame(), _gencc_frame(*feed), in_scope={_GATA6_CHD})
+        assert [record.sgc_id for record in validity[_GATA6].records] == [
+            "SGC-101696",
+            "SGC-104080",
+        ]

@@ -154,6 +154,7 @@ def _build(
     published: set[str] | None = None,
     census: BurdenCensus = _NO_BURDEN,
     profile_census: ProfileCensus = _NO_PROFILES,
+    combined_results: int = 0,
 ) -> str:
     """Render the page.
 
@@ -183,6 +184,7 @@ def _build(
         ),
         census=census,
         profile_census=profile_census,
+        combined_results=combined_results,
         emitter=emitter,
     )
     return (tmp_path / LANDING).read_text(encoding="utf-8")
@@ -347,6 +349,7 @@ def test_the_page_is_published_through_write_text_and_reaches_the_checksums(
         published={TBX5},
         census=_NO_BURDEN,
         profile_census=_NO_PROFILES,
+        combined_results=0,
         emitter=emitter,
     )
 
@@ -443,6 +446,21 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     # The claim the widening made false must not come back (section 4.35: the
     # negative assertion is the half nobody is watching for).
     assert "Every gene here is published on an upstream expert panel" not in text
+    # D49: the figures count every rare-variant test, and a de novo enrichment is
+    # not a burden test, so the front page never calls them "burden statistics".
+    assert "Rare-variant statistics are reported per independent cohort family" in sentence
+    assert "burden statistic" not in text.lower()
+    # D49: the definition names all three analyses, as literal prose (not the
+    # source constant), and says "copy-number variants" so a future non-deletion
+    # CNV analysis does not make it false.
+    definition = re.search(r"<p>A <strong>rare-variant statistic</strong>.*?</p>", text, re.S)
+    assert definition, "the front page carries no definition of a rare-variant statistic"
+    assert " ".join(re.sub(r"<[^>]+>", "", definition.group(0)).split()).startswith(
+        "A rare-variant statistic is one study's rare-variant test of one gene under one "
+        "design: a case-control burden test of rare SNVs and indels or of copy-number "
+        "variants, or a de novo enrichment test, which are different analyses and are named "
+        "as such on each gene's page."
+    )
 
 
 def test_the_published_and_mirrored_counts_are_derived_not_hardcoded(tmp_path: Path) -> None:
@@ -594,14 +612,14 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     for value, label in (
         (4, "genes published"),
         (3, "independent datasets"),
-        (6, "burden statistics"),
+        (6, "rare-variant statistics"),
     ):
         assert re.search(
             rf'"figure-value">{value}</span> <span class="figure-label">{label}<', hero
         ), f"the hero no longer states {value} beside {label!r}"
-    assert re.search(r"<dt>Burden statistics</dt>\s*<dd>6</dd>", listed)
+    assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
-    assert re.search(r"<dt>Genes with burden evidence</dt>\s*<dd>2</dd>", listed)
+    assert re.search(r"<dt>Genes with rare-variant evidence</dt>\s*<dd>2</dd>", listed)
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
 
 
@@ -752,7 +770,8 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
     # label because "Phenotype terms (HPO)" carries regex metacharacters.
     cards = {
         "assertions": "Curated gene-disease assertions",
-        "burden_rows": "Burden statistics",
+        "burden_combined": "Within-study combined rare-variant results",
+        "burden_rows": "Rare-variant statistics",
         "cohort_families": "Independent datasets",
         "cohorts": "Sample collections",
         "datasets": "Omics datasets",
@@ -763,6 +782,7 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
         "profile_datasets": "Developmental expression datasets",
         "profile_genes": "Genes with developmental expression data",
         "publications": "Publications cited",
+        "scope_terms": "Disease terms in scope",
     }
     assert set(cards) == set(counts), (
         "the manifest census and the front page's cards have drifted apart; "
@@ -789,6 +809,9 @@ def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
     The `<nav>` is the other half of the shell, and `root=""` is what makes its
     links right from the site root: a landing page rendered with `"../"` would
     point every visitor's "Genes" link above the deploy root.
+
+    Its third link, to `methods.html` (D50, 2026-10-26), is what puts the
+    site's reading notes one click from every page, the gene pages included.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
@@ -798,6 +821,7 @@ def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
     assert text.count("<style>") == 1
     assert '<a href="index.html">CHD Atlas</a>' in text
     assert '<a href="genes/index.html">Genes</a>' in text
+    assert '<a href="methods.html">How to read this atlas</a></nav>' in text
 
 
 def test_the_front_page_links_to_the_browsable_gene_index(tmp_path: Path) -> None:
@@ -842,6 +866,41 @@ def test_the_relabelled_mirrored_validity_row_sits_outside_whats_published(
         rf"<dt>{re.escape(_MIRRORED_ROW_LABEL)}</dt>\s*<dd>5</dd>",
         sources_section,
     )
+
+
+def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires(
+    tmp_path: Path,
+) -> None:
+    """Orphanet appeared on the front page zero times until 2026-10-26.
+
+    Its phenotype frequencies are what bring Noonan, Costello, Adams-Oliver and
+    the other nominated syndromes into scope, and for some published genes
+    those syndromes are the only route in; `sources.json` records both Orphadata
+    products as CC-BY-4.0, attribution required, and Orphadata asks to be cited
+    in a stated form. Pinned against a literal in "Where this data comes from",
+    whitespace-collapsed (the template wraps it), so the citation cannot be
+    shortened, and a source named only in "What this is" does not pass: the
+    citation is what the licence asks for, not the name.
+    """
+    corpus = Corpus(root=Path("."), assertions=(_assertion(),))
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
+
+    sources_section = _prose(_section(text, "<h2>Where this data comes from</h2>"))
+    assert (
+        "<strong>Orphanet</strong>'s phenotype annotations decide whether a syndrome a curator "
+        "nominates is in scope on how often it carries a structural heart malformation; its "
+        "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
+        "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
+        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
+        "a date or a checksum, and carries the licence and attribution terms each of these is "
+        "mirrored under.</p>"
+    ) in sources_section
+    # ClinGen's, GenCC's and HGNC's entries are dates ("FILE CREATED: 2026-08-03",
+    # "retrieved 2026-08-03", "2026-10-16"), so "by version or checksum" was
+    # false of three sources (review, 2026-10-26).
+    assert "by version or checksum" not in sources_section
+    assert "ClinGen, GenCC, HPO, Orphanet" in _prose(_section(text, "<h2>What this is</h2>"))
 
 
 def test_a_single_assertion_is_singular_not_plural(tmp_path: Path) -> None:

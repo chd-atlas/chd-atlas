@@ -8,16 +8,20 @@ from pathlib import Path
 
 from chd_atlas.build.burden import (
     BurdenRow,
+    CombinedRow,
     build_cohorts,
     burden_census,
     burden_payload,
     cohort_registry,
+    combined_census,
+    combined_payload,
     load_burden,
+    load_combined,
     shared_cohorts,
 )
 from chd_atlas.build.emit import Emitter
 from chd_atlas.models.cohort import Cohort
-from chd_atlas.tables import BURDEN
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED
 
 _BASE: dict[str, str] = {
     "study": "PMID:42230622",
@@ -325,7 +329,8 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     2026-08-06, `curation/cohorts.yaml` reached zero published bytes and
     `Cohort.url` reached none at all, so a consumer had 915 statistics and none
     of the sentences that say what they count -- including that `taa_cases` is
-    777 probands who do not have congenital heart disease.
+    777 thoracic aortic aneurysm probands, a condition outside this atlas's
+    scope.
 
     Four properties, one fixture, because they share it and each fails a
     different mutant:
@@ -369,3 +374,93 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     # `url` present and null rather than omitted -- `"url" in ...` fails on an
     # omitted key where `.get("url") is None` would pass on both.
     assert "url" in published[1] and published[1]["url"] is None
+
+
+_COMBINED_BASE: dict[str, str] = {
+    "study": "PMID:40127276",
+    "gene": "HGNC:17075",
+    "cohort_stratum": "all",
+    "lesion_group": "",
+    "consequence_class": "lof",
+    "combines": "mutation_model;control_cohort",
+    "method": "joint_local_fdr",
+    "pvalue": "1.66e-38",
+    "local_fdr": "2.7e-34",
+    "method_note": "",
+    "source": "sierant2025_ds6",
+}
+
+
+def _write_combined(tmp_path: Path, *rows: dict[str, str]) -> Path:
+    mirrors = tmp_path / "mirrors"
+    mirrors.mkdir(parents=True, exist_ok=True)
+    header = "\t".join(BURDEN_COMBINED.column_names)
+    body = ["\t".join(row[name] for name in BURDEN_COMBINED.column_names) for row in rows]
+    path = mirrors / "burden_combined.tsv"
+    path.write_text("\n".join([header, *body]) + "\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_combined_rows_read_in_burden_reading_order_and_publish_every_key(
+    tmp_path: Path,
+) -> None:
+    """Same reading order as the arm rows, and one shape for every object.
+
+    The file is in sort order (gene, study, stratum, consequence), which puts
+    `nonsyndromic` before `syndromic`. The reading order is the study, then
+    `STRATUM_ORDER`. A `load_combined` that skipped its sort would hand these
+    back in file order, and the literal below would fail.
+    """
+    rows = [
+        {**_COMBINED_BASE, "study": "PMID:11111111", "cohort_stratum": "nonsyndromic"},
+        {**_COMBINED_BASE, "study": "PMID:11111111", "cohort_stratum": "syndromic"},
+        {**_COMBINED_BASE, "consequence_class": "damaging"},
+        {**_COMBINED_BASE, "consequence_class": "missense_damaging"},
+    ]
+    loaded = load_combined(_write_combined(tmp_path, *rows))["HGNC:17075"]
+
+    assert [(r.study, r.cohort_stratum, r.consequence_class) for r in loaded] == [
+        ("PMID:11111111", "syndromic", "lof"),
+        ("PMID:11111111", "nonsyndromic", "lof"),
+        ("PMID:40127276", "all", "damaging"),
+        ("PMID:40127276", "all", "missense_damaging"),
+    ]
+    payload = combined_payload(loaded)
+    assert payload[2] == {
+        "study": "PMID:40127276",
+        "cohort_stratum": "all",
+        "lesion_group": None,
+        "consequence_class": "damaging",
+        "combines": ["mutation_model", "control_cohort"],
+        "method": "joint_local_fdr",
+        "pvalue": 1.66e-38,
+        "local_fdr": 2.7e-34,
+        "method_note": None,
+        "source": "sierant2025_ds6",
+    }
+    # Present and null, not absent: every object carries every key.
+    assert "lesion_group" in payload[2] and payload[2]["lesion_group"] is None
+
+
+def test_the_combined_census_counts_published_genes_not_mirrored_rows() -> None:
+    """75 published today against 90 mirrored: the two must stay distinct (§4.30)."""
+    row = CombinedRow(
+        study="PMID:40127276",
+        gene="HGNC:1",
+        cohort_stratum="all",
+        lesion_group=None,
+        consequence_class="lof",
+        combines=("mutation_model", "control_cohort"),
+        method="joint_local_fdr",
+        pvalue=0.01,
+        local_fdr=0.02,
+        method_note=None,
+        source="sierant2025_ds6",
+    )
+    combined = {"HGNC:1": [row, row], "HGNC:2": [row]}
+    assert combined_census(combined, published={"HGNC:1"}) == 2
+    assert combined_census(combined, published=set()) == 0
+
+
+def test_an_absent_combined_mirror_loads_as_nothing(tmp_path: Path) -> None:
+    assert load_combined(tmp_path) == {}

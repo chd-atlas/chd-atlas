@@ -31,7 +31,7 @@ from typing import Final
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.paths import COHORTS
 from chd_atlas.models.cohort import Cohort
-from chd_atlas.tables import BURDEN, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 
 # The order strata are presented in, everywhere. Not alphabetical, which would
 # put `nonsyndromic` before `syndromic` and both before the whole-cohort figure a
@@ -115,6 +115,20 @@ def _cohorts(value: object) -> tuple[str, ...]:
     return tuple(part for part in str(value).split(";") if part)
 
 
+def _stratum_rank(stratum: str) -> int:
+    """Index in `STRATUM_ORDER`; an unknown stratum sorts last rather than raising."""
+    return STRATUM_ORDER.index(stratum) if stratum in STRATUM_ORDER else len(STRATUM_ORDER)
+
+
+def _consequence_rank(consequence: str) -> int:
+    """Index in `CONSEQUENCE_ORDER`; an unknown class sorts last rather than raising."""
+    return (
+        CONSEQUENCE_ORDER.index(consequence)
+        if consequence in CONSEQUENCE_ORDER
+        else len(CONSEQUENCE_ORDER)
+    )
+
+
 def _sort_key(row: BurdenRow) -> tuple[object, ...]:
     """Reading order within one gene: study, then stratum, then consequence.
 
@@ -125,17 +139,14 @@ def _sort_key(row: BurdenRow) -> tuple[object, ...]:
     has not been taught to order, and dropping it or dying on it would be worse
     than putting it at the end.
     """
-    stratum = (
-        STRATUM_ORDER.index(row.cohort_stratum)
-        if row.cohort_stratum in STRATUM_ORDER
-        else len(STRATUM_ORDER)
+    return (
+        row.study,
+        _stratum_rank(row.cohort_stratum),
+        row.cohort_stratum,
+        _consequence_rank(row.consequence_class),
+        row.consequence_class,
+        row.origin,
     )
-    consequence = (
-        CONSEQUENCE_ORDER.index(row.consequence_class)
-        if row.consequence_class in CONSEQUENCE_ORDER
-        else len(CONSEQUENCE_ORDER)
-    )
-    return (row.study, stratum, row.cohort_stratum, consequence, row.consequence_class, row.origin)
 
 
 def load_burden(root: Path) -> dict[str, list[BurdenRow]]:
@@ -297,6 +308,105 @@ def burden_payload(rows: Iterable[BurdenRow]) -> list[Json]:
 
 
 @dataclass(frozen=True)
+class CombinedRow:
+    """One study's own combination of two of its burden arms (`burden_combined.tsv`).
+
+    `local_fdr` is a local false discovery rate and never a corrected p; see
+    `BURDEN_COMBINED` and `pages._combined_line`, which is why it is not called
+    `pvalue_adjusted` anywhere.
+    """
+
+    study: str
+    gene: str
+    cohort_stratum: str
+    lesion_group: str | None
+    consequence_class: str
+    combines: tuple[str, ...]
+    method: str
+    pvalue: float
+    local_fdr: float
+    method_note: str | None
+    source: str
+
+
+def _combined_sort_key(row: CombinedRow) -> tuple[object, ...]:
+    """The arm rows' reading order: study, stratum, consequence."""
+    return (
+        row.study,
+        _stratum_rank(row.cohort_stratum),
+        row.cohort_stratum,
+        row.lesion_group or "",
+        _consequence_rank(row.consequence_class),
+        row.consequence_class,
+    )
+
+
+def load_combined(root: Path) -> dict[str, list[CombinedRow]]:
+    """Every combined row, grouped by HGNC id and ordered for reading.
+
+    Empty when the mirror is absent, unreadable or missing a column. The last two
+    are TBL000/TBL001 errors the gate refuses on, so behind the gate only
+    "absent" is reachable.
+    """
+    path = root / "mirrors" / "burden_combined.tsv"
+    if not path.is_file():
+        return {}
+    frame, _ = read_table(path, BURDEN_COMBINED)
+    if frame is None or any(c not in frame.columns for c in BURDEN_COMBINED.column_names):
+        return {}
+
+    grouped: dict[str, list[CombinedRow]] = {}
+    for record in frame.iter_rows(named=True):
+        row = CombinedRow(
+            study=str(record["study"]),
+            gene=str(record["gene"]),
+            cohort_stratum=str(record["cohort_stratum"]),
+            lesion_group=record["lesion_group"],
+            consequence_class=str(record["consequence_class"]),
+            # The `;` convention the cohort columns use, split by the same
+            # function and kept in the order the study's arms were written in.
+            combines=_cohorts(record["combines"]),
+            method=str(record["method"]),
+            pvalue=float(record["pvalue"]),
+            local_fdr=float(record["local_fdr"]),
+            method_note=record["method_note"],
+            source=str(record["source"]),
+        )
+        grouped.setdefault(row.gene, []).append(row)
+    return {gene: sorted(rows, key=_combined_sort_key) for gene, rows in grouped.items()}
+
+
+def combined_payload(rows: Iterable[CombinedRow]) -> list[Json]:
+    """One gene's combined rows, JSON-ready, every key on every object.
+
+    Every key on every object for the reason `burden_payload` gives; `combines`
+    publishes as an array for the reason its cohort columns do.
+    """
+    return [
+        {
+            "study": row.study,
+            "cohort_stratum": row.cohort_stratum,
+            "lesion_group": row.lesion_group,
+            "consequence_class": row.consequence_class,
+            "combines": list(row.combines),
+            "method": row.method,
+            "pvalue": row.pvalue,
+            "local_fdr": row.local_fdr,
+            "method_note": row.method_note,
+            "source": row.source,
+        }
+        for row in rows
+    ]
+
+
+def combined_census(
+    combined: Mapping[str, Sequence[CombinedRow]], published: Collection[str]
+) -> int:
+    """Combined results reaching a published bundle, never the mirror's row count."""
+    return sum(len(combined.get(gene, ())) for gene in published)
+
+
+@dataclass(frozen=True)
 class BurdenCensus:
     """The three burden figures, derived once and published in three places.
 
@@ -331,7 +441,8 @@ def burden_census(
     intended, so re-mirroring is not needed the day D21 widens). A front page
     counting the mirror would advertise 1,475 statistics a reader cannot reach
     from any link on it, and `manifest.json` would promise a consumer five times
-    the rows it can fetch. It counts the 290 that reach a published bundle.
+    the rows it can fetch. It counts the rows that reach a published bundle --
+    290 that day.
 
     **`families` is the dataset count, never `len({row.study for row in rows})`.**
     A cohort family is a connected component over shared sample collections, so
@@ -345,9 +456,11 @@ def burden_census(
     families.
 
     Genes are counted as those with at least one *published* row rather than as
-    `len(published)`. They are equal today, at 23 of 23, and stating the
-    published-gene count under a burden label would keep reading as 23 on the
-    day a gene is published with no burden evidence at all.
+    `len(published)`. They were equal at 23 of 23 when this was written, and
+    stating the published-gene count under a burden label would have kept
+    reading as 23 on the day a gene was published with no burden evidence at
+    all -- which has since happened: they differ by every published gene no
+    rare-variant study covered.
 
     **`families` is the one figure here NOT restricted to `published`, and that
     asymmetry is deliberate.** `rows` and `genes` count what a reader can reach;
@@ -405,9 +518,11 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     the API.
 
     The caveats are the point, not decoration. `taa_cases` is 777 sporadic
-    thoracic aortic aneurysm probands who **do not have congenital heart
-    disease**; `ukbb`'s controls are adults recruited at 40-69 against cases
-    largely enrolled in childhood; `ddd` ascertains on developmental disorder, so
+    thoracic aortic aneurysm probands, a condition **outside this atlas's
+    scope**, in a case set the study reports as CHD (whether any of them also
+    has a congenital heart lesion is recorded nowhere this atlas has read);
+    `ukbb`'s controls are adults recruited at 40-69 against cases a substantial
+    proportion of whom were enrolled in childhood; `ddd` ascertains on developmental disorder, so
     its contribution is enriched for syndromic CHD. A consumer computing anything
     from a row without those sentences is computing something else.
 

@@ -35,6 +35,12 @@ from typing import Final
 
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.models.scope import ScopeAuthority, ScopeEntry
+from chd_atlas.orphanet_scope import (
+    FREQUENCY_FLOOR,
+    OrphanetTables,
+    qualifying_targets,
+    warrant,
+)
 
 # Deliberately wide. Measured 2026-08-03 against the committed ClinGen mirror:
 # of 13 flagship CHD genes' Definitive/Strong disease labels, 12 of 13 --
@@ -164,7 +170,8 @@ def validate_scope_attribution(
     reports it: one bad id must cost one issue, not two.
 
     ERROR rather than WARNING: a false attribution is a provenance claim the
-    atlas cannot support, and `pages._SCOPE_RULE` publishes it on every page.
+    atlas cannot support, and the scope rule publishes it: in full on
+    `methods.html` (`methods.SCOPE_RULE`), linked from every gene page.
 
     Measured 2026-08-06 across the 68 committed terms: **13** are used by
     ClinGen's Congenital Heart Disease GCEP, **10** by another ClinGen expert
@@ -185,6 +192,12 @@ def validate_scope_attribution(
 
     issues: list[ValidationIssue] = []
     for entry in scope:
+        # An Orphanet frequency warrant is not a curation either mirror holds;
+        # SCP006 (`validate_orphanet_warrants`) checks it against the Orphanet
+        # mirrors instead. Without this, the `else` below would look "Orphanet"
+        # up among ClinGen's panels and refuse every such term.
+        if entry.admitted_by is ScopeAuthority.ORPHANET_PHENOTYPE_FREQUENCY:
+            continue
         # The class named in `admitted_by` decides which mirror the name must
         # appear in. This is the line the review's forgery got past.
         expected = (
@@ -375,4 +388,113 @@ def validate_curation_is_in_scope(
         )
         for gene in sorted(curated_genes)
         if gene not in in_scope_genes
+    ]
+
+
+def validate_orphanet_warrants(
+    scope: Iterable[ScopeEntry],
+    tables: OrphanetTables | None,
+    structural: frozenset[str] | None,
+    location: str,
+) -> list[ValidationIssue]:
+    """SCP006: every Orphanet-scoped term has the warrant it claims. SCP008: or it was not checked.
+
+    A term admitted on `orphanet_phenotype_frequency` must reach the ORPHA code it
+    names -- directly, or as a subtype by a validated E/BTNT mapping -- and that
+    disorder must carry a structural heart phenotype at `Frequent (79-30%)` or
+    stronger (`orphanet_scope.warrant`). The message names which half failed,
+    because the two are fixed differently: a wrong code is a curation typo, a
+    disorder that does not qualify is a syndrome the rule does not admit.
+
+    ERROR, like SCP005: the scope rule printed on every gene page says each
+    term's warrant was measured, and a term whose warrant fails would make that
+    false for every gene it admits.
+
+    When the mirrors or the pinned HPO release cannot be read, this reports one
+    SCP006 error naming the cause and one SCP008 skip warning, not one refusal
+    per term -- the cascade `REF000`/`SRC000` exist to prevent. With no
+    Orphanet-scoped term to check it reports nothing at all, so the skip can
+    never arrive alone (CLAUDE.md section 4.41).
+    """
+    nominated = sorted(
+        (
+            entry
+            for entry in scope
+            if entry.admitted_by is ScopeAuthority.ORPHANET_PHENOTYPE_FREQUENCY
+        ),
+        key=lambda entry: entry.id,
+    )
+    if not nominated:
+        return []
+    if tables is None or structural is None:
+        missing = "the Orphanet/MONDO scope mirrors" if tables is None else "the pinned HPO release"
+        return [
+            ValidationIssue(
+                "SCP006",
+                Severity.ERROR,
+                location,
+                f"{len(nominated)} Orphanet-scoped term(s) cannot be verified: {missing} "
+                f"could not be read",
+            ),
+            ValidationIssue(
+                "SCP008",
+                Severity.WARNING,
+                location,
+                f"skipped Orphanet warrant checks: {missing} could not be read",
+            ),
+        ]
+    issues: list[ValidationIssue] = []
+    for entry in nominated:
+        # The model makes `orphanet` mandatory for this class; the guard is for mypy.
+        if entry.orphanet is None:
+            continue
+        result = warrant(entry.id, entry.orphanet, tables, structural)
+        if isinstance(result, str):
+            issues.append(
+                ValidationIssue(
+                    "SCP006",
+                    Severity.ERROR,
+                    location,
+                    f"scope term {entry.id} ({entry.label}) has no Orphanet warrant: {result}",
+                )
+            )
+    return issues
+
+
+def orphanet_candidates(
+    scope_terms: set[str],
+    labels: Mapping[str, str],
+    tables: OrphanetTables | None,
+    structural: frozenset[str] | None,
+    location: str,
+) -> list[ValidationIssue]:
+    """SCP007: terms that would pass SCP006 if a curator nominated them.
+
+    The review signal that makes a *non*-nomination a visible choice rather than
+    a silent one. The rule is not applied automatically: measured 2026-10-24,
+    applied to every mirrored term it admits 132 terms, including Fabry disease
+    and Hurler syndrome through valve findings, because HPO's valve branch does
+    not separate a congenital malformation from a degenerative one. So every
+    qualifying term is listed here, in one digest, and a curator decides.
+
+    A gap warning in the sense SCP003 is, not a skip: the check ran, and found
+    something a human has to act on. It is expected to arrive alone.
+    """
+    if tables is None or structural is None:
+        return []
+    hits = []
+    for term in sorted(set(labels) - scope_terms):
+        targets = qualifying_targets(term, tables, structural)
+        if targets:
+            hits.append(f"{term} ({labels[term]}) via {', '.join(targets)}")
+    if not hits:
+        return []
+    return [
+        ValidationIssue(
+            "SCP007",
+            Severity.WARNING,
+            location,
+            f"{len(hits)} disease term(s) not in scope would qualify on Orphanet's "
+            f"frequencies at {FREQUENCY_FLOOR} or stronger if nominated: " + "; ".join(hits),
+        )
     ]

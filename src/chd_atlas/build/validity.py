@@ -1,8 +1,7 @@
 # src/chd_atlas/build/validity.py
 """Gene-disease validity, mirrored and attributed -- never authored here.
 
-Design decision D12 (`docs/superpowers/specs/2026-08-03-validity-backbone-design.md`):
-the atlas publishes no validity classification of its own. One curator cannot
+Design decision D12: the atlas publishes no validity classification of its own. One curator cannot
 out-curate a chartered expert panel, and the resource that tried is the
 cautionary case: CHDgene publishes a documented 3-tier ranking under which all
 189 genes carry 5/5 stars.
@@ -61,30 +60,23 @@ class ValidityRecord:
     render the authority's own word and still filter on a common scale, without
     the atlas inventing a confidence nobody stated.
 
-    The last four fields are authority-specific: `sop`, `classification_date`
-    and `gcep` come from ClinGen only, `submitter` from GenCC only. Each is
-    `None` on a record from the other source rather than the two sources
-    getting separate record types, because every consumer of `records` wants
-    one homogeneous list to sort, filter and render, not a union type to match
-    on first.
+    The last six fields are authority-specific: `sop`, `classification_date`
+    and `gcep` come from ClinGen only; `submitter`, `submitted_on` and `sgc_id`
+    from GenCC only. Each is `None` on a record from the other source rather
+    than the two sources getting separate record types, because every consumer
+    of `records` wants one homogeneous list to sort, filter and render, not a
+    union type to match on first.
 
-    **`submitted_on` and `sgc_id` are read from the GenCC mirror and
-    deliberately not fields here, so they reach no published byte.** This is a
-    scope decision, recorded because its symptom is indistinguishable from the
-    silent evidence loss `CLAUDE.md` calls this project's characteristic
-    failure: `tables.py::GENCC_SUBMISSIONS` declares and validates both columns,
-    so a reader who finds them in `mirrors/gencc_submissions.tsv` and not in a
-    bundle has no way to tell a decision from a dropped join. Measured
-    2026-08-06 against a real build: of the **344** validity records the **92**
-    published bundles carry, **266** are GenCC, and all 266 have a non-null
-    `submitted_on` and a non-null `sgc_id` in the mirror. (This paragraph read
-    142 / 23 / 119 until 2026-08-06 -- the pre-widening census, still internally
-    consistent and no longer true of any build.) The consequence is
-    that a GenCC record publishes no date at all -- `classification_date` is
-    ClinGen's and is `None` on every one of the 266 -- and no stable identifier,
-    leaving `(source, disease, moi, submitter)` as the only key distinguishing
-    it, the same tuple `_sort_key` orders on. Publishing them would be purely
-    additive and so a `schema_version` minor bump; it is queued, not refused.
+    **`submitted_on` and `sgc_id` reached no published byte until schema
+    2.16.** They were a recorded scope decision rather than a dropped join, and
+    the cost was measured before it was paid off: on 2026-10-25, 470 of the 591
+    validity records the 119 published bundles carry were GenCC, every one
+    with a non-null `submitted_on` and `sgc_id` in the mirror and a blank date
+    on its page. `submitted_on` is carried verbatim -- the mirror holds three
+    timestamp shapes (`2018-05-31 20:04:32`, `2025-01-17T00:00:00.000000Z` and
+    a millisecond variant) -- because normalising a date for display is the
+    page's job (`pages._date`), and a field that rewrote the upstream value
+    would stop being a mirror of it.
     """
 
     source: ValiditySource
@@ -98,6 +90,8 @@ class ValidityRecord:
     classification_date: str | None = None
     gcep: str | None = None
     submitter: str | None = None
+    submitted_on: str | None = None
+    sgc_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -131,16 +125,28 @@ def uncurated() -> GeneValidity:
     )
 
 
-def _sort_key(record: ValidityRecord) -> tuple[str, str, str, str]:
-    """`(source, disease, moi, submitter or "")`.
+def _sort_key(record: ValidityRecord) -> tuple[str, str, str, str, str]:
+    """`(source, disease, moi, submitter or "", sgc_id or "")`.
 
     So two builds of one commit agree on array order regardless of which
     mirror row was read first. `submitter` is `None` on every ClinGen record;
     `or ""` sorts those first, which never has to arbitrate a real tie because
     a null-vs-populated `submitter` split never happens within one source --
-    only GenCC rows carry it, and every GenCC row has one.
+    only GenCC rows carry it, and every GenCC row has one. The fifth element
+    breaks the one published tie, PKD1L1's two Ambry Genetics submissions for
+    MONDO:0014967, whose order otherwise followed mirror row order; measured
+    2026-10-25, adding it reorders zero published records -- `gene_validity`'s
+    output for all 185 registry genes sorted under both keys reorders none, and
+    a byte diff of two real builds differed only in `manifest.json`'s
+    `source_commit`.
     """
-    return (record.source.value, record.disease, record.moi, record.submitter or "")
+    return (
+        record.source.value,
+        record.disease,
+        record.moi,
+        record.submitter or "",
+        record.sgc_id or "",
+    )
 
 
 def _clingen_records(frame: pl.DataFrame, in_scope: set[str]) -> dict[str, list[ValidityRecord]]:
@@ -194,6 +200,8 @@ def _gencc_records(frame: pl.DataFrame, in_scope: set[str]) -> dict[str, list[Va
                 moi=row["moi"],
                 report_url=row["report_url"],
                 submitter=row["submitter"],
+                submitted_on=row["submitted_on"],
+                sgc_id=row["sgc_id"],
             )
         )
     return by_gene
@@ -339,7 +347,9 @@ def _asserts(record: ValidityRecord) -> bool:
     `None` **does** assert. GenCC's `Supportive` maps to `None`
     (`vocab.GENCC_CLASSIFICATIONS`) and means the submitter asserted an
     association without grading its evidence -- an assertion, merely ungraded.
-    Excluding it would drop Orphanet from six genes that have nothing else.
+    Excluding it would drop a submitter from every gene its only in-scope record
+    is a `Supportive` one for, and leave a gene whose sole in-scope record is
+    such a submission asserted by nobody.
     """
     return record.classification not in CONTESTED and (
         record.classification is not Classification.NO_KNOWN_ASSOCIATION
@@ -370,20 +380,22 @@ def _admitting_clingen(entry: GeneValidity) -> ValidityRecord | None:
 def admitting_grade(entry: GeneValidity) -> Classification | None:
     """The grade of the ClinGen record that admitted this gene, or `None`.
 
-    **`derive.gene_facts` headlines this, so that the headline and
-    `admitted_by.classification` cannot come to disagree.** They are one figure
-    and must be computed once: read off `_admitting_clingen`, the headline is
-    the admitting panel's grade by construction rather than by coincidence.
+    `admitted_by.classification` publishes the same record's grade, and the
+    landing page counts panel-graded genes with this.
 
-    It was `strongest()` over *every* in-scope ClinGen record until 2026-08-06.
-    That agrees with this on all 92 published genes -- measured, 0 differ -- and
-    diverges on an input the gate already admits: `NO_KNOWN_ASSOCIATION` is
-    deliberately not a veto (`_clingen_contests`), so a gene ClinGen recorded it
-    for, with two GenCC submitters agreeing, is published. `strongest()` would
-    headline that gene `no_known_association` -- a panel's "we looked and found
-    nothing" rendered as this atlas's headline, beside an `admitted_by` naming
-    GenCC and carrying a `null` classification. No such gene is in the committed
-    mirrors; issue #13 is about publishing the 9 that would be.
+    **`derive.gene_facts` does not headline this**, and this docstring said it
+    did until 2026-10-26. The headline is `strongest()` over every in-scope
+    ClinGen record with a mapped grade; for a gene ClinGen admitted that is
+    this record, so the two agree on every published gene (measured 2026-10-26,
+    0 of 119 differ). They part on an input the gate already admits:
+    `NO_KNOWN_ASSOCIATION` is deliberately not a veto (`_clingen_contests`), so
+    a gene ClinGen recorded it for, with two GenCC submitters agreeing, is
+    published with `None` here and `no_known_association` in the headline.
+    Keying the headline on this function was tried and reverted for exactly
+    that gene: a `null` headline renders "no ClinGen expert panel has graded
+    this gene", false for a gene a panel graded -- see the comment above
+    `panel_graded` in `derive.gene_facts`. No such gene is in the committed
+    mirrors.
     """
     record = _admitting_clingen(entry)
     return record.classification if record is not None else None
@@ -404,18 +416,27 @@ def agreeing_submitters(entry: GeneValidity) -> tuple[str, ...]:
     orders dict keys only.
     """
     return tuple(
-        sorted(
-            {
-                record.submitter
-                for record in entry.records
-                if record.source is ValiditySource.GENCC
-                and record.submitter
-                and record.submitter != "ClinGen"
-                and record.classification is not None
-                and CLASSIFICATION_RANK[record.classification]
-                >= CLASSIFICATION_RANK[PUBLICATION_FLOOR]
-            }
-        )
+        sorted({record.submitter for record in agreeing_records(entry) if record.submitter})
+    )
+
+
+def agreeing_records(entry: GeneValidity) -> tuple[ValidityRecord, ...]:
+    """The GenCC records whose submitters `agreeing_submitters` counts, in `records` order.
+
+    The rule lives here once, because two consumers read it: the gate, which
+    counts the submitters, and the gene page's card, which states the mode of
+    inheritance those submitters' qualifying records carry (D55). A submitter's
+    *other* records -- a `Supportive` one, or one for a second disease below the
+    floor -- are not what admitted the gene and are not returned.
+    """
+    return tuple(
+        record
+        for record in entry.records
+        if record.source is ValiditySource.GENCC
+        and record.submitter
+        and record.submitter != "ClinGen"
+        and record.classification is not None
+        and CLASSIFICATION_RANK[record.classification] >= CLASSIFICATION_RANK[PUBLICATION_FLOOR]
     )
 
 
@@ -507,7 +528,7 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
     """Why this gene is published, as a payload. `admitted_by` + `asserted_by`.
 
     **The gate is a claim about external authorities, and this is what lets a
-    consumer check it rather than trust it.** `pages._SCOPE_RULE` tells every
+    consumer check it rather than trust it.** `methods.SCOPE_RULE` tells a
     reader that no disease is in scope on the atlas's own judgement; without
     this field the same reader has no way to see which authority actually
     admitted the gene in front of them.
@@ -568,10 +589,26 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
             "submitters": list(agreeing_submitters(entry)),
         }
 
-    # One name per institution, and only institutions that actually assert the
-    # gene -- `_asserts` drops the dissenting rungs, which would otherwise be
-    # counted as agreement. A ClinGen expert panel is ClinGen; its GenCC
-    # submissions are the same body and must not count again.
+    institutions = asserting_institutions(entry)
+    return {
+        "admitted_by": admitted,
+        "asserted_by": {"count": len(institutions), "institutions": list(institutions)},
+    }
+
+
+def asserting_institutions(entry: GeneValidity) -> tuple[str, ...]:
+    """`asserted_by.institutions`: every institution asserting the gene in scope, sorted.
+
+    Its own function because two consumers read it -- `admission_provenance`,
+    which publishes it, and the gene page's card, which counts the curators
+    beside the one that admitted the gene (D55) -- and the card must count
+    exactly the list the bundle publishes.
+
+    One name per institution, and only institutions that actually assert the
+    gene -- `_asserts` drops the dissenting rungs, which would otherwise be
+    counted as agreement. A ClinGen expert panel is ClinGen; its GenCC
+    submissions are the same body and must not count again.
+    """
     institutions = {
         record.submitter
         for record in entry.records
@@ -581,7 +618,4 @@ def admission_provenance(entry: GeneValidity) -> dict[str, Json]:
         record.source is ValiditySource.CLINGEN and _asserts(record) for record in entry.records
     ):
         institutions.add("ClinGen")
-    return {
-        "admitted_by": admitted,
-        "asserted_by": {"count": len(institutions), "institutions": sorted(institutions)},
-    }
+    return tuple(sorted(institutions))

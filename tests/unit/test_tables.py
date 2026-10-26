@@ -9,6 +9,8 @@ import pytest
 from chd_atlas.duplicates import duplicates
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.tables import (
+    BURDEN,
+    BURDEN_COMBINED,
     CHROMOSOMES,
     CLINGEN_VALIDITY,
     FLAT_TABLES,
@@ -95,6 +97,43 @@ def test_reports_a_value_failing_its_pattern(tmp_path: Path) -> None:
     assert [i.code for i in issues] == ["TBL005"]
 
 
+@pytest.mark.parametrize(
+    ("submitted_on", "codes"),
+    [
+        ("2018-05-31 20:04:32", []),
+        ("2025-01-17T00:00:00.000000Z", []),
+        ("2021-09-08T16:00:00.000Z", []),
+        ("", []),  # null is allowed
+        ("31/05/2018", ["TBL005"]),
+        ("May 2018", ["TBL005"]),
+        ("20180531", ["TBL005"]),
+    ],
+)
+def test_gencc_submitted_on_must_begin_with_a_calendar_date(
+    tmp_path: Path, submitted_on: str, codes: list[str]
+) -> None:
+    """The three real shapes pass; a value the date prefix would not truncate
+    cleanly is reported, because `docs/data-api.md` promises the prefix."""
+    row = "\t".join(
+        [
+            "SGC-1",
+            "HGNC:1",
+            "G",
+            "MONDO:0000001",
+            "d",
+            "Unknown",
+            "Strong",
+            "S",
+            submitted_on,
+            "",
+        ]
+    )
+    header = "\t".join(c.name for c in GENCC_SUBMISSIONS.columns)
+    path = _write(tmp_path / "gencc_submissions.tsv", f"{header}\n{row}\n")
+    issues = validate_table(path, GENCC_SUBMISSIONS)
+    assert [i.code for i in issues] == codes
+
+
 def test_integer_columns_stay_integers(tmp_path: Path) -> None:
     """Guards the reason polars was chosen over pandas: nullable ints must not become floats."""
     path = _write(
@@ -121,7 +160,38 @@ def test_registry_covers_every_mirror_table() -> None:
         "clingen_validity",
         "gencc_submissions",
         "burden",
+        "burden_combined",
+        "orphanet_phenotypes",
+        "orphanet_omim",
+        "mondo_xrefs",
     }
+
+
+def test_a_combined_row_is_keyed_on_the_burden_partition_minus_what_its_arms_span() -> None:
+    """The combined table's key is a contract, not a convenience.
+
+    A combination spans its arms, so it cannot carry the columns the arms
+    differ in: `origin` (de novo vs transmitted), `maf_max` (none vs 1e-5) and
+    `variant_class`. Adding any of them back would make one combination two rows.
+    Dropping `lesion_group` would leave the paper's per-phenotype meta-analysis
+    needing a migration. And `pvalue_adjusted` must never appear: the JL-FDR is
+    a local FDR, smaller than its own p for about half the panel, which BUR018
+    exists to refuse under that name.
+    """
+    assert BURDEN_COMBINED.sort_key == (
+        "gene",
+        "study",
+        "cohort_stratum",
+        "lesion_group",
+        "consequence_class",
+    )
+    assert set(BURDEN.sort_key) - set(BURDEN_COMBINED.sort_key) == {
+        "variant_class",
+        "origin",
+        "maf_max",
+    }
+    assert "local_fdr" in BURDEN_COMBINED.column_names
+    assert "pvalue_adjusted" not in BURDEN_COMBINED.column_names
 
 
 def test_clingen_validity_is_keyed_on_the_triple_not_the_pair() -> None:
@@ -898,9 +968,15 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         r"^SO:\d{7}$",
         r"^MOD:\d{5}$",
         r"^SGC-\d+$",
+        r"^\d{4}-\d{2}-\d{2}.*$",
         r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$",
         r"^PMID:\d+$",
         r"^[a-z0-9]+(_[a-z0-9]+)*(;[a-z0-9]+(_[a-z0-9]+)*)*$",
+        # The Orphanet scope mirrors, 2026-10-25.
+        r"^ORPHA:\d+$",
+        r"^OMIM:\d+$",
+        r"^HP:\d{7}$",
+        r"^(ORPHA|OMIM):\d+$",
     }
 
     adversarial = [
@@ -956,6 +1032,29 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         "HGNC:1٣٣",  # Arabic-Indic digits mixed into an ASCII-digit run
         "HGNC:１２３",  # full-width digits
         "HGNC:" + "9" * 1000,
+        # The Orphanet scope patterns. `Orphanet:648` is MONDO's spelling, which
+        # the converter must normalise; `XREF_TARGET_PATTERN` is the second
+        # pattern here with alternation, so its two arms are probed separately.
+        "ORPHA:648",
+        "ORPHA:648\n",
+        "ORPHA:",
+        "Orphanet:648",
+        "OMIM:163950",
+        "OMIM:163950\n",
+        "HP:0001627",
+        "HP:001627",
+        "HP:0001627\n",
+        "ORPHAOMIM:1",
+        # `gencc_submissions.submitted_on`: a date prefix, then anything.
+        "2018-05-31 20:04:32",
+        "2025-01-17T00:00:00.000000Z",
+        "2018-05-31",
+        "2018-5-31",
+        " 2018-05-31",
+        "x2018-05-31",
+        "2018-05-31\n",
+        "2018-05-31\nz",
+        "２０１８-05-31",
     ]
     adversarial_series = pl.Series("v", adversarial, dtype=pl.String)
 
@@ -1001,7 +1100,28 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
     # figure is a census of the committed corpus, not a property of the code,
     # so it moves whenever a mirror does -- which is the point of pinning it:
     # a silent change in what gets pattern-checked is exactly what it catches.
-    assert total_compared == 122_980
+    #
+    # **122,980 -> 123,250 on 2026-10-24**, when `burden_combined.tsv` landed:
+    # 90 rows x 3 pattern-checked columns (`study`, `gene`, `combines`) = 270.
+    #
+    # **123,250 -> 176,566 on 2026-10-25**, when the three Orphanet scope
+    # mirrors landed, each with two pattern-checked columns: (7,902 phenotype
+    # + 8,745 OMIM + 10,011 xref rows) x 2 = 53,316.
+    #
+    # **176,566 -> 178,014 the same day**, when the registry widened from 154
+    # genes to 185 and the burden converters re-ran against it: 31 genes x 2
+    # (`hgnc_id`, `uniprot`) + 330 burden rows x 3 + the 297 of them with a
+    # control cohort + 33 combined rows x 3 = 1,448.
+    #
+    # **178,014 -> 181,703 the same day**, when `mirrors/profiles` was
+    # regenerated for the 185-gene registry: 31 genes x 119 assay groups = 3,689
+    # rows, each with its `gene` column pattern-checked. The quantile mirror is
+    # computed over the whole transcriptome, not the registry, and came out
+    # byte-identical.
+    #
+    # **181,703 -> 212,113**, when `gencc_submissions.submitted_on` gained its
+    # date-prefix pattern: all 30,410 rows carry a value (awk count).
+    assert total_compared == 212_113
 
     for pattern in patterns:
         compiled = re.compile(pattern)

@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from chd_atlas.issues import Severity, ValidationIssue
-from chd_atlas.tables import BURDEN, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 from chd_atlas.vocab import (
     EFFECT_MEASURES,
     BurdenComparator,
@@ -375,6 +375,141 @@ def validate_burden_references(
     # above claimed `build_genes` iterates the registry, which pointed away from
     # the gap entirely. That claim is fixed; a warning on every build for a
     # deliberate design choice is not the remedy.
+    return issues
+
+
+def validate_burden_combined(root: Path) -> list[ValidationIssue]:
+    """Check each combined row against the arms it claims to combine.
+
+    A combined row is a statement about two rows of `burden.tsv`, so it is only
+    publishable over both of them:
+
+    * **BUR020** -- every comparator in `combines` has a burden row with the same
+      study, gene, stratum, lesion group and consequence class. Without this a
+      combined p could reach a page over arms that never did.
+    * **BUR021** -- `combines` names at least two distinct burden comparators.
+    * **BUR023** -- neither statistic is exactly 0, the underflow BUR013 refuses
+      for an arm's p.
+
+    Reads both mirrors and nothing else, so the runner calls it outside the
+    corpus branch, like `validate_burden`. An unreadable `burden.tsv` skips the
+    arm check (TBL000/TBL001 already report it as an error); an *absent* one is
+    one BUR020, not one per combined row.
+    """
+    path = root / "mirrors" / "burden_combined.tsv"
+    if not path.is_file():
+        return []
+    frame, _ = read_table(path, BURDEN_COMBINED)
+    if frame is None or any(c not in frame.columns for c in BURDEN_COMBINED.column_names):
+        return []
+
+    issues: list[ValidationIssue] = []
+
+    def error(code: str, location: str, message: str) -> None:
+        issues.append(ValidationIssue(code, Severity.ERROR, location, message))
+
+    burden_path = root / "mirrors" / "burden.tsv"
+    arms: set[tuple[Any, ...]] | None = None
+    if not burden_path.is_file():
+        if frame.height:
+            error(
+                "BUR020",
+                str(path),
+                f"{frame.height} combined row(s), but mirrors/burden.tsv is absent, so "
+                f"none of the arms they combine exists",
+            )
+    else:
+        burden, _ = read_table(burden_path, BURDEN)
+        if burden is not None and all(c in burden.columns for c in BURDEN.column_names):
+            arms = {
+                (
+                    row["study"],
+                    row["gene"],
+                    row["cohort_stratum"],
+                    row["lesion_group"],
+                    row["consequence_class"],
+                    row["comparator"],
+                )
+                for row in burden.iter_rows(named=True)
+            }
+
+    for index, row in enumerate(frame.iter_rows(named=True)):
+        location = f"{path}:row {index + 2}"
+        distinct = sorted(set(_split(row["combines"])))
+        unknown = [comparator for comparator in distinct if comparator not in _COMPARATORS]
+        if unknown:
+            error("BUR021", location, f"'combines' names {unknown}, which no burden comparator is")
+        elif len(distinct) < 2:
+            error(
+                "BUR021",
+                location,
+                f"'combines' names {distinct}; a combination needs at least two distinct "
+                f"arms, and one arm under a new name is a single test",
+            )
+        for column in ("pvalue", "local_fdr"):
+            if row[column] == 0:
+                error(
+                    "BUR023",
+                    location,
+                    f"'{column}' is exactly 0; no method returns that, so this is an "
+                    f"underflowed or mistranscribed value",
+                )
+        if arms is None:
+            continue
+        key = (
+            row["study"],
+            row["gene"],
+            row["cohort_stratum"],
+            row["lesion_group"],
+            row["consequence_class"],
+        )
+        for comparator in distinct:
+            if comparator in _COMPARATORS and (*key, comparator) not in arms:
+                error(
+                    "BUR020",
+                    location,
+                    f"combines a '{comparator}' arm, but mirrors/burden.tsv has no such row "
+                    f"for {row['study']} {row['gene']} "
+                    f"({row['cohort_stratum']}, {row['consequence_class']})",
+                )
+    return issues
+
+
+def validate_burden_combined_references(
+    root: Path,
+    *,
+    known_genes: set[str] | None,
+    known_studies: set[str] | None,
+) -> list[ValidationIssue]:
+    """BUR022: a combined row citing a study or gene no registry defines.
+
+    Separate from `validate_burden_combined` for the reason
+    `validate_burden_references` is separate from `validate_burden`: these need
+    registries a failed corpus load empties, and `None` means "could not be
+    read", which skips the check rather than reporting every row. `source` is
+    not checked here; `runner._used_sources` already feeds it to SRC003.
+    """
+    path = root / "mirrors" / "burden_combined.tsv"
+    if not path.is_file():
+        return []
+    frame, _ = read_table(path, BURDEN_COMBINED)
+    if frame is None:
+        return []
+
+    issues: list[ValidationIssue] = []
+    for column, known, registry in (
+        ("study", known_studies, "curation/publications.yaml"),
+        ("gene", known_genes, "mirrors/genes.tsv"),
+    ):
+        if known is None or column not in frame.columns:
+            continue
+        values = {str(value) for value in frame[column].to_list() if value is not None}
+        for value in sorted(values - known):
+            issues.append(
+                ValidationIssue(
+                    "BUR022", Severity.ERROR, str(path), f"{column} {value} is not in {registry}"
+                )
+            )
     return issues
 
 

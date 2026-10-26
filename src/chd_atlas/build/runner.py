@@ -24,16 +24,25 @@ from __future__ import annotations
 from pathlib import Path
 
 from chd_atlas.build.bundles import build_genes
-from chd_atlas.build.burden import build_cohorts, burden_census, cohort_registry, load_burden
+from chd_atlas.build.burden import (
+    build_cohorts,
+    burden_census,
+    cohort_registry,
+    combined_census,
+    load_burden,
+    load_combined,
+)
 from chd_atlas.build.concordance import (
     cohort_families,
     evidence_axes,
     gene_concordance,
 )
 from chd_atlas.build.emit import Emitter
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.landing import build_landing
 from chd_atlas.build.literature import build_literature, build_sources
 from chd_atlas.build.manifest import source_commit, write_manifest
+from chd_atlas.build.methods import build_methods
 from chd_atlas.build.omics import build_omics
 from chd_atlas.build.pages import build_gene_index_page, build_gene_pages
 from chd_atlas.build.profiles import (
@@ -42,11 +51,13 @@ from chd_atlas.build.profiles import (
     percentile_annotations,
     profile_census,
 )
+from chd_atlas.build.scope import build_scope, scope_warrants
 from chd_atlas.build.search import GeneLabels, build_search
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.build.variants import build_variants
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.assertion import LesionAssertion
+from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import TABLE_SCHEMAS, read_table
 from chd_atlas.validate.runner import validate_repository
 from chd_atlas.validate.sources import load_sources
@@ -161,6 +172,43 @@ def _pipes(raw: object) -> tuple[str, ...]:
     return tuple(part.strip() for part in str(raw).split("|") if part.strip())
 
 
+def _gene_identities(root: Path) -> dict[str, GeneIdentity]:
+    """The identity columns of `mirrors/genes.tsv`, keyed on HGNC id. D52.
+
+    A second projection of the registry rather than more fields on
+    `GeneLabels`, which is the search vocabulary -- what a visitor might type --
+    and is consumed as such by `build_search`. These are what a bundle publishes
+    as `identity` and what a page shows and links by. Both read the same file
+    through the same `_cell` cleaning, so a whitespace-only cell is absent in
+    each.
+
+    The same empty fallbacks as `_gene_registry`, unreachable behind
+    `build_site`'s gate for the same reason.
+    """
+    path = root / "mirrors" / "genes.tsv"
+    if not path.is_file():
+        return {}
+    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
+    if frame is None or "hgnc_id" not in frame.columns:
+        return {}
+
+    identities: dict[str, GeneIdentity] = {}
+    for row in frame.to_dicts():
+        gene = _cell(row.get("hgnc_id"))
+        if gene is None:
+            continue
+        ncbi = row.get("ncbi_gene")
+        identities[gene] = GeneIdentity(
+            name=_cell(row.get("name")),
+            locus=_cell(row.get("locus")),
+            ensembl_gene=_cell(row.get("ensembl_gene")),
+            ncbi_gene=int(ncbi) if ncbi is not None else None,
+            uniprot=_cell(row.get("uniprot")),
+            mane_select=_cell(row.get("mane_select")),
+        )
+    return identities
+
+
 def _assertions_by_gene(corpus: Corpus) -> dict[str, list[LesionAssertion]]:
     """Every curated assertion, grouped by the gene it is about, ordered by id.
 
@@ -223,6 +271,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # decision already made.
     corpus, _ = load_curation(root)
     genes = _gene_registry(root)
+    identities = _gene_identities(root)
 
     # Unreachable behind the gate above in the same way `_gene_registry`'s
     # empty-mirror fallback is: TBL012 is an error, so `validate_repository`
@@ -262,6 +311,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # `published` and `symbols` are: a gene page and the bundle it links to
     # rendering different burden rows is the failure a single source removes.
     burden = load_burden(root)
+    # Loaded once beside `burden` for the same reason: the bundle, the page and
+    # the manifest census all read this one mapping.
+    combined = load_combined(root)
 
     emitter = Emitter(root=out)
     # `build_omics` skips this table outright -- it is keyed on `_GENE_COLUMN`,
@@ -378,6 +430,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         corpus,
         emitter,
         symbols=symbols,
+        identities=identities,
         omics=omics,
         variants=variants,
         validity=validity,
@@ -385,6 +438,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         burden=burden,
         concordance=concordance,
         profiles=expression_profiles,
+        combined=combined,
     )
     build_literature(corpus, emitter)
     # The resolution table for the bare cohort ids every burden row carries.
@@ -398,7 +452,23 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # It cannot fail here — SRC001 is an error, so the gate refused already.
     registry, _ = load_sources(root)
     build_sources(registry, emitter)
+    # The Orphanet warrants, derived once from the mirrors by the function SCP006
+    # refused on, and handed to both `scope.json` and the gene pages, so the
+    # registry and the note under a gene's validity table state one warrant.
+    warrants = scope_warrants(
+        corpus.chd_scope,
+        load_orphanet_tables(root),
+        pinned_structural_phenotypes(root, registry.ontology_files()),
+    )
+    build_scope(corpus.chd_scope, warrants, emitter)
+    # The site's reading notes (D50): the full scope rule and grade key the gene
+    # pages' short forms link to. Every page's nav links it, so a build that
+    # skipped this would publish a dead link on all of them.
+    build_methods(emitter, cohorts=cohort_registry(corpus.cohorts))
     build_search(corpus, emitter, genes=genes, published=published)
+    # One integer, handed to the front page here and to the manifest below, for
+    # the reason `census` is threaded rather than recomputed.
+    combined_results = combined_census(combined, published)
     build_landing(
         corpus,
         symbols=symbols,
@@ -406,6 +476,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         published=published,
         census=census,
         profile_census=profile_stats,
+        combined_results=combined_results,
         emitter=emitter,
     )
     # The HTML over everything above. Wired here and nowhere else: until this
@@ -421,6 +492,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         facts,
         emitter,
         symbols=symbols,
+        identities=identities,
         validity=validity,
         assertions=_assertions_by_gene(corpus),
         publications={publication.id: publication for publication in corpus.publications},
@@ -438,6 +510,11 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # trajectory and the phase sentence under the stage it covers cannot
         # come from two different readings of `curation/cardiac_phases.yaml`.
         phases=corpus.cardiac_phases,
+        # The same mapping the bundles were built from, so a page cannot state a
+        # combination its own bundle does not carry.
+        combined=combined,
+        scope_warrants=warrants,
+        scope_labels={str(e.id): e.label for e in corpus.chd_scope},
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`
@@ -455,16 +532,20 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # The same objects the bundles publish, so the strip a reader scans
         # and the JSON a program reads cannot disagree.
         concordance=concordance,
+        # For the summary caveats of the studies the strips name, which the
+        # gene pages' cards print from the same records.
+        publications={publication.id: publication for publication in corpus.publications},
     )
     # Last, and enforced as last: this seals the emitter.
     #
     # The build counts come from `census` and `profile_stats`, the same objects
     # `build_landing` was handed a moment ago, so `manifest.json` and
     # `index.html` cannot publish two censuses of one build. `genes` is
-    # `len(published)` rather than `census.genes`: they are equal today at 23 of
-    # 23, but they answer different questions — how many genes the site
-    # publishes, and how many of those carry burden evidence — and the day they
-    # diverge each key must still mean what it says.
+    # `len(published)` rather than `census.genes`: they answer different
+    # questions — how many genes the site publishes, and how many of those
+    # carry burden evidence — and they differ by every published gene no
+    # rare-variant study covered. They were equal at 23 of 23 when this was
+    # written and have since parted, which is the day this was written for.
     write_manifest(
         corpus,
         emitter,
@@ -472,6 +553,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         counts={
             "genes": len(published),
             "burden_rows": census.rows,
+            # Combined results reaching a published bundle, never the mirror's
+            # row count -- the same convention as `burden_rows`.
+            "burden_combined": combined_results,
             "cohort_families": census.families,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],

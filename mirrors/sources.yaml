@@ -25,8 +25,8 @@ sources:
     name: >-
       Sierant et al. 2025, PNAS 122(13) e2420343122, Dataset S6
       (gene-level meta-analysis over all 248 MIPseq panel genes: Poisson de novo
-      enrichment in trios, and Fisher case-control of ultra-rare TUVs against
-      gnomAD)
+      enrichment in trios, Fisher case-control of ultra-rare TUVs against
+      gnomAD, and the JL-FDR meta-analysis combining the two)
     version: "sha256:d8e9f7777b329c810adde8b9f4a0f91a4d1a6211b760daeb9329ae6f36606daa"
     retrieved_on: 2026-08-05
     # The canonical location. RETRIEVED VIA PMC, not from here: pnas.org answers
@@ -97,8 +97,18 @@ sources:
     # recorded as the version: the download's own `last-modified` header reads
     # Fri, 31 Jul 2026 12:53:50 GMT, and `https://rest.genenames.org/info`
     # reports lastModified 2026-07-31T11:49:58.141Z.
-    version: "2026-07-31"
-    retrieved_on: 2026-08-04
+    #
+    # Refreshed 2026-10-25, when the Orphanet scope path widened the keep set
+    # from 154 genes to 185: the complete set's `last-modified` header read
+    # Fri, 16 Oct 2026 13:36:15 GMT (sha256 12363916be36…2f91). None of the
+    # 154 rows already mirrored changed.
+    #
+    # One cell is the atlas's choice rather than HGNC's: RBM10's `uniprot`, which
+    # HGNC lists as P0DW28|P98175. `scripts/convert_hgnc.py` pins P98175, RBM10's
+    # own protein (P0DW28 is the MINAS-60 microprotein its transcripts also
+    # encode), 2026-10-25. Every other cell is HGNC's.
+    version: "2026-10-16"
+    retrieved_on: 2026-10-25
     url: https://www.genenames.org/
     # "all data is released under the Creative Commons Public Domain (CC0)
     # License ... any form of reuse of the content is permitted"
@@ -118,6 +128,52 @@ sources:
     redistribution: permitted_with_attribution
     ontology_prefix: HP
     ontology_file: ontologies/hp-2026-06-23.obo
+  # The three sources the Orphanet scope rule reads (issue #8 part 1). The raw
+  # files live in gitignored local/data/ and are reproduced by
+  # scripts/convert_orphanet.py; the sha256 is what lets a curator prove a
+  # re-download is the same file.
+  - id: orphanet_product4
+    name: >-
+      Orphadata Science, product 4 ("Phenotypes associated with rare
+      disorders", en_product4.xml): HPO phenotype annotations with frequency
+      bands, cardiovascular branch (HP:0001626) only
+    # XML header: date="2026-06-23 07:57:18".
+    version: "sha256:4f44e8a61201399911aa1ba44a293c0ccaa5ce11272c47d40862255cb72f6b32"
+    retrieved_on: 2026-10-25
+    url: https://www.orphadata.com/data/xml/en_product4.xml
+    # The file declares `<ShortIdentifier>CC-BY-4.0</ShortIdentifier>` in its
+    # own `<Licence>` block, and https://www.orphadata.com/legal-notice/ says
+    # Orphadata Science files are CC BY 4.0. Required citation: "Orphadata
+    # Science: Free access data from Orphanet. (c) INSERM 1999. Available on
+    # http://sciences.orphadata.com/. Data version [date]". Its AI-use clause
+    # covers LLM/AI tools offered to third parties, which this static data
+    # site is not.
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
+  - id: orphanet_product1
+    name: >-
+      Orphadata Science, product 1 ("Rare diseases and alignment with
+      terminologies", en_product1.xml): Orphanet-to-OMIM references with
+      their mapping relation and validation status
+    # XML header: date="2026-06-23 07:53:50", the same release as product 4.
+    version: "sha256:df8d562a0c6011af36a74eb4000ce81ca7d723e8031010819fb71727c0962bbb"
+    retrieved_on: 2026-10-25
+    url: https://www.orphadata.com/data/xml/en_product1.xml
+    # Same licence block and terms as product 4.
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
+  - id: mondo_sssom
+    name: >-
+      Mondo Disease Ontology mappings (mondo.sssom.tsv), release v2026-10-06:
+      skos:exactMatch to Orphanet and OMIM, for terms the validity mirrors name
+    version: "sha256:ec15afdb32fab3d3cb679d357e25ef4fb38b5e2c468ff4ac5456da10e2f6c80b"
+    retrieved_on: 2026-10-25
+    # Pinned to the release tag, never `master`.
+    url: https://raw.githubusercontent.com/monarch-initiative/mondo/v2026-10-06/src/ontology/mappings/mondo.sssom.tsv
+    # The repository's LICENSE is CC BY 4.0 (GitHub's licence API reports
+    # SPDX CC-BY-4.0 for monarch-initiative/mondo).
+    licence: CC-BY-4.0
+    redistribution: permitted_with_attribution
   - id: expression_atlas_e_mtab_6814
     name: >-
       EMBL-EBI Expression Atlas, experiment E-MTAB-6814 ("Human RNA-seq
