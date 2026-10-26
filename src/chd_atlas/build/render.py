@@ -74,7 +74,8 @@ STYLESHEET: Final = """
        are ordinal, so a ramp is what they mean; a second hue would invent an
        axis. `ungraded` is drawn as absence (outline, muted) rather than as the
        bottom of the ramp: no panel graded the gene, which is not a weaker grade
-       but a different question, and 16 of the 92 genes published are in it. */
+       but a different question, and every gene admitted on submitter
+       agreement is in it. */
     --grade-4: #1a7f37; --grade-4-fg: #ffffff;
     --grade-3: #4e9c66; --grade-3-fg: #ffffff;
     --grade-2: #a9d3b6; --grade-2-fg: #14301d;
@@ -326,7 +327,7 @@ STYLESHEET: Final = """
      reintroduced a phrase that
      `test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional`
      asserts is absent from a one-study page -- and naming the class here would
-     put the very token a page-wide check greps for onto all 94 pages. Reason
+     put the very token a page-wide check greps for onto every page. Reason
      and class name both live in the module that emits the geometry. */
   .sparks {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
@@ -617,7 +618,10 @@ def grade_key() -> str:
     external authority treats as congenital heart disease". The Orphanet scope
     path brought Costello and cardiofaciocutaneous syndrome into scope, and
     ClinGen's RASopathy panel disputes six published genes for them -- BRAF,
-    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, every one Definitive for Noonan syndrome.
+    KRAS, MAP2K1, PTPN11, RAF1 and SOS1, each Definitive for the syndrome it
+    is admitted on: Noonan syndrome or Noonan syndrome with multiple
+    lentigines, or cardiofaciocutaneous syndrome itself for BRAF and MAP2K1,
+    which the same panel disputes only for Costello syndrome.
     PTPN11's page carried the denial beside its own `conflicting evidence` chip
     and two `Disputed` rows. What stays true on every page is narrower and is
     what the sentence now says: no gene is *headlined* by a contested grade (the

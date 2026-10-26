@@ -541,10 +541,11 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # The build counts come from `census` and `profile_stats`, the same objects
     # `build_landing` was handed a moment ago, so `manifest.json` and
     # `index.html` cannot publish two censuses of one build. `genes` is
-    # `len(published)` rather than `census.genes`: they are equal today at 23 of
-    # 23, but they answer different questions — how many genes the site
-    # publishes, and how many of those carry burden evidence — and the day they
-    # diverge each key must still mean what it says.
+    # `len(published)` rather than `census.genes`: they answer different
+    # questions — how many genes the site publishes, and how many of those
+    # carry burden evidence — and they differ by every published gene no
+    # rare-variant study covered. They were equal at 23 of 23 when this was
+    # written and have since parted, which is the day this was written for.
     write_manifest(
         corpus,
         emitter,
@@ -552,8 +553,8 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         counts={
             "genes": len(published),
             "burden_rows": census.rows,
-            # Combined results reaching a published bundle (75), not the
-            # mirror's 90 -- the same convention as `burden_rows`.
+            # Combined results reaching a published bundle, never the mirror's
+            # row count -- the same convention as `burden_rows`.
             "burden_combined": combined_results,
             "cohort_families": census.families,
             "profile_genes": profile_stats["genes"],

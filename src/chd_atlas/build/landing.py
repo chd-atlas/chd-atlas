@@ -221,9 +221,12 @@ def _render(
     # so the hero note can state the gate it actually has. It said "every gene
     # here is published on an upstream expert panel's classification" until
     # 2026-08-06, which the widening made false for the 16 genes no panel has
-    # graded -- read from `admitting_grade`, the same function the headline and
-    # `admitted_by.classification` come from, so the front page cannot claim a
-    # split the bundles contradict.
+    # graded -- read from `admitting_grade`, which is what
+    # `admitted_by.classification` publishes, so the front page cannot claim a
+    # split the bundles contradict. (This said the headline came from the same
+    # function too; it does not -- `derive.gene_facts` takes `strongest()` over
+    # the in-scope ClinGen records -- though the two agree on every published
+    # gene, measured 2026-10-26.)
     panel_graded_count = sum(
         1 for gene in published if gene in validity and admitting_grade(validity[gene]) is not None
     )

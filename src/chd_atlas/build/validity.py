@@ -347,7 +347,9 @@ def _asserts(record: ValidityRecord) -> bool:
     `None` **does** assert. GenCC's `Supportive` maps to `None`
     (`vocab.GENCC_CLASSIFICATIONS`) and means the submitter asserted an
     association without grading its evidence -- an assertion, merely ungraded.
-    Excluding it would drop Orphanet from six genes that have nothing else.
+    Excluding it would drop a submitter from every gene its only in-scope record
+    is a `Supportive` one for, and leave a gene whose sole in-scope record is
+    such a submission asserted by nobody.
     """
     return record.classification not in CONTESTED and (
         record.classification is not Classification.NO_KNOWN_ASSOCIATION
@@ -378,20 +380,22 @@ def _admitting_clingen(entry: GeneValidity) -> ValidityRecord | None:
 def admitting_grade(entry: GeneValidity) -> Classification | None:
     """The grade of the ClinGen record that admitted this gene, or `None`.
 
-    **`derive.gene_facts` headlines this, so that the headline and
-    `admitted_by.classification` cannot come to disagree.** They are one figure
-    and must be computed once: read off `_admitting_clingen`, the headline is
-    the admitting panel's grade by construction rather than by coincidence.
+    `admitted_by.classification` publishes the same record's grade, and the
+    landing page counts panel-graded genes with this.
 
-    It was `strongest()` over *every* in-scope ClinGen record until 2026-08-06.
-    That agrees with this on all 92 published genes -- measured, 0 differ -- and
-    diverges on an input the gate already admits: `NO_KNOWN_ASSOCIATION` is
-    deliberately not a veto (`_clingen_contests`), so a gene ClinGen recorded it
-    for, with two GenCC submitters agreeing, is published. `strongest()` would
-    headline that gene `no_known_association` -- a panel's "we looked and found
-    nothing" rendered as this atlas's headline, beside an `admitted_by` naming
-    GenCC and carrying a `null` classification. No such gene is in the committed
-    mirrors; issue #13 is about publishing the 9 that would be.
+    **`derive.gene_facts` does not headline this**, and this docstring said it
+    did until 2026-10-26. The headline is `strongest()` over every in-scope
+    ClinGen record with a mapped grade; for a gene ClinGen admitted that is
+    this record, so the two agree on every published gene (measured 2026-10-26,
+    0 of 119 differ). They part on an input the gate already admits:
+    `NO_KNOWN_ASSOCIATION` is deliberately not a veto (`_clingen_contests`), so
+    a gene ClinGen recorded it for, with two GenCC submitters agreeing, is
+    published with `None` here and `no_known_association` in the headline.
+    Keying the headline on this function was tried and reverted for exactly
+    that gene: a `null` headline renders "no ClinGen expert panel has graded
+    this gene", false for a gene a panel graded -- see the comment above
+    `panel_graded` in `derive.gene_facts`. No such gene is in the committed
+    mirrors.
     """
     record = _admitting_clingen(entry)
     return record.classification if record is not None else None

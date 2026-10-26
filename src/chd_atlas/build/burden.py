@@ -402,7 +402,7 @@ def combined_payload(rows: Iterable[CombinedRow]) -> list[Json]:
 def combined_census(
     combined: Mapping[str, Sequence[CombinedRow]], published: Collection[str]
 ) -> int:
-    """Combined results reaching a published bundle: 75 today, never the mirror's 90."""
+    """Combined results reaching a published bundle, never the mirror's row count."""
     return sum(len(combined.get(gene, ())) for gene in published)
 
 
@@ -441,7 +441,8 @@ def burden_census(
     intended, so re-mirroring is not needed the day D21 widens). A front page
     counting the mirror would advertise 1,475 statistics a reader cannot reach
     from any link on it, and `manifest.json` would promise a consumer five times
-    the rows it can fetch. It counts the 290 that reach a published bundle.
+    the rows it can fetch. It counts the rows that reach a published bundle --
+    290 that day.
 
     **`families` is the dataset count, never `len({row.study for row in rows})`.**
     A cohort family is a connected component over shared sample collections, so
@@ -455,9 +456,11 @@ def burden_census(
     families.
 
     Genes are counted as those with at least one *published* row rather than as
-    `len(published)`. They are equal today, at 23 of 23, and stating the
-    published-gene count under a burden label would keep reading as 23 on the
-    day a gene is published with no burden evidence at all.
+    `len(published)`. They were equal at 23 of 23 when this was written, and
+    stating the published-gene count under a burden label would have kept
+    reading as 23 on the day a gene was published with no burden evidence at
+    all -- which has since happened: they differ by every published gene no
+    rare-variant study covered.
 
     **`families` is the one figure here NOT restricted to `published`, and that
     asymmetry is deliberate.** `rows` and `genes` count what a reader can reach;
@@ -515,9 +518,11 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     the API.
 
     The caveats are the point, not decoration. `taa_cases` is 777 sporadic
-    thoracic aortic aneurysm probands who **do not have congenital heart
-    disease**; `ukbb`'s controls are adults recruited at 40-69 against cases
-    largely enrolled in childhood; `ddd` ascertains on developmental disorder, so
+    thoracic aortic aneurysm probands, a condition **outside this atlas's
+    scope**, in a case set the study reports as CHD (whether any of them also
+    has a congenital heart lesion is recorded nowhere this atlas has read);
+    `ukbb`'s controls are adults recruited at 40-69 against cases a substantial
+    proportion of whom were enrolled in childhood; `ddd` ascertains on developmental disorder, so
     its contribution is enriched for syndromic CHD. A consumer computing anything
     from a row without those sentences is computing something else.
 

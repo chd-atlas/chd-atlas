@@ -41,9 +41,10 @@
 # `models/phases.py` no longer requires phases to be disjoint, because they
 # are not: human cardiac morphogenetic processes run concurrently. Measured
 # from this same source, against the boundaries below, and against a real
-# built page rather than by hand (`phases_for` excludes `heart_looping` --
-# see the next section -- so it never appears in these matches even though
-# it is also biologically underway throughout this range) --
+# built page rather than by hand (`heart_looping` never appears in these
+# matches because its derived end, 3.71 wpc, falls before the first of these
+# stages -- see the next section. This comment said `phases_for` excluded it,
+# which stopped being true on 2026-08-24, when its end became `derived`) --
 #
 #   elapsed wpc   phases matched
 #   4             atrial septum morphogenesis, ventricular septum
