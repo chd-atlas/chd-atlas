@@ -113,6 +113,44 @@ def _orphanet_mirrors_missing(root: Path) -> None:
     )
 
 
+def _orphanet_mirror_missing_a_column(root: Path) -> None:
+    """The three Orphanet mirrors present, and one of them missing a column the rule reads.
+
+    `load_orphanet_tables` must read that as unreadable -- None, so SCP006 and
+    SCP008 name it once -- rather than index a column that is not there.
+    Measured 2026-10-26: this fixture reports exactly SCP006 and TBL001
+    (errors) and SCP008 (warning); with the column check removed,
+    `validate_repository` raises `KeyError: 'hpo_label'` instead of reporting,
+    and validators report, never raise (CLAUDE.md section 1). The other two
+    mirrors are whole, so nothing but the column check can return None; and
+    their sources are registered, so TBL001 is the only error besides the
+    SCP006 it causes.
+    """
+    _orphanet_mirrors_missing(root)
+    with (root / "mirrors" / "sources.yaml").open("a") as registry:
+        for source in ("orphanet_product4", "orphanet_product1", "mondo_sssom"):
+            registry.write(
+                f"  - id: {source}\n"
+                f"    name: {source}\n"
+                '    version: "2026-10"\n'
+                "    retrieved_on: 2026-10-25\n"
+                "    url: https://example.org/\n"
+                "    licence: CC-BY-4.0\n"
+                "    redistribution: permitted\n"
+            )
+    (root / "mirrors" / "orphanet_phenotypes.tsv").write_text(
+        "orpha\tdisorder_name\thpo\tfrequency\tsource\n"
+        "ORPHA:648\tNoonan syndrome\tHP:0001631\tFrequent (79-30%)\torphanet_product4\n"
+    )
+    (root / "mirrors" / "orphanet_omim.tsv").write_text(
+        "orpha\tomim\trelation\tvalidation\tsource\n"
+        "ORPHA:648\tOMIM:163950\tE\tValidated\torphanet_product1\n"
+    )
+    (root / "mirrors" / "mondo_xrefs.tsv").write_text(
+        "mondo\ttarget\tsource\nMONDO:0018997\tORPHA:648\tmondo_sssom\n"
+    )
+
+
 def _gene_registry_missing(root: Path) -> None:
     """Validity mirrors present, gene registry absent. Isolates GEN000's cause.
 
@@ -560,6 +598,14 @@ def test_a_gap_warning_is_reported_without_blocking_the_build() -> None:
             {"SCP008"},
             {"SCP006"},
             id="orphanet-mirrors-missing",
+        ),
+        # And for a mirror that is present but missing a column: the same skip,
+        # the same cause, and the table error naming the column.
+        pytest.param(
+            _orphanet_mirror_missing_a_column,
+            {"SCP008"},
+            {"SCP006", "TBL001"},
+            id="orphanet-mirror-missing-a-column",
         ),
     ],
 )

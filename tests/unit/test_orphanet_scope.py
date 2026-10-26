@@ -266,6 +266,34 @@ def test_the_three_mirrors_load_into_the_shape_the_rule_reads(tmp_path: Path) ->
     assert tables.xrefs == {"MONDO:0012547": frozenset({"OMIM:610733"})}
 
 
+@pytest.mark.parametrize(
+    ("pinned", "content"),
+    [
+        pytest.param({}, None, id="unpinned"),
+        pytest.param({"HP": "ontologies/hp.obo"}, None, id="pinned-but-absent"),
+        pytest.param({"HP": "ontologies/hp.obo"}, b"id: HP:\xff\n", id="not-utf-8"),
+    ],
+)
+def test_an_hpo_release_that_cannot_be_read_is_none_never_an_empty_set(
+    tmp_path: Path, pinned: dict[str, str], content: bytes | None
+) -> None:
+    """None means "the release never loaded"; an empty set means "nothing is structural".
+
+    The second is a claim about every syndrome. Measured 2026-10-26 by handing
+    `validate_orphanet_warrants` the committed scope and Orphanet mirrors: with
+    None it reports one SCP006 naming the pinned HPO release and one SCP008
+    skip; with `frozenset()` it reports 36 SCP006 refusals, one per
+    Orphanet-scoped term, each saying the syndrome "carries no structural heart
+    phenotype" -- 36 false findings about Orphanet's data and not one about
+    the file that did not load. A `frozenset()` in place of the first `None`
+    survived the release review's 634-test mutation set.
+    """
+    if content is not None:
+        (tmp_path / "ontologies").mkdir()
+        (tmp_path / "ontologies" / "hp.obo").write_bytes(content)
+    assert pinned_structural_phenotypes(tmp_path, pinned) is None
+
+
 def test_the_structural_set_the_build_applies_is_the_one_methods_html_states() -> None:
     """264 terms over the pinned HPO release, alt ids included (measured 2026-10-25).
 

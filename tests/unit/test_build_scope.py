@@ -94,8 +94,34 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
     assert terms[2]["orphanet"]["omim"] is None
 
 
-def test_a_build_that_reaches_an_unwarranted_orphanet_term_refuses_rather_than_publishing() -> None:
-    """A bypassed gate must fail, never publish (CLAUDE.md section 9): SCP006 refuses first."""
-    wrong = _entry("MONDO:0018997", "Noonan syndrome", orphanet="ORPHA:3071")
-    with pytest.raises(ValueError, match="MONDO:0018997"):
-        scope_warrants([wrong], _TABLES, _STRUCTURAL)
+@pytest.mark.parametrize(
+    ("entry", "tables", "structural", "message"),
+    [
+        pytest.param(
+            _entry("MONDO:0018997", "Noonan syndrome", orphanet="ORPHA:3071"),
+            _TABLES,
+            _STRUCTURAL,
+            "MONDO:0018997",
+            id="unwarranted-term",
+        ),
+        pytest.param(_NOONAN, None, _STRUCTURAL, "no Orphanet mirrors or HPO", id="no-mirrors"),
+        pytest.param(_NOONAN, _TABLES, None, "no Orphanet mirrors or HPO", id="no-hpo-release"),
+    ],
+)
+def test_a_build_that_reaches_an_unwarranted_orphanet_term_refuses_rather_than_publishing(
+    entry: ScopeEntry,
+    tables: OrphanetTables | None,
+    structural: frozenset[str] | None,
+    message: str,
+) -> None:
+    """A bypassed gate must fail, never publish (CLAUDE.md section 9): SCP006 refuses first.
+
+    And a term with nothing to derive its warrant from is the same bypass, not
+    a term with no warrant to state: returning `{}` there would publish every
+    gene page the term admits with no Orphanet note and `scope.json` with
+    `orphanet: null` for it, on a green build. Measured 2026-10-26 at c034dd6:
+    a `return {}` before this raise survived all 634 tests of the release
+    review's mutation set, which had no case reaching it.
+    """
+    with pytest.raises(ValueError, match=message):
+        scope_warrants([entry], tables, structural)
