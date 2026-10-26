@@ -216,6 +216,24 @@ _CURATION_BY_AGREEMENT: Final = (
     "independently assert it."
 )
 
+# The `sources disagree` chip's tooltip: what `has_source_discordance` measures
+# (`validity._has_source_discordance`), which its two words do not say. The flag
+# is per gene by the owner's decision (2026-10-25), and on every page carrying
+# it today ClinGen and GenCC agree on each gene-disease pair they both classify
+# (BRAF, KRAS, MAP2K1, PTPN11, RAF1 and SOS1, measured 2026-10-26): it fires
+# because one source disputes the gene for Costello or cardiofaciocutaneous
+# syndrome while the other supports it for another disease (Noonan syndrome
+# among them on all six). "Sources disagree" alone reads as two authorities
+# contradicting each other about one disease, so the tooltip says "not
+# necessarily the same disease". "The other" because there are exactly two
+# sources, and the second is GenCC's submissions as mirrored -- ClinGen's own
+# copies included, which `methods.html#validity` states.
+_SOURCE_DISCORDANCE_TITLE: Final = (
+    "One source, ClinGen's expert panels or the submissions to the Gene Curation Coalition, "
+    "disputes or refutes this gene for a disease in scope while the other classifies it "
+    "Limited or better for one, not necessarily the same disease; see the validity table."
+)
+
 _EM_DASH: Final = "—"
 
 _VALIDITY_HEADERS: Final = (
@@ -1370,7 +1388,7 @@ def _rail(
     if fact.has_conflicting_evidence:
         chips.append(chip("conflicting evidence", kind="warn"))
     if fact.has_source_discordance:
-        chips.append(chip("sources disagree", kind="warn"))
+        chips.append(chip("sources disagree", kind="warn", title=_SOURCE_DISCORDANCE_TITLE))
 
     identity_block = ""
     if identity is not None:
@@ -4975,6 +4993,16 @@ def build_gene_index_page(
     kinds link from their short form (it was a folded key on both pages until
     2026-10-26, D50).
 
+    **A contested gene is not shown as settled here either.** Until 2026-10-26
+    the confidence cell was the bare grade, so BRAF, KRAS, MAP2K1, PTPN11, RAF1
+    and SOS1 read as ordinary `definitive` rows while `genes/index.json` behind
+    this page flagged each `has_conflicting_evidence` -- the reading
+    `docs/data-api.md` tells a client never to commit. The cell now carries the
+    gene card's own `conflicting evidence` chip, wherever the flag is set;
+    `data-confidence` stays the bare grade, because the facet matches it.
+    `test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is`
+    holds it against a real build.
+
     Two couplings to `render.FILTER_SCRIPT` that nothing in the type system
     holds, both pinned by
     `test_every_facet_names_a_data_attribute_the_filter_script_reads`:
@@ -5011,7 +5039,16 @@ def build_gene_index_page(
                     # `HGNC:11604` is the identifier they cite. Linking only the
                     # id put the affordance on the string nobody scans for.
                     Link(text=symbol, href=f"../{gene_page_path(HgncId(gene))}"),
-                    confidence or _EM_DASH,
+                    # A contested gene's confidence carries the card's own
+                    # `conflicting evidence` chip, so this table never shows it
+                    # as settled; `data-confidence` below stays the bare grade,
+                    # which is what the confidence facet matches on.
+                    Markup(
+                        f"{html.escape(confidence or _EM_DASH)} "
+                        + chip("conflicting evidence", kind="warn")
+                    )
+                    if fact.has_conflicting_evidence
+                    else confidence or _EM_DASH,
                     "; ".join(diseases) or _EM_DASH,
                     # Position matters and was wrong for one commit: the header
                     # was inserted after `definitive for` while the cell stayed

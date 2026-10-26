@@ -675,10 +675,14 @@ class Markup:
     because escaping cannot make a name safe, and the same reasoning applies to
     a cell that carries markup.
 
-    One caller today: `pages._dot_strip`, whose HTML is a fixed set of `<span>`
-    elements with class names from a literal map and `title` text escaped where
-    it is built. Nothing it interpolates comes from a mirror or from curation
-    unescaped.
+    As a table cell, two callers today, both in `build_gene_index_page` (the
+    forest plot's SVG text uses the type for the same obligation, outside any
+    table): `pages._dot_strip`,
+    whose HTML is a fixed set of `<span>` elements with class names from a
+    literal map and `title` text escaped where it is built; and a contested
+    gene's confidence cell, the grade (a vocabulary member, escaped anyway)
+    followed by a `chip`, which escapes its own label. Nothing either
+    interpolates comes from a mirror or from curation unescaped.
     """
 
     html: str
@@ -710,10 +714,16 @@ def _cell(value: Cell) -> str:
     return html.escape(value)
 
 
-def chip(text: str, kind: str = "") -> str:
-    """A small labelled pill. `kind` selects a `.chip-*` modifier class."""
+def chip(text: str, kind: str = "", title: str = "") -> str:
+    """A small labelled pill. `kind` selects a `.chip-*` modifier class.
+
+    `title`, when given, is the pill's tooltip, escaped like the label. For a
+    label too short to say what it measures: `sources disagree` is the one
+    caller today (`pages._SOURCE_DISCORDANCE_TITLE`).
+    """
     suffix = f" chip-{html.escape(kind)}" if kind else ""
-    return f'<span class="chip{suffix}">{html.escape(text)}</span>'
+    tooltip = f' title="{html.escape(title)}"' if title else ""
+    return f'<span class="chip{suffix}"{tooltip}>{html.escape(text)}</span>'
 
 
 def definition_list(items: Sequence[tuple[str, str]]) -> str:

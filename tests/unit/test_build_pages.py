@@ -488,11 +488,22 @@ def test_a_mirrored_disease_label_carrying_markup_is_escaped(
     assert "<img src=x" not in _page(tmp_path, "HGNC_4173.html")
 
 
+# The `sources disagree` chip as published: its title is the only place a
+# reader is told what the two words measure.
+_SOURCES_DISAGREE_CHIP: Final = (
+    '<span class="chip chip-warn" title="One source, ClinGen&#x27;s expert panels or the '
+    "submissions to the Gene Curation Coalition, disputes or refutes this gene for a disease "
+    "in scope while the other classifies it Limited or better for one, not necessarily the "
+    'same disease; see the validity table.">sources disagree</span>'
+)
+_CONFLICTING_EVIDENCE_CHIP: Final = '<span class="chip chip-warn">conflicting evidence</span>'
+
+
 @pytest.mark.parametrize(
     ("conflicting", "discordant", "shown", "hidden"),
     [
-        (True, False, "conflicting evidence", "sources disagree"),
-        (False, True, "sources disagree", "conflicting evidence"),
+        (True, False, _CONFLICTING_EVIDENCE_CHIP, "sources disagree"),
+        (False, True, _SOURCES_DISAGREE_CHIP, "conflicting evidence"),
     ],
 )
 def test_a_contested_gene_is_never_chipped_as_settled(
@@ -532,12 +543,25 @@ def test_a_contested_gene_is_never_chipped_as_settled(
         noticed either. The `hidden` assertion is what catches the two flags being
         read into the wrong chip.
 
-    Neither flag is set on any of the 92 genes published today (measured
-        2026-08-06 on a real build's `genes/index.json`), and no published gene
-        carries a contested headline -- the floor excludes those rungs and the
-        ClinGen veto excludes the rest -- so every branch this test exercises is
-        latent, reachable only from a fixture until the mirrors change and invisible
-        to any test that renders the committed corpus.
+    No published gene carries a contested headline -- the floor excludes those
+        rungs and the ClinGen veto excludes the rest -- so the refuted chip is
+        latent, reachable only from a fixture. The two flags are not: both are set
+        on six published genes since the Orphanet scope path (BRAF, KRAS, MAP2K1,
+        PTPN11, RAF1, SOS1; this read "neither flag is set on any of the 92
+        genes" until 2026-10-26).
+
+        **Each chip is asserted whole, title included (2026-10-26).** `sources
+        disagree` had no title and `methods.html` never mentioned it, while on
+        all six pages carrying it ClinGen and GenCC agree on every gene-disease
+        pair they both classify: the flag is per gene, and fires on a dispute for
+        one disease beside support for another. The title says so.
+
+        **The gene index carries the same `conflicting evidence` chip, keyed on
+        the same flag.** Its confidence column showed those six genes as a bare
+        `definitive` until 2026-10-26, the settled reading `docs/data-api.md`
+        forbids a client. Asserted on the gene's own row, beside the bare grade
+        the confidence facet still matches on; the second case is the row that
+        must not carry it.
     """
     facts = {
         GATA4: replace(
@@ -581,6 +605,16 @@ def test_a_contested_gene_is_never_chipped_as_settled(
     assert 'class="chip chip-warn">refuted</span>' in rail.group()
     assert shown in rail.group()
     assert hidden not in rail.group()
+
+    build_gene_index_page(
+        facts, emitter, symbols={GATA4: "GATA4"}, validity={GATA4: validity}, burden_counts={}
+    )
+    browse = _page(tmp_path, "index.html")
+    row = re.search(r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>", browse, re.S)
+    assert row is not None, "the gene index has no row for the gene"
+    assert 'data-confidence="refuted"' in row.group()
+    cells = re.findall(r"<td>(.*?)</td>", row.group(), re.S)
+    assert cells[2] == (f"refuted {_CONFLICTING_EVIDENCE_CHIP}" if conflicting else "refuted")
 
 
 def test_every_gene_in_the_facts_gets_exactly_one_page(

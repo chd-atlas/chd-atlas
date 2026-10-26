@@ -1031,6 +1031,41 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
             assert browse.count(html.escape(caveat)) == int(study in on_strips), study
 
 
+def test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is(site: Path) -> None:
+    """The gene index never shows a contested gene as settled (2026-10-26).
+
+    `docs/data-api.md`'s one consumer obligation is that a gene flagged
+    `has_conflicting_evidence` is never displayed as settled, and the front page
+    says the same. The site's own gene index broke it: its confidence column
+    rendered BRAF, KRAS, MAP2K1, PTPN11, RAF1 and SOS1 as a bare `definitive`,
+    while the `genes/index.json` behind the page flagged every one.
+
+    The flagged set is read from that JSON, never written here, so this keeps
+    testing the right genes as the population moves; it must be non-empty, or
+    the positive half measures nothing. Every published gene must have exactly
+    one row, so a gene the page dropped cannot pass as "unflagged". The cell is
+    compared whole -- the bare grade (or the em dash a gene no panel graded
+    shows) and the card's own chip -- and `data-confidence` must stay the bare
+    grade, which is what the confidence facet matches on.
+    """
+    entries = _read(site, "genes/index.json")["genes"]
+    flagged = {entry["gene"] for entry in entries if entry["has_conflicting_evidence"]}
+    assert flagged, "no published gene is flagged has_conflicting_evidence; this measures nothing"
+    browse = (site / "genes" / "index.html").read_text(encoding="utf-8")
+    chip = '<span class="chip chip-warn">conflicting evidence</span>'
+    for entry in entries:
+        page = entry["gene"].replace(":", "_")
+        rows = re.findall(
+            rf"<tr[^>]*>(?:(?!</tr>).)*{page}\.html(?:(?!</tr>).)*</tr>", browse, re.S
+        )
+        assert len(rows) == 1, f"{entry['gene']} has {len(rows)} rows on the gene index"
+        confidence = entry["headline_confidence"] or ""
+        assert f'data-confidence="{confidence}"' in rows[0], entry["gene"]
+        cell = re.findall(r"<td>(.*?)</td>", rows[0], re.S)[2]
+        bare = confidence or "—"
+        assert cell == (f"{bare} {chip}" if entry["gene"] in flagged else bare), entry["gene"]
+
+
 def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
     site: Path,
 ) -> None:

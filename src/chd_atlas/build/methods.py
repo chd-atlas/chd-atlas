@@ -26,7 +26,8 @@ a page with no gene on it.
   leave: the ClinGen-copy notice stays on the page (P5), and the table's intro
   keeps a short form of its scope. The section states in full what those
   abbreviate, for a page with no table on it -- so "a gene page lists", never
-  "listed here" or "the panel record above".
+  "listed here" or "the panel record above". Its third paragraph states in
+  full what the card's two warning chips abbreviate to two words each.
 * `#rare-variants` is both: three paragraphs moved off every gene page (the
   folded reading notes and the composite note's second sentence), and two are
   the full forms of notices a gene page keeps in one line. Two more state in
@@ -169,6 +170,20 @@ SCOPE_RULE: Final = (
 # submitter": the scope filter drops GenCC rows too, and most out-of-scope
 # records are GenCC's (76 published genes have one, 27 an out-of-scope ClinGen
 # record).
+#
+# The third paragraph glosses the card's two flags (2026-10-26), which no page
+# explained: `methods.html` mentioned "sources disagree" zero times, and on all
+# six pages carrying it ClinGen and GenCC agree on every gene-disease pair they
+# both classify. Each clause is read off the code that sets the flag:
+# `vocab.has_conflicting_evidence` over every in-scope record with a mapped
+# classification (`derive.gene_facts`), and `validity._has_source_discordance`,
+# whose sources are `ValiditySource.CLINGEN` and `ValiditySource.GENCC` -- so a
+# ClinGen copy submitted to GenCC is GenCC's there. `NO_KNOWN_ASSOCIATION` is
+# subtracted from the supporting side and is not in `CONTESTED`; `Supportive`
+# maps to no classification and is read by neither. The flag is per gene by the
+# owner's decision (2026-10-25), so the paragraph says what that permits rather
+# than narrowing it. "Narrower" is exact: a gene with `has_source_discordance`
+# has a contesting and a supporting record, which is `has_conflicting_evidence`.
 _VALIDITY: Final = (
     '<h2 id="validity">Mirrored validity records</h2>'
     "<p>A gene page lists its classifications in two groups: ClinGen expert panels' own "
@@ -180,6 +195,19 @@ _VALIDITY: Final = (
     "<p>Only records for diseases in this atlas's remit are listed. A panel or submitter "
     "may have classified the same gene for a disease outside it, and that record is not "
     "shown, so a gene page may not be every classification the gene has.</p>"
+    "<p>A gene page's card may carry two flags beside its grade. <em>conflicting "
+    "evidence</em> means that among the gene's records for diseases in scope, at least one "
+    "is <em>Disputed</em> or <em>Refuted</em> and at least one classifies the gene Limited "
+    "or better, whoever made each and whatever disease each is for; the gene index marks "
+    "the same genes beside their confidence. <em>sources disagree</em> is narrower: a "
+    "record that disputes or refutes the gene and one that classifies it Limited or better "
+    "come from different sources, one a ClinGen expert panel's own record and the other a "
+    "submission to GenCC "
+    "(ClinGen's own copies count as GenCC's here). It too is a flag on the gene, not on a "
+    "disease: the two records may be for different diseases, and the two sources may agree "
+    "on every disease they both classify. Neither flag counts a <em>No Known Disease "
+    "Relationship</em> record on either side, nor GenCC's <em>Supportive</em>, which "
+    "grades no evidence.</p>"
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page

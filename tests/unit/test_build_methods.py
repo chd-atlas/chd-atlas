@@ -324,6 +324,16 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
     "A panel may have classified" became "A panel or submitter": the scope
     filter drops GenCC rows too, and most out-of-scope records are GenCC's (76
     published genes have one, against 27 with an out-of-scope ClinGen record).
+
+    **The third paragraph glosses the card's two warning chips (2026-10-26).**
+    `sources disagree` rendered on six pages with no title and was mentioned 0
+    times on this page, and on all six ClinGen and GenCC agree on every
+    gene-disease pair they both classify: the flag is per gene, by the owner's
+    decision, and fires because one source disputes the gene for one disease
+    while the other supports it for another. Each clause is read off the code
+    (`vocab.has_conflicting_evidence`, `validity._has_source_discordance`), and
+    the paragraph states what the per-gene flag permits rather than narrowing
+    the flag.
     """
     section = _section(page, "validity")
     assert section == (
@@ -337,6 +347,18 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
         "<p>Only records for diseases in this atlas's remit are listed. A panel or submitter "
         "may have classified the same gene for a disease outside it, and that record is not "
         "shown, so a gene page may not be every classification the gene has.</p>"
+        "<p>A gene page's card may carry two flags beside its grade. <em>conflicting "
+        "evidence</em> means that among the gene's records for diseases in scope, at least one "
+        "is <em>Disputed</em> or <em>Refuted</em> and at least one classifies the gene Limited "
+        "or better, whoever made each and whatever disease each is for; the gene index marks "
+        "the same genes beside their confidence. <em>sources disagree</em> is narrower: a "
+        "record that disputes or refutes the gene and one that classifies it Limited or better "
+        "come from different sources, one a ClinGen expert panel's own record and the other a "
+        "submission to GenCC (ClinGen's own copies count as GenCC's here). It too is a flag on "
+        "the gene, not on a disease: the two records may be for different diseases, and the "
+        "two sources may agree on every disease they both classify. Neither flag counts a "
+        "<em>No Known Disease Relationship</em> record on either side, nor GenCC's "
+        "<em>Supportive</em>, which grades no evidence.</p>"
     )
     # Written once on this page, in the grade key.
     assert page.count("Every classification on this site is mirrored") == 1
