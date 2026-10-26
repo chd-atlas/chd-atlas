@@ -309,7 +309,12 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   every publication that evidence cites. A curated gene's evidence section
   opens with a line linking here, *How to read curated evidence*.
 - `#rare-variants` says how to read a gene page's rare-variant results: that
-  the counts and statistics in its study tables are the studies' own, that no
+  the counts and statistics in its study tables are the studies' own, and the
+  one rule the atlas applies to them — a non-synonymous row whose result points
+  to enrichment in cases with p below 0.05 supports the gene, and survives its
+  study's correction when the corrected p its study published is below 0.05
+  too, which decides the card's list, the matrix's states and a forest
+  marker's fill; that no
   statistic is pooled across studies, what each count unit means and what an
   absent row does not mean, the synonymous negative control, what a
   damaging composite row is, that a study's `all cases` group is the union of

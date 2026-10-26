@@ -304,9 +304,27 @@ _CURATED_EVIDENCE: Final = (
 # here).
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
+    # The one rule the atlas applies (owner decision 2026-10-26, W2). It said
+    # "adds no assessment of them" while the card, the matrix and the forest
+    # fill each decide what survives by `concordance.survives_own_correction`.
+    # Read off the code that day: `_supports` (not synonymous, a raw p below
+    # `ALPHA` -- strictly -- and `is_upward`, which reads the effect, an
+    # unbounded bound, or the published counts), then a study-published
+    # `pvalue_adjusted` below `ALPHA`, strictly; `ALPHA` is 0.05, the studies'
+    # convention; a row with no corrected p does not survive; `family_state`
+    # reads the matrix tier off the same rows; `pages._survived_correction`
+    # fills a forest marker by it for every row but a synonymous one, which is
+    # drawn muted (the forest paragraph below says so).
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
-    "republished as published. The atlas computes none of them and adds no assessment "
-    "of them; where a study is by an author of this atlas, its block says so.</p>"
+    "republished as published. The atlas computes none of them. It applies one rule of its "
+    "own, at the 0.05 the studies themselves use: a row that is not synonymous "
+    "<strong>supports</strong> the gene when its result points to enrichment in cases and "
+    "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
+    "corrected p its study published is below 0.05 as well; a row whose study published "
+    "no corrected p survives none. A gene page's card lists the rows that survive, the "
+    "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
+    "support, and a forest plot draws a surviving row filled. Where a study is by an "
+    "author of this atlas, its block says so.</p>"
     # was pages._POOLING_NOTICE in full
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
     "studies draw on the same sample collection they describe partly the same people, "

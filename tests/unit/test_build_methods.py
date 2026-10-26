@@ -559,11 +559,28 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     set", a denominator equivalence no study's rows bear out (PMID:34324492's
     count 6,746 of its 7,958 cases); it now says only that the group is not a
     subgroup, and the old phrase is asserted absent.
+
+    **The first paragraph states the one rule the atlas applies** (owner
+    decision 2026-10-26, W2). It said the atlas "adds no assessment" of the
+    studies' numbers, while the card, the matrix and the forest fill each
+    decide what survives by `concordance.survives_own_correction`: not
+    synonymous, a raw p below 0.05 and a result pointing to enrichment in
+    cases, then a study-published corrected p below 0.05, both strictly. The
+    owner's draft gave the rule as "a row whose study-published corrected p is
+    below 0.05", which is the second half alone: a depleted row, or a
+    synonymous one, clears that and survives nothing.
     """
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
-        "republished as published. The atlas computes none of them and adds no assessment "
-        "of them; where a study is by an author of this atlas, its block says so.",
+        "republished as published. The atlas computes none of them. It applies one rule of "
+        "its own, at the 0.05 the studies themselves use: a row that is not synonymous "
+        "<strong>supports</strong> the gene when its result points to enrichment in cases and "
+        "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
+        "corrected p its study published is below 0.05 as well; a row whose study published "
+        "no corrected p survives none. A gene page's card lists the rows that survive, the "
+        "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
+        "support, and a forest plot draws a surviving row filled. Where a study is by an "
+        "author of this atlas, its block says so.",
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
         "studies draw on the same sample collection they describe partly the same people, "
         "so combining their results would count those people twice; a gene page names any "
@@ -961,6 +978,9 @@ def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_r
         "these cohorts overlap",
         # The tables round to three significant figures (2026-10-26).
         "exactly as published",
+        # The card, the matrix and the forest fill apply a rule of the atlas's
+        # own, which `#rare-variants` states (owner decision 2026-10-26, W2).
+        "adds no assessment",
         # A shared collection may be adult controls (2026-10-26).
         "the same children",
         # True of one study, stated in general (2026-10-26).
