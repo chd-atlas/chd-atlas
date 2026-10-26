@@ -94,7 +94,7 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert (
         "<p>What every gene page assumes, written once: which genes are here and what each "
         "classification means, how the validity records are listed, how to read the "
-        "rare-variant results and the expression figures, and every sample collection the "
+        "rare-variant results, and every sample collection the "
         "rare-variant studies draw on.</p>"
     ) in page
 

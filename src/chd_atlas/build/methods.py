@@ -287,12 +287,14 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 
 
 # The page's own account of what it holds (CLAUDE.md section 4.29); the cohort
-# list joined it on 2026-10-26.
+# list joined it on 2026-10-26. It names only sections the page renders: the
+# expression section is not on this page yet, and naming it here would promise
+# a reader something the page does not hold.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
     "classification means, how the validity records are listed, how to read the "
-    "rare-variant results and the expression figures, and every sample collection the "
+    "rare-variant results, and every sample collection the "
     "rare-variant studies draw on.</p>"
 )
 
