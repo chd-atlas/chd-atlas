@@ -246,7 +246,8 @@ STYLESHEET: Final = """
 
   .reading-notes { margin: 1rem 0; }
   .reading-notes summary { cursor: pointer; color: var(--muted); }
-  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible {
+  .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible,
+  .forest summary:focus-visible {
     outline: 2px solid var(--evidence); outline-offset: 2px;
   }
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
@@ -338,6 +339,8 @@ STYLESHEET: Final = """
   .spark figcaption { font-size: 0.6rem; color: var(--muted); }
   .forest { margin: 0.6rem 0; }
   .forest figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
+  .forest figcaption p { margin: 0.25rem 0; }
+  .forest summary { cursor: pointer; color: var(--muted); }
 """
 
 # The one piece of client-side behaviour on the site, and a literal so it does

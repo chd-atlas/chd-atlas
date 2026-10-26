@@ -2271,10 +2271,10 @@ def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     assert '<details class="reading-notes"><summary>How to read these numbers' not in section
     figure = _forest_figures(section)[0]
     assert (
-        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-        "negative control, drawn apart from the results it calibrates.</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
-        in figure
+        "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+        "rows, its negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
+        "</details>" in figure
     )
     for text in (page, html.unescape(page)):
         for moved in (
@@ -3409,14 +3409,16 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     """D57: a chart caption is one visible line plus a "How to read this chart" toggle.
 
     The key was one `<figcaption>` of up to twelve sentences under every panel
-    -- 185 panels on 114 pages, measured on a build of 9f24190. Only the axis
-    clause is particular to its panel (the measure, its range, and what 1
-    means for that measure), so it alone stays in sight; every other clause
-    describes a mark in words that are the same wherever that mark is drawn,
-    and folds. **Each clause keeps its condition**: the tests above that
-    assert a clause renders only beside its mark slice the figure, which
-    contains the toggle, so they hold unchanged; this one asserts where the
-    clauses sit.
+    -- 185 panels on 114 pages, measured on a build of 9f24190. The axis clause
+    (the measure, its range, and what 1 means for that measure) stays in sight
+    and every other clause folds. Most of them describe a mark in words that
+    are the same wherever that mark is drawn; the not-fully-split clause does
+    not -- it warns about this panel -- and folds too, as the D57 spec places
+    it (10 panels on 10 pages, measured 2026-10-26). This docstring said the
+    axis clause alone was particular to its panel until then. **Each clause
+    keeps its condition**: the tests above that assert a clause renders only
+    beside its mark slice the figure, which contains the toggle, so they hold
+    unchanged; this one asserts where the clauses sit.
 
     One panel that draws every mark, so every conditional clause renders: a
     surviving composite (filled), an arrow to the right (unbounded, its
@@ -3430,6 +3432,13 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     and the muted clause changed on the fold: it ended "How to read these
     results says why", a link to the same section the toggle now closes on,
     so it names the row's role itself ("its negative control").
+
+    **Two more changes after review (2026-10-26).** The muted clause was
+    singular -- "The muted row is this study's synonymous row" -- while each of
+    the 113 panels carrying it draws three, one per case group; it says "one
+    of this study's synonymous rows". And the toggle's link read "How to read
+    this atlas", the nav's text for the top of `methods.html`, while it led to
+    one section; it names the section.
     """
     survived = {"pvalue_adjusted": 0.0037, "pvalue_adjustment": "benjamini_hochberg"}
     placed: dict[str, object] = {"effect_bound": None}
@@ -3520,9 +3529,10 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         "contains is not itself plotted, so what sits under a union on this panel is part of "
         "it and not all of it. The table below carries every row this study published for "
         "this gene. "
-        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-        "negative control, drawn apart from the results it calibrates.</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+        "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+        "rows, its negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
+        "</details>"
     )
 
 

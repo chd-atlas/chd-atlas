@@ -2919,15 +2919,26 @@ def _forest_caption(
 
     **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
     key was one run of up to twelve sentences under every panel -- 185 panels
-    on 114 pages, measured on a build of 9f24190. Only the axis clause is
-    particular to its panel: the measure, its range, and what 1 means for that
-    measure. Every other clause says what a mark means in words that are the
-    same wherever that mark is drawn, so it folds under "How to read this
-    chart", which closes on a link to `methods.html#rare-variants`, where the
-    key is stated once in general. **The fold changed no clause's condition**:
-    each still renders only beside its mark, inside the toggle. The muted
-    clause alone was reworded, to name the row's role ("its negative
-    control") instead of linking the section the toggle already links.
+    on 114 pages, measured on a build of 9f24190. The axis clause stays in
+    sight: the measure, its range, and what 1 means for that measure. Every
+    other clause folds under "How to read this chart", which closes on a link
+    to `methods.html#rare-variants`, where the key is stated once in general.
+    **Not every folded clause is the same wherever it renders.** The mark
+    clauses are: each says what a mark means in words that do not change with
+    the panel. The not-fully-split clause is not -- it is a warning about this
+    panel, that a tagged row's components are not all drawn on it -- and it
+    folds too, as the approved D57 spec places it; measured 2026-10-26 on a
+    real build, it is folded on 10 panels on 10 pages (TBX5, TBX20, ZEB2,
+    CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL). This docstring said "only
+    the axis clause is particular to its panel" until then. **The fold
+    changed no clause's condition**: each still renders only where it is
+    true, inside the toggle. The muted clause alone was reworded, to name the
+    row's role ("its negative control") instead of linking the section the
+    toggle already links -- and again the same day, to "one of this study's
+    synonymous rows", because each of the 113 panels that draws one draws
+    three, one per case group. The toggle's link reads "How to read
+    rare-variant results": it read "How to read this atlas", the site nav's
+    text for the top of `methods.html`, while it led to one section of it.
 
     Conditional clause by clause, for the reason `_composite_note` is
     conditional (and `_SYNONYMOUS_NOTICE` was) and `_POOLING_NOTICE` had to be
@@ -3049,8 +3060,8 @@ def _forest_caption(
         # own -- a second link to the same place, one sentence before the
         # toggle's.
         parts.append(
-            "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
-            "negative control, drawn apart from the results it calibrates."
+            "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
+            "rows, its negative control, drawn apart from the results it calibrates."
         )
     # The axis clause is first and unconditional, and the pooling clause is
     # unconditional too, so `rest` is never empty.
@@ -3059,7 +3070,7 @@ def _forest_caption(
         f"<figcaption><p>{axis.strip()}</p>"
         '<details class="chart-notes"><summary>How to read this chart</summary>'
         f"<p>{rest}</p>"
-        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p>'
+        '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
         "</details></figcaption>"
     )
 
