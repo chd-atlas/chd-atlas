@@ -1291,6 +1291,67 @@ def _card_dispute(fact: GeneFacts, gene_validity: GeneValidity) -> str:
     return f'<p class="card-dispute">{html.escape(sentence)}</p>'
 
 
+def _card_no_association(fact: GeneFacts, gene_validity: GeneValidity) -> str:
+    """Who reports no known disease relationship, for what, and when (owner decision R6).
+
+    Rendered exactly where `has_no_association_report` is true: some authority
+    recorded `No Known Disease Relationship` in scope while another supports
+    the gene (`vocab.reports_no_association`). The bundle published the flag
+    and `no_association_reported_by` since schema 2.10, and the validity table
+    listed the record, but the card -- the summary a reader takes in first --
+    said nothing. Measured on a build of 3b766ba: one published gene, GDF1,
+    whose card reads beside G2P's `Definitive` "Illumina reports no known
+    disease relationship for congenital heart defects, multiple types, 6
+    (2021); see the validity table."
+
+    Built from the records, never from a literal or from the bundle's name
+    list: grouped by authority -- the expert panel for a ClinGen record, the
+    submitter for a GenCC one, as `_card_dispute` names them -- with each
+    authority's diseases and the year of its own record (`_record_date`, the
+    date the validity table shows). Panels first, then submitters, each by
+    name; diseases sorted. ClinGen's own GenCC copy of a panel record folds as
+    it does in the table (`_repeats_the_panel`), so it is not named twice.
+    "no known disease relationship" is the one term either mirror maps to
+    `NO_KNOWN_ASSOCIATION` (`vocab`), said in words rather than in the
+    authority's capitals. A record with no calendar date names no year.
+
+    A flag with no record to name means the facts and the records were
+    derived apart, and the page is refused, as `_card_dispute` refuses.
+    """
+    if not fact.has_no_association_report:
+        return ""
+    panel = [record for record in gene_validity.records if record.source is ValiditySource.CLINGEN]
+    reports = [
+        record
+        for record in gene_validity.records
+        if record.classification is Classification.NO_KNOWN_ASSOCIATION
+        and not _repeats_the_panel(record, panel)
+    ]
+    if not reports:
+        raise ValueError(
+            f"{fact.gene} is flagged has_no_association_report with no such record to name; "
+            "its facts and its validity records were derived apart"
+        )
+    # De-duplicated through a dict, not a `set`, so the sorts below are for the
+    # reader and dropping one changes the text on every hash seed.
+    groups: dict[tuple[int, str], dict[str, None]] = {}
+    for record in reports:
+        if record.source is ValiditySource.CLINGEN:
+            key = (0, f"the {record.gcep}" if record.gcep else "ClinGen")
+        else:
+            key = (1, record.submitter or "a Gene Curation Coalition submitter")
+        dated = _date(_record_date(record))
+        year = f" ({dated[:4]})" if _CALENDAR_DATE.match(dated) else ""
+        groups.setdefault(key, {})[f"{record.disease_label}{year}"] = None
+    clauses = [
+        f"{authority} reports no known disease relationship for {_and_join(sorted(diseases))}"
+        for (_, authority), diseases in sorted(groups.items())
+    ]
+    sentence = "; ".join(clauses) + "; see the validity table."
+    sentence = sentence[0].upper() + sentence[1:]
+    return f'<p class="card-no-association">{html.escape(sentence)}</p>'
+
+
 def _card_scope(
     fact: GeneFacts, gene_validity: GeneValidity, warrants: Mapping[str, Warrant]
 ) -> str:
@@ -1359,8 +1420,9 @@ def _rail(
     **D55: the rail is the card.** Top to bottom: the symbol and the gene's
     identity; the HGNC id and the chips; a definition list (`_card_rows`: the
     warrant, who else lists the gene, its inheritance); the headline grade's
-    gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); the Orphanet
-    line (`_card_scope`); the rare-variant results that survive their own
+    gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); a
+    no-association line (`_card_no_association`, R6); the Orphanet line
+    (`_card_scope`); the rare-variant results that survive their own
     study's correction (`_card_rare_variants`, D56), each linking to its
     study's block; the atlas-curation sentence (`_card_curation`); and a last
     line linking the top of `methods.html` as "How to read this page" (P1,
@@ -1450,6 +1512,7 @@ def _rail(
         f"{definition_list(_card_rows(fact, gene_validity))}"
         f"{_card_gloss(fact)}"
         f"{_card_dispute(fact, gene_validity)}"
+        f"{_card_no_association(fact, gene_validity)}"
         f"{_card_scope(fact, gene_validity, warrants or {})}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"

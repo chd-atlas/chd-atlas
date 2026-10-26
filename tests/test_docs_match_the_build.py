@@ -1370,6 +1370,8 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "parts, so the two can lead with different rows.",
         "Declaration: this study is by an author of this atlas; republished as published, "
         "no assessment added.",
+        "Illumina reports no known disease relationship for congenital heart defects, "
+        "multiple types, 6 (2021); see the validity table.",
         "Every measurement below is from bulk tissue: a low or absent figure is not "
         "evidence a gene is unimportant to heart development.",
     ):

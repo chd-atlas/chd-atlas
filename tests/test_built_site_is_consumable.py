@@ -553,6 +553,19 @@ def test_a_gene_an_authority_reported_no_association_for_says_so_in_both_payload
     for bundle_path in sorted((site / "genes").glob("HGNC_*.json")):
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         assert payload["has_no_association_report"] == bool(payload["no_association_reported_by"])
+        # And the card says it exactly where the bundle does (owner decision
+        # 2026-10-26, R6): one line, naming every authority the bundle names.
+        rail = bundle_path.with_suffix(".html").read_text(encoding="utf-8")
+        rail = rail[rail.index('<aside class="rail">') : rail.index("</aside>")]
+        lines = re.findall(r'<p class="card-no-association">(.*?)</p>', rail)
+        assert len(lines) == int(payload["has_no_association_report"]), payload["gene"]
+        for authority in payload["no_association_reported_by"]:
+            assert f"{html.escape(authority)} reports no known disease relationship" in lines[0]
+    page = (site / "genes" / "HGNC_4214.html").read_text(encoding="utf-8")
+    assert (
+        '<p class="card-no-association">Illumina reports no known disease relationship for '
+        "congenital heart defects, multiple types, 6 (2021); see the validity table.</p>"
+    ) in page
 
 
 # Every attribute the chart renderers position anything with. `points` and

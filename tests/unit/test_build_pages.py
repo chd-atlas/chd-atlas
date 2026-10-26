@@ -7924,6 +7924,147 @@ def test_a_dispute_flag_with_no_contested_record_to_name_is_refused(tmp_path: Pa
         _card_page(tmp_path, replace(fact, has_conflicting_evidence=True), validity)
 
 
+def _no_association(submitter: str, disease: str, label: str, on: str | None) -> ValidityRecord:
+    """A GenCC submitter's `No Known Disease Relationship`, dated `on`."""
+    return replace(
+        _gencc(submitter, Classification.NO_KNOWN_ASSOCIATION, disease=disease, label=label),
+        classification_term="No Known Disease Relationship",
+        submitted_on=on,
+    )
+
+
+@pytest.mark.parametrize(
+    ("gene", "line"),
+    [
+        pytest.param(
+            _agreed(
+                _gencc("G2P", Classification.DEFINITIVE),
+                _gencc("Labcorp Genetics (formerly Invitae)", Classification.STRONG),
+                _no_association(
+                    "Illumina",
+                    "MONDO:0013463",
+                    "congenital heart defects, multiple types, 6",
+                    "2021-12-10 00:00:00",
+                ),
+            ),
+            "Illumina reports no known disease relationship for congenital heart defects, "
+            "multiple types, 6 (2021); see the validity table.",
+            id="GDF1: one submitter, one disease",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+                # The panel's own record, and ClinGen's GenCC copy of it, which
+                # folds in the table and so must not be named twice here.
+                replace(
+                    _clingen(
+                        Classification.NO_KNOWN_ASSOCIATION,
+                        "MONDO:0005453",
+                        "congenital heart disease",
+                        "UD",
+                    ),
+                    classification_term="No Known Disease Relationship",
+                    classification_date="2024-10-01T16:00:00.000Z",
+                ),
+                replace(
+                    _gencc(
+                        "ClinGen",
+                        Classification.NO_KNOWN_ASSOCIATION,
+                        "UD",
+                        disease="MONDO:0005453",
+                        label="congenital heart disease",
+                    ),
+                    classification_term="No Known Disease Relationship",
+                    submitted_on="2024-10-01 00:00:00",
+                ),
+                # Two submitters in reverse alphabetical order, the first with
+                # two diseases in reverse order and one record with no date.
+                _no_association("Illumina", "MONDO:0013463", "tetralogy of Fallot", None),
+                _no_association(
+                    "Illumina", "MONDO:0007173", "atrial septal defect 7", "2019-03-01 00:00:00"
+                ),
+                _no_association(
+                    "Ambry Genetics", "MONDO:0007173", "atrial septal defect 7", "2020-08-20"
+                ),
+            ),
+            "The Congenital Heart Disease Gene Curation Expert Panel reports no known disease "
+            "relationship for congenital heart disease (2024); Ambry Genetics reports no known "
+            "disease relationship for atrial septal defect 7 (2020); Illumina reports no known "
+            "disease relationship for atrial septal defect 7 (2019) and tetralogy of Fallot; see "
+            "the validity table.",
+            id="a panel and two submitters, sorted, the panel's GenCC copy folded",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+            ),
+            None,
+            id="no report",
+        ),
+    ],
+)
+def test_the_card_names_who_reports_no_known_disease_relationship_and_for_what(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], line: str | None
+) -> None:
+    """`has_no_association_report` on the card, in words (owner decision 2026-10-26, R6).
+
+    The bundle has published the flag and `no_association_reported_by` since
+    schema 2.10, and the validity table lists the record, but the card said
+    nothing: GDF1's reads G2P's `Definitive` grade with no sign that Illumina
+    reports no known disease relationship for one of the same diseases. The
+    line names each authority -- the panel for a ClinGen record, the submitter
+    for a GenCC one -- its diseases and the year of its record, panels first,
+    then submitters by name, diseases sorted, from the records rather than
+    from the bundle's name list. The second fixture lists its submitters and
+    one submitter's diseases in reverse order and carries no `set`, so a
+    dropped sort fails on every hash seed; its ClinGen copy of the panel's
+    record folds as it does in the table. Directly after the gloss.
+    """
+    fact, validity = gene
+    reporters = tuple(
+        sorted(
+            {
+                record.submitter or record.gcep or ""
+                for record in validity.records
+                if record.classification is Classification.NO_KNOWN_ASSOCIATION
+            }
+        )
+    )
+    rail = _card_page(
+        tmp_path,
+        replace(
+            fact,
+            has_no_association_report=bool(reporters),
+            no_association_reported_by=reporters,
+        ),
+        validity,
+    )
+    if line is None:
+        assert "card-no-association" not in rail
+        assert "no known disease relationship" not in rail
+        return
+    assert rail.count('<p class="card-no-association">') == 1
+    after = rail[rail.index("</dl>") + len("</dl>") :]
+    if 'class="card-gloss"' in after:
+        after = after[after.index("</p>") + len("</p>") :]
+    assert after.startswith(f'<p class="card-no-association">{line}</p>')
+
+
+def test_a_no_association_flag_with_no_record_to_name_is_refused(tmp_path: Path) -> None:
+    """The flag and the records come from one derivation; disagreeing, they are a bug."""
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+    )
+    flagged = replace(
+        fact, has_no_association_report=True, no_association_reported_by=("Illumina",)
+    )
+    with pytest.raises(ValueError, match="no such record"):
+        _card_page(tmp_path, flagged, validity)
+
+
 _NOONAN: Final = "MONDO:0018997"
 _NSML: Final = "MONDO:0007893"
 _HOLT_ORAM: Final = "MONDO:0007732"

@@ -1431,7 +1431,12 @@ Top to bottom:
    Costello syndrome and cardiofaciocutaneous syndrome by the RASopathy Gene
    Curation Expert Panel; see the validity table." The flag itself does not
    say which disease; on every gene that sets it today the dispute is for a
-   different disease from the one the headline grade is for.
+   different disease from the one the headline grade is for. Where
+   `has_no_association_report` is true, a line after it names each authority
+   that reports no known disease relationship, the diseases, and the year of
+   its record, from the records the validity table lists — GDF1's reads
+   "Illumina reports no known disease relationship for congenital heart
+   defects, multiple types, 6 (2021); see the validity table."
 5. Where every disease the headline grade is for is in scope through Orphanet's
    phenotype frequencies, the reason: "Graded for Noonan syndrome as a whole
    syndrome; in scope because Orphanet records a structural heart malformation
