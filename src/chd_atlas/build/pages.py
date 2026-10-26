@@ -1341,8 +1341,10 @@ def _rail(
     gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); the Orphanet
     line (`_card_scope`); the rare-variant results that survive their own
     study's correction (`_card_rare_variants`, D56), each linking to its
-    study's block; the atlas-curation sentence (`_card_curation`); the JSON
-    link.
+    study's block; the atlas-curation sentence (`_card_curation`); and a last
+    line linking the top of `methods.html` as "How to read this page" (P1,
+    2026-10-26) beside the gene's JSON. The nav's link to the same file reads
+    "How to read this atlas"; from the card the question is about this page.
     Every row from data the page already has -- nothing computed.
 
     It replaced a definition list of raw tokens and zero counts -- `validity:
@@ -1430,7 +1432,8 @@ def _rail(
         f"{_card_scope(fact, gene_validity, warrants or {})}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
-        f'<p><a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
+        '<p><a href="../methods.html">How to read this page</a> &middot; '
+        f'<a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
     )
 
 

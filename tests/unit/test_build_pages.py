@@ -8109,6 +8109,16 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     Exactly one curation paragraph per card, and none in the main column: the
     sentence moved here, and a page stating it twice is a page whose two copies
     can come to disagree.
+
+    **The card ends on two links, after this sentence (P1, 2026-10-26):** "How
+    to read this page", to the top of `methods.html`, and the gene's own JSON.
+    The nav links the same file as "How to read this atlas"; the card's text
+    differs on purpose, because from the card the reader's question is about
+    the page in front of them. Every section a gene page renders has a section
+    there, except the atlas's own curated evidence and its publications, which
+    render on 1 of 119 pages (measured 2026-10-26). The link is to the top, not
+    an anchor: the card abbreviates the scope, validity and rare-variant
+    sections at once.
     """
     fact, validity = gene
     emitter = Emitter(root=tmp_path)
@@ -8126,6 +8136,11 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     rail = _rail_of(page)
 
     assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    assert rail.endswith(
+        f'<p class="card-curation">{sentence}</p>'
+        '<p><a href="../methods.html">How to read this page</a> &middot; '
+        '<a href="../genes/HGNC_4173.json">this gene as JSON</a></p>'
+    )
     # Only where the card's own sentence says it, never on another line.
     denial = "no ClinGen expert panel has graded"
     assert (denial in page) is (denial in sentence)

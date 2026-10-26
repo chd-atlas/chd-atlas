@@ -129,7 +129,17 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert "<h1>How to read this atlas</h1>" in page
     assert '<a href="genes/index.html">Genes</a>' in page
     assert '<a href="methods.html">How to read this atlas</a>' in page
-    assert '<h2 id="scope">' in page
+    # The sections in the order the introduction names them and a gene page
+    # renders them, and nothing else at that rank (written once all five
+    # existed, 2026-10-26).
+    assert re.findall(r'<h2 id="([^"]+)"', page) == [
+        "scope",
+        "validity",
+        "rare-variants",
+        "cohorts",
+        "expression",
+    ]
+    assert page.count("<h2") == 5
     # The page's own account of what it holds (CLAUDE.md section 4.29: a
     # summary that omits what the page publishes passes every other check).
     # The cohort list joined it on 2026-10-26, and the same day it stopped

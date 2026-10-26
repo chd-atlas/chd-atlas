@@ -964,8 +964,9 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     every study's result for every gene, prints each caveat exactly once.
 
     And every card states once what the atlas itself curated, nothing in the
-    main column repeats it, and a card names who disputes the gene exactly
-    where the bundle's `has_conflicting_evidence` is true.
+    main column repeats it, a card names who disputes the gene exactly where
+    the bundle's `has_conflicting_evidence` is true, and every card ends on one
+    link to `methods.html` and one to the gene's own JSON.
 
     Counts derived, never pinned. Both sides of each "iff" must be exercised,
     or the test is measuring one population twice (CLAUDE.md section 4.30).
@@ -1033,6 +1034,11 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
         )
 
         assert rail.count('<p class="card-curation">') == 1, entry["gene"]
+        assert rail.count('<a href="../methods.html">How to read this page</a>') == 1, entry["gene"]
+        assert rail.endswith(
+            '<p><a href="../methods.html">How to read this page</a> &middot; '
+            f'<a href="../{entry["bundle"]}">this gene as JSON</a></p>'
+        ), entry["gene"]
         main = page[page.index("</aside>") :]
         assert "curated by the atlas" not in main.lower(), entry["gene"]
         disputed = rail.count('<p class="card-dispute">')

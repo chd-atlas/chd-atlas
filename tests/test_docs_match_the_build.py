@@ -1305,7 +1305,9 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     had narrowed it to the terms the atlas lists; and it said the gene
     index's cells "are plain text, not chips" beside a `conflicting evidence`
     chip on every contested row. Each is pinned to a literal and to the page,
-    and each retired wording is asserted absent from the doc.
+    and each retired wording is asserted absent from the doc. So are the gene
+    page's short forms and the labels of its links to `methods.html`, which
+    the doc quotes so a reader can find them on the page.
     """
     doc = " ".join(DOC.read_text().split())
     pages = {path.stem: path.read_text() for path in sorted((site / "genes").glob("HGNC_*.html"))}
@@ -1354,6 +1356,33 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     ):
         assert literal in doc.replace("*", ""), literal
         assert literal in html.unescape(every_page), f"no page renders {literal!r}"
+    # The short forms and toggles the doc names (2026-10-26), against the text a
+    # reader sees: tags stripped with no space, because two carry a `<strong>`.
+    # Each link label is pinned with the anchor the doc says it opens.
+    shown = html.unescape(re.sub(r"<[^>]+>", "", every_page))
+    for sentence in (
+        "Every count and statistic in the study tables below is an upstream study's, "
+        "republished as published; the atlas computes none of them.",
+        "The atlas computes no pooled statistic across studies: pooling two that share a "
+        "sample collection would count the same people twice.",
+        "Declaration: this study is by an author of this atlas; republished as published, "
+        "no assessment added.",
+        "Every measurement below is from whole, bulk tissue: a low or absent figure is not "
+        "evidence a gene is unimportant to heart development.",
+    ):
+        assert f'"{sentence}"' in doc, sentence
+        assert sentence in shown, f"no page renders {sentence!r}"
+    for anchor, label in (
+        ("", "How to read this page"),
+        ("#rare-variants", "How to read these results"),
+        ("#rare-variants", "How to read rare-variant results"),
+        ("#expression", "How to read these figures"),
+        ("#expression", "How to read expression figures"),
+    ):
+        assert f"*{label}*" in doc, label
+        assert f'<a href="../methods.html{anchor}">{label}</a>' in every_page, label
+    assert "*How to read this chart*" in doc
+    assert "<summary>How to read this chart</summary>" in every_page
     methods = _text_of((site / "methods.html").read_text())
     assert "a flag on the gene, not on a disease" in methods
     assert "Both are flags on the gene, not on a disease" in doc
