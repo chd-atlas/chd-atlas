@@ -480,13 +480,30 @@ def test_the_three_blocks_read_three_disjoint_bands_of_the_sheet() -> None:
             )
 
 
+# The note every combined row carries, written out rather than imported so a
+# change to `COMBINED_NOTE` has to be made here too, deliberately. Its fourth
+# sentence said the meta p "does not reproduce as Fisher's method" until
+# 2026-10-26, on every gene -- including WDR5, all three of whose meta p-values
+# are within 10% of Fisher's. Pinned twice: on the row the converter builds
+# (a wrong converter) and on the committed mirror (a stale one).
+_COMBINED_NOTE = (
+    "The study's own meta-analysis of its de novo and case-control arms, by the "
+    "joint local false discovery rate method (Jiang & Yu 2017, PMID:28011772). The "
+    "local FDR is not a corrected p-value and can be smaller than the p beside it. "
+    "The meta-analysis p is the study's own, transcribed as printed; for many of the "
+    "study's genes it does not reproduce as Fisher's method on the two printed arm "
+    "p-values. The study's genome-wide threshold is p < 2.6e-6."
+)
+
+
 def test_the_combination_is_read_from_its_own_columns_never_from_fishers() -> None:
     """Driven through `_combined_row` on a synthetic record (CLAUDE.md §4.23).
 
     The JL-FDR block and the Fisher block both end in `P-Val`, `FDR`, so a
     transposed index is the plausible defect: the row would publish Fisher's
     case-control p as the combination's and every gate would pass. Every cell
-    here differs, so reading any neighbour fails.
+    here differs, so reading any neighbour fails. The row's note is pinned to
+    `_COMBINED_NOTE` here too.
     """
     record = [""] * 70
     record[GENE_COLUMN] = "KMT2D"
@@ -501,6 +518,7 @@ def test_the_combination_is_read_from_its_own_columns_never_from_fishers() -> No
     assert (row["pvalue"], row["local_fdr"]) == ("1.6582e-38", "2.6973e-34")
     assert row["combines"] == "mutation_model;control_cohort"
     assert row["method"] == "joint_local_fdr"
+    assert row["method_note"] == _COMBINED_NOTE
     assert (row["study"], row["gene"], row["consequence_class"]) == (STUDY, "HGNC:7133", "lof")
     assert (row["cohort_stratum"], row["lesion_group"]) == ("all", "")
     assert tuple(row) == COMBINED_ORDER == BURDEN_COMBINED.column_names
@@ -639,7 +657,9 @@ def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
     Reads the committed mirror, so it catches a *stale* mirror rather than a
     converter defect (the direct test above does that). Every combined row must
     sit over the two arm rows it combines -- BUR020 checks that in the
-    validator; this pins that the converter wrote one per pair and no more.
+    validator; this pins that the converter wrote one per pair and no more, and
+    that every row carries the current `_COMBINED_NOTE`, so a converter edited
+    without being re-run fails here.
     """
     combined, issues = read_table(REPO_ROOT / "mirrors" / "burden_combined.tsv", BURDEN_COMBINED)
     assert combined is not None, issues
@@ -648,6 +668,8 @@ def test_the_committed_combined_mirror_has_one_row_per_arm_pair() -> None:
     mine = arms.filter(pl.col("study") == STUDY)
     assert combined.height == mine.height // 2 == 123
     assert set(combined["method"].unique()) == {"joint_local_fdr"}
+    notes = combined.filter(pl.col("study") == STUDY)["method_note"].unique().to_list()
+    assert notes == [_COMBINED_NOTE]
     assert combined.filter(pl.col("local_fdr") < pl.col("pvalue")).height > 0, (
         "the local FDR is below its own p for about half the panel; if no row "
         "shows that, the columns were read from a corrected-p block"
