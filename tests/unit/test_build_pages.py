@@ -5903,9 +5903,14 @@ _PULMONIC = Annotation("HP:0001642", "Abnormal pulmonary valve morphology", "Fre
 def _noonan_validity() -> GeneValidity:
     """One ClinGen-path disease and two Orphanet-scoped ones, one of them a subtype.
 
-    Three because each kills a different mutant (CLAUDE.md section 4.36): a note
-    rendered for every disease shows up on Holt-Oram, a note that ignored `via`
-    reads the same for both Noonan terms, and an unsorted loop swaps them.
+    Three because each kills a different mutant (CLAUDE.md section 4.36): a
+    loop over every record's disease fails on Holt-Oram, which has no warrant; a
+    note that ignored `via` reads the same for both Noonan terms; and an
+    unsorted loop swaps them. A note for a warrant the gene holds no record for
+    is guarded by the test's own extra warrant, not by these records: until
+    2026-10-26 every warrant passed was one of them, and a loop over every
+    warrant survived all 1,297 tests (built, it put all 36 notes on all 119
+    pages).
     """
     base = _validity().records[0]
     return GeneValidity(
@@ -5967,8 +5972,16 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
             "MONDO:0012547": Warrant(
                 "ORPHA:648", "Noonan syndrome", "subtype", "OMIM:610733", (_PULMONIC,)
             ),
+            # In scope, and not a disease this gene has a record for.
+            _NSML: Warrant(
+                "ORPHA:500", "Noonan syndrome with multiple lentigines", "direct", None, ()
+            ),
         },
-        scope_labels={"MONDO:0018997": "Noonan syndrome", "MONDO:0012547": "Noonan syndrome 4"},
+        scope_labels={
+            "MONDO:0018997": "Noonan syndrome",
+            "MONDO:0012547": "Noonan syndrome 4",
+            _NSML: "Noonan syndrome with multiple lentigines",
+        },
     )
     page = _page(tmp_path, "HGNC_4173.html")
     section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2",))
@@ -5996,8 +6009,11 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     # Above both groups, not under either.
     first_group = section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.index(subtype) < first_group and section.index(direct) < first_group
-    # A disease an expert panel curated as CHD gets no Orphanet sentence.
+    # A disease an expert panel curated as CHD gets no Orphanet sentence, and a
+    # scope term the gene has no record for gets none at all: the page would
+    # explain a disease it never lists.
     assert "Holt-Oram syndrome is in scope because" not in section
+    assert "multiple lentigines" not in page
 
 
 # `test_the_grade_key_no_longer_denies_an_in_scope_dispute_it_now_displays` sat
@@ -7413,6 +7429,16 @@ _IN_SCOPE_BY_ORPHANET: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
+                _clingen(Classification.DEFINITIVE, _AOS4, "Adams-Oliver syndrome 4"),
+            ),
+            "Graded for Adams-Oliver syndrome 4 and Noonan syndrome as whole syndromes; "
+            f"{_IN_SCOPE_BY_ORPHANET} of Adams-Oliver syndrome and Noonan syndrome.",
+            id="one direct and one subtype: the subtype's syndrome is still named",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
                 _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
                 _clingen(Classification.DEFINITIVE, _NOONAN, "Noonan syndrome"),
             ),
@@ -7456,7 +7482,13 @@ def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_di
     malformation for Adams-Oliver syndrome, and Adams-Oliver syndrome 4 (EOGT's
     headline disease, the one subtype among the 21 Orphanet lines measured
     2026-10-26) is in scope as its subtype; "in at least 30% of cases" alone
-    would read as a frequency recorded for the subtype itself.
+    would read as a frequency recorded for the subtype itself. **And still
+    named beside a direct one**: a headline graded for Noonan syndrome and for
+    Adams-Oliver syndrome 4 names both syndromes. Attributing only when every
+    warrant is a subtype's would drop "of Adams-Oliver syndrome" there, and
+    that mutant survived the release review's 634-test mutation run until this
+    case was added (2026-10-26; latent, none of the 21 lines on a real build
+    that day).
 
     **Rendered only when every disease the headline grade is for is
     Orphanet-scoped**, and naming all of them. A gene graded at its headline
@@ -7524,6 +7556,29 @@ _NOT_CURATED_BY_PANEL: Final = (
             id="not curated, a panel graded it",
         ),
         pytest.param(
+            (
+                replace(
+                    _agreed()[0],
+                    validity_state=ValidityState.EXPERT_CURATED,
+                ),
+                GeneValidity(
+                    records=(
+                        _clingen(
+                            Classification.NO_KNOWN_ASSOCIATION,
+                            "MONDO:0007173",
+                            "atrial septal defect 7",
+                        ),
+                        _gencc("Ambry Genetics", Classification.LIMITED),
+                        _gencc("G2P", Classification.DEFINITIVE),
+                    ),
+                    state=ValidityState.EXPERT_CURATED,
+                    has_source_discordance=False,
+                ),
+            ),
+            _NOT_CURATED_BY_PANEL,
+            id="not curated, admitted on agreement over a panel's no known association",
+        ),
+        pytest.param(
             _agreed(
                 _gencc("Ambry Genetics", Classification.LIMITED),
                 _gencc("G2P", Classification.DEFINITIVE),
@@ -7579,7 +7634,11 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     The discriminator between the two uncurated sentences is `validity_state`,
     not the headline: a gene admitted on agreement that ClinGen recorded `No
     Known Disease Relationship` for in scope has a panel record, and the first
-    sentence stays true of it where the second would not.
+    sentence stays true of it where the second would not. That gene is a case
+    here, because it is the only one that tells the two apart: every other
+    fixture pairs a panel record with a headline, and keying the sentence on
+    the headline survived all 1,297 tests until it was added (2026-10-26). Its
+    page carries "no ClinGen expert panel has graded" nowhere.
 
     Exactly one curation paragraph per card, and none in the main column: the
     sentence moved here, and a page stating it twice is a page whose two copies
@@ -7601,6 +7660,9 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     rail = _rail_of(page)
 
     assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    # Only where the card's own sentence says it, never on another line.
+    denial = "no ClinGen expert panel has graded"
+    assert (denial in page) is (denial in sentence)
     assert "in which Orphanet records" not in page
     main = page[page.index("</aside>") :]
     assert "curated by the atlas" not in main.lower()
