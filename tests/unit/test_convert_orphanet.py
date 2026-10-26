@@ -14,11 +14,13 @@ from pathlib import Path
 
 from chd_atlas.orphanet_scope import load_orphanet_tables, reach
 from chd_atlas.tables import MONDO_XREFS, ORPHANET_OMIM, ORPHANET_PHENOTYPES
+from chd_atlas.validate.sources import load_sources
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from convert_orphanet import (  # noqa: E402
+    HPO_RELEASE,
     OMIM_ORDER,
     PHENOTYPE_ORDER,
     XREF_ORDER,
@@ -144,3 +146,20 @@ def test_the_committed_mirrors_carry_noonan_4s_route_to_its_parent() -> None:
     assert tables is not None
     assert reach("MONDO:0012547", "ORPHA:648", tables) == ("subtype", "OMIM:610733")
     assert reach("MONDO:0018997", "ORPHA:648", tables) == ("direct", None)
+
+
+def test_the_converter_filters_on_the_hpo_release_sources_yaml_pins() -> None:
+    """One HPO release for the mirror and for the rule that reads it.
+
+    The converter keeps an Orphanet annotation only if its HPO id falls under
+    HP:0001626 in `HPO_RELEASE`; SCP006 and the build decide what is structural
+    over the release `mirrors/sources.yaml` pins (`pinned_structural_phenotypes`).
+    The two are separate literals -- the converter runs without the package
+    installed, so it does not import the registry loader -- and re-pinning HPO
+    in one alone would apply the rule over one release to a mirror filtered
+    through another: an annotation whose term the new release places under the
+    heart would never have been mirrored, and the syndrome it qualifies would
+    fail the rule with nothing saying why.
+    """
+    registry, _ = load_sources(REPO_ROOT)
+    assert registry.ontology_files()["HP"] == HPO_RELEASE
