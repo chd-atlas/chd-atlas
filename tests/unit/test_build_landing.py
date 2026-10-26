@@ -21,12 +21,13 @@ from chd_atlas.build.runner import build_site
 from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
 from chd_atlas.corpus import Corpus
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
+from chd_atlas.models.literature import Publication
 from chd_atlas.vocab import Classification, ValiditySource, ValidityState
 
 # What a corpus with no burden evidence at all publishes. Every test in this
 # file that is about something else -- escaping, pluralisation, the shell --
 # renders against it.
-_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0)
+_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=())
 
 # The developmental-expression counterpart to `_NO_BURDEN`, for the same tests.
 _NO_PROFILES = ProfileCensus(genes=0, datasets=0)
@@ -621,6 +622,79 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
     assert re.search(r"<dt>Genes with rare-variant evidence</dt>\s*<dd>2</dd>", listed)
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
+
+
+def _study(pmid: str, *, own_lab: bool) -> Publication:
+    """A curated rare-variant study; only its id and `own_lab` are read here."""
+    return Publication(
+        id=pmid,
+        title=f"Study {pmid}",
+        journal="J",
+        year=2026,
+        authors=["A"],
+        study_type="case_control",  # type: ignore[arg-type]
+        own_lab=own_lab,
+    )
+
+
+@pytest.mark.parametrize(
+    ("by_an_author", "sentence"),
+    [
+        pytest.param(
+            {"PMID:1"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="one",
+        ),
+        pytest.param(
+            {"PMID:1", "PMID:2"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by "
+            "authors of this atlas, and a gene page says so in each of their blocks.",
+            id="several",
+        ),
+        pytest.param(
+            set(),
+            "Of the 3 rare-variant studies whose results this atlas publishes, none is by an "
+            "author of this atlas.",
+            id="none",
+        ),
+    ],
+)
+def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
+    tmp_path: Path, by_an_author: set[str], sentence: str
+) -> None:
+    """One sentence, both counts computed (owner decision 2026-10-26, R7).
+
+    The cards and the study blocks declare a study by an author of this atlas
+    and the front page said nothing. The population is the studies whose rows
+    reach a published bundle (`BurdenCensus.studies`), never every curated
+    publication: two decoys are by an atlas author and are not among them --
+    `PMID:9` tests only a gene outside the gate, and `PMID:8` tests nothing --
+    so counting `corpus.publications` reads "3 of 5" in every case
+    (CLAUDE.md section 4.30: two figures equal on the real corpus would let
+    the wrong one pass). Pinned in each of its three forms, as literals.
+    """
+    burden = {
+        "HGNC:1": [_burden_row(study="PMID:1"), _burden_row(study="PMID:2")],
+        "HGNC:2": [_burden_row(study="PMID:3")],
+        # Outside the gate: mirrored, never published.
+        "HGNC:9": [_burden_row(study="PMID:9")],
+    }
+    published = {"HGNC:1", "HGNC:2", TBX5}
+    families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
+    census = burden_census(burden, published, families)
+    corpus = Corpus(
+        root=Path("."),
+        assertions=(_assertion(),),
+        publications=tuple(
+            _study(pmid, own_lab=pmid in by_an_author or pmid in {"PMID:8", "PMID:9"})
+            for pmid in ("PMID:1", "PMID:2", "PMID:3", "PMID:8", "PMID:9")
+        ),
+    )
+
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+
+    assert f"<p>{sentence}</p>" in _prose(_section(text, "<h2>What's published</h2>"))
 
 
 def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) -> None:

@@ -1007,7 +1007,20 @@ def _card_rare_variants(
     sample collection describe the same people -- and, where some study
     published a correction for the gene, says none survives one; where none
     did, it says only how many tested it, and the no-correction lines say the
-    rest. With no row at all it says no
+    rest.
+
+    **That line named no study, so it shed the declaration** (owner decision
+    2026-10-26, R7): MYH11, HRAS, KLF13 and CFC1 are tested by PMID:34324492
+    alone, nothing survives, and their cards said nothing of its being by an
+    atlas author. Where any study that tested the gene is one, the line says
+    so: "(a study by an atlas author)" where one study tested it, "(each
+    study by an atlas author)" where several did and all are, and "(k of the
+    n studies by an atlas author)" where only some are -- counted in studies,
+    because the line's own count is of datasets and one family may hold both
+    kinds. Measured on a real build: all 86 such lines carry it (24 + 4 of
+    the first form, 48 of the second, 7 + 3 of the third). Where a
+    no-correction line follows for the same study, it carries the mark too
+    (24 cards); each line keeps its own declaration. With no row at all it says no
     study here reports a result, and not that no study *tested* the gene: a
     supplement that omits a gene (CRIPTO, in PMID:42230622) does not say the
     study never ran it. The power caveat follows whenever the gene has rows,
@@ -1024,9 +1037,12 @@ def _card_rare_variants(
             "<p>No rare-variant study in this atlas reports a result for this gene.</p></div>"
         )
 
-    def own_lab(study: str) -> str:
+    def by_an_author(study: str) -> bool:
         publication = publications.get(study)
-        return _OWN_LAB_MARK if publication is not None and publication.own_lab else ""
+        return publication is not None and publication.own_lab
+
+    def own_lab(study: str) -> str:
+        return _OWN_LAB_MARK if by_an_author(study) else ""
 
     groups: dict[tuple[str, str], list[BurdenRow]] = {}
     for row in rows:
@@ -1118,7 +1134,18 @@ def _card_rare_variants(
         verdict = (
             "; none survives a correction its study published." if published_correction else "."
         )
-        body = f"{heading}<p>Tested in {tested} independent {noun}{verdict}</p>"
+        # The declaration this line names no study to carry (owner decision
+        # 2026-10-26, R7). Counted in studies, never in datasets: a cohort
+        # family can hold a study by an atlas author beside one that is not.
+        own = sum(1 for study in studies if by_an_author(study))
+        declared = ""
+        if len(studies) == 1 and own:
+            declared = " (a study by an atlas author)"
+        elif own == len(studies) > 1:
+            declared = " (each study by an atlas author)"
+        elif own:
+            declared = f" ({own} of the {len(studies)} studies by an atlas author)"
+        body = f"{heading}<p>Tested in {tested} independent {noun}{declared}{verdict}</p>"
     return (
         f'<div class="card-variants">{body}{"".join(uncorrected)}'
         f"<p>{EVIDENCE_POWER_CAVEAT}</p></div>"

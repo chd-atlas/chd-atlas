@@ -425,6 +425,11 @@ class BurdenCensus:
     rows: int
     genes: int
     families: int
+    # The studies whose rows reach a published bundle, sorted: the population
+    # the front page's own-lab sentence counts (owner decision 2026-10-26,
+    # R7). Not published in `manifest.json`, which names its `counts` keys one
+    # by one.
+    studies: tuple[str, ...]
 
 
 def burden_census(
@@ -473,15 +478,25 @@ def burden_census(
     one higher than the number of families any published gene was tested by.
     Reviewed 2026-08-06 and kept; the alternative was measured and inverts a
     real overlap.
+
+    **`studies` is restricted to `published`, like `rows`** (owner decision
+    2026-10-26, R7): the front page says how many of the rare-variant studies
+    whose results the site publishes are by an author of this atlas, and a
+    study whose rows all sit outside the gate has no block on any page to say
+    so. Sorted, because it is derived from a set.
     """
     rows = 0
     genes = 0
+    studies: set[str] = set()
     for gene in published:
         count = len(burden.get(gene, ()))
         rows += count
         if count:
             genes += 1
-    return BurdenCensus(rows=rows, genes=genes, families=len(families))
+        studies.update(row.study for row in burden.get(gene, ()))
+    return BurdenCensus(
+        rows=rows, genes=genes, families=len(families), studies=tuple(sorted(studies))
+    )
 
 
 def cohort_registry(cohorts: Iterable[Cohort]) -> dict[str, Cohort]:

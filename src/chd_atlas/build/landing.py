@@ -187,6 +187,50 @@ def _number(value: int) -> str:
     return f"{value:,}"
 
 
+def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
+    """How many of the rare-variant studies published here are by an atlas author (R7).
+
+    Owner decision 2026-10-26: the cards and blocks declare a study by an
+    author of this atlas, and the front page said nothing. Both counts are
+    computed: `studies` is `BurdenCensus.studies` -- the studies whose rows
+    reach a published bundle, the ones with a block on some gene page -- and
+    `Publication.own_lab` is read for each. **Never every curated
+    publication.** The owner's draft read "Two of the five studies cited
+    here": five is every record in `publications.json`, and two of those
+    (an expression dataset's paper and the curated assertion's) have no block
+    to say anything in, so "each study's block says so" would be true of the
+    population only by accident; and counting all five would put a 1997
+    linkage paper and an expression atlas in the denominator of a declaration
+    about the rare-variant evidence. Measured on a real build the day it was
+    written: 3 studies publish rows on published genes, PMID:34324492 and
+    PMID:42230622 are by an atlas author, and all 190 of their blocks on the
+    gene pages carry the declaration, against 0 of the other study's 36
+    (`pages._disclosure` renders in every block of an own-lab study, so "says
+    so" holds by construction).
+
+    Digits, as every figure on this page is. Empty where no study publishes a
+    row, since there is then nothing to declare.
+    """
+    total = len(studies)
+    if not total:
+        return ""
+    by_author = {publication.id for publication in corpus.publications if publication.own_lab}
+    own = sum(1 for study in studies if study in by_author)
+    noun = "rare-variant study" if total == 1 else "rare-variant studies"
+    opening = f"Of the {total} {noun} whose results this atlas publishes, "
+    if not own:
+        return f"<p>{opening}none is by an author of this atlas.</p>"
+    if own == 1:
+        return (
+            f"<p>{opening}1 is by an author of this atlas, and a gene page says so in its "
+            "block.</p>"
+        )
+    return (
+        f"<p>{opening}{own} are by authors of this atlas, and a gene page says so in each of "
+        "their blocks.</p>"
+    )
+
+
 def _stat(label: str, value: str) -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
@@ -343,6 +387,7 @@ def _render(
     paper: two studies drawing on the same sample collection describe the same people and
     count once. How many datasets agree about a gene is shown on every row of the browse
     page, and it is a count of evidence — never a verdict on the gene.</p>
+  {_own_lab_sentence(census.studies, corpus)}
   {_GLYPH_KEY}
 
   <h2>Where this data comes from</h2>

@@ -219,15 +219,20 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
     - **Genes are those with rows, not the published population.** `HGNC:3` is
       published and has none, so `len(published)` gives 3 where the answer is 2.
 
-    One test rather than three because they share a fixture and a single call,
-    which is what makes the three numbers checkable against each other; a
-    per-figure split would triple the setup and weaken nothing that matters.
+    - **Studies are those with a published row** (owner decision 2026-10-26,
+      R7: the front page's own-lab sentence counts them). `PMID:9` tests only
+      the unpublished `HGNC:9`, so it has no block on any page and is not one
+      of them; sorted, because it is derived from a set.
+
+    One test rather than four because they share a fixture and a single call,
+    which is what makes the numbers checkable against each other; a
+    per-figure split would multiply the setup and weaken nothing that matters.
     """
     burden = {
         "HGNC:1": [_row(study="PMID:1"), _row(study="PMID:1")],
         "HGNC:2": [_row(study="PMID:2")],
         # Mirrored, never published: the 127-gene asymmetry, in miniature.
-        "HGNC:9": [_row(study="PMID:1") for _ in range(4)],
+        "HGNC:9": [*(_row(study="PMID:1") for _ in range(3)), _row(study="PMID:9")],
     }
     # Published and untested, so `genes` cannot be read off `published`.
     published = {"HGNC:1", "HGNC:2", "HGNC:3"}
@@ -239,6 +244,7 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
     assert census.rows == 3
     assert census.families == 1
     assert census.genes == 2
+    assert census.studies == ("PMID:1", "PMID:2")
 
 
 def test_every_published_row_carries_every_key_whatever_its_comparator() -> None:

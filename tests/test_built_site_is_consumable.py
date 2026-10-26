@@ -1239,6 +1239,54 @@ def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
     assert fragments, "no gene page carries a fragment link; the sweep would pass vacuously"
 
 
+def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare(
+    site: Path,
+) -> None:
+    """The landing's own-lab sentence, against the blocks it vouches for (R7).
+
+    "Of the 3 rare-variant studies whose results this atlas publishes, 2 are
+    by authors of this atlas, and a gene page says so in each of their
+    blocks." Both numbers are read here off the gene pages -- the distinct
+    study blocks they render, and which of those `publications.json` marks
+    `own_lab` -- and every block of such a study must carry the declaration,
+    while no other study's block may. Measured on a real build the day it was
+    written: 190 own-lab blocks, all declared; 36 others, none.
+    """
+    own = {
+        entry["id"]
+        for entry in json.loads((site / "publications.json").read_text(encoding="utf-8"))[
+            "publications"
+        ]
+        if entry["own_lab"]
+    }
+    declaration = "Declaration: this study is by an author of this atlas"
+    rendered: set[str] = set()
+    for path in sorted((site / "genes").glob("HGNC_*.html")):
+        page = path.read_text(encoding="utf-8")
+        start = page.find('<h2 id="rare-variants">')
+        if start == -1:
+            continue
+        stop = page.find("<h2", start + 1)
+        section = page[start : stop if stop != -1 else len(page)]
+        heads = list(re.finditer(r'<h3 id="study-(\d+)">', section))
+        ends = [head.start() for head in heads[1:]] + [len(section)]
+        for head, end in zip(heads, ends, strict=True):
+            block = section[head.start() : end]
+            study = f"PMID:{head.group(1)}"
+            rendered.add(study)
+            assert (declaration in block) == (study in own), (path.name, study)
+    assert rendered, "no gene page renders a study block; the check would pass vacuously"
+    mine = len(rendered & own)
+    assert mine, "no rendered study is by an atlas author; the sentence's main form is unmeasured"
+    landing = " ".join(
+        html.unescape(re.sub(r"<[^>]+>", "", (site / "index.html").read_text())).split()
+    )
+    assert (
+        f"Of the {len(rendered)} rare-variant studies whose results this atlas publishes, "
+        f"{mine} {'is' if mine == 1 else 'are'} by "
+    ) in landing
+
+
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
     """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".
 

@@ -265,7 +265,11 @@ byte-identical between two builds of one commit like everything else here.
 
 It also carries a key to the four evidence glyphs, built from the same constant
 as the browse page's strip legend and the gene page's matrix legend. The three
-cannot come to describe the same four states in different words.
+cannot come to describe the same four states in different words. And it says
+how many of the rare-variant studies whose results the site publishes are by
+an author of this atlas — both counts computed, from the studies with a row on
+a published gene and their `own_lab` in [`publications.json`](#publicationsjson)
+— and that a gene page says so in each such study's block.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
 build behind this document publishes 122 of them — this one, `genes/index.html`,
@@ -1470,8 +1474,11 @@ Top to bottom:
    published a correction is read per gene, from its rows.
 
    With no surviving row, how many independent datasets (cohort families, not
-   studies) tested the gene, and — where some study published a correction for
-   it — that none survives a correction its study published; with no row at
+   studies) tested the gene, declaring any study among them by an author of
+   this atlas — "(a study by an atlas author)" where one study tested it,
+   "(each study by an atlas author)", or "(1 of the 2 studies by an atlas
+   author)", counted in studies — and, where some study published a
+   correction for it, that none survives a correction its study published; with no row at
    all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
    evidence against a gene — follows whenever the gene has rows.
 7. One sentence saying what the atlas itself has curated (below).
