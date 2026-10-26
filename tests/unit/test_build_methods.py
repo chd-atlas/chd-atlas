@@ -148,10 +148,13 @@ def test_scope_glosses_every_rung_as_one_label_chip_and_gloss(page: str) -> None
     these words also occur in the scope rule above it (section 4.19).
 
     **Rendered open, not folded** (P3). On a gene page the key was a collapsed
-    `<details>` because it was not what the page was for; here it is.
+    `<details>` because it was not what the page was for; here it is. Asserted
+    on the whole page since 2026-10-26: `_section` began stopping at the next
+    `<h2`, and a slice of `#scope` alone would let a fold appear anywhere below
+    it -- nothing on this page is meant to be folded.
     """
     section = _section(page, "scope")
-    assert "<details" not in section, "the grade key is folded on the page that exists for it"
+    assert "<details" not in page, "a fold on the page that exists to be read"
     key = re.search(r'<div class="grade-key">.*?</div>', section, re.S)
     assert key, "#scope carries no grade key"
     legend = re.search(r"<dl>(.*?)</dl>", key.group(0), re.S)
@@ -248,21 +251,32 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
     * "so a gene page is not every classification the gene has" was false for
       43 of the 119 published genes, which have no ClinGen or GenCC record for
       any disease outside scope. It says "may not be", as the gene page does.
+
+    **Reworded after review, 2026-10-26.** Its opening sentence ("Every
+    classification in this atlas is an upstream panel's or submitter's,
+    republished with its provenance intact") repeated the grade key's first
+    sentence two paragraphs up, so it is written once, in the key. "the
+    ClinGen expert panel's own records" became "ClinGen expert panels'", and
+    "A panel may have classified" became "A panel or submitter": the scope
+    filter drops GenCC rows too, and most out-of-scope records are GenCC's (76
+    published genes have one, against 27 with an out-of-scope ClinGen record).
     """
     section = _section(page, "validity")
     assert section == (
         '<h2 id="validity">Mirrored validity records</h2>'
-        "<p>Every classification in this atlas is an upstream panel's or submitter's, "
-        "republished with its provenance intact. A gene page lists them in two groups: the "
-        "ClinGen expert panel's own records first, then other curators' submissions to the "
-        "Gene Curation Coalition (GenCC). ClinGen also submits its own classifications to "
-        "GenCC; a gene page lists such a copy only where its mapped grade, date, inheritance "
-        "or disease differs from the panel's own record, or where it carries no date or has "
-        "no panel record to match. Each gene's JSON keeps every copy, listed or not.</p>"
-        "<p>Only records for diseases in this atlas's remit are listed. A panel may have "
-        "classified the same gene for a disease outside it, and that record is not shown, so "
-        "a gene page may not be every classification the gene has.</p>"
+        "<p>A gene page lists its classifications in two groups: ClinGen expert panels' own "
+        "records first, then other curators' submissions to the Gene Curation Coalition "
+        "(GenCC). ClinGen also submits its own classifications to GenCC; a gene page lists "
+        "such a copy only where its mapped grade, date, inheritance or disease differs from "
+        "the panel's own record, or where it carries no date or has no panel record to "
+        "match. Each gene's JSON keeps every copy, listed or not.</p>"
+        "<p>Only records for diseases in this atlas's remit are listed. A panel or submitter "
+        "may have classified the same gene for a disease outside it, and that record is not "
+        "shown, so a gene page may not be every classification the gene has.</p>"
     )
+    # Written once on this page, in the grade key.
+    assert page.count("Every classification on this site is mirrored") == 1
+    assert "Every classification in this atlas is an upstream" not in page
 
 
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
@@ -273,8 +287,8 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
     "How to read these numbers" notes; the last was the second sentence of its
     composite note. Each was re-read for a page with no table on it: "In each
-    study's table" anchors what the units sentence describes, "the rows above
-    it" became "beside it" and "a scan of this size" became "that size".
+    study's table" anchors what the units sentence describes, and "the rows
+    above it" became "beside it".
 
     Recorded decisions that moved with them:
 
@@ -304,42 +318,58 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     derives ("n = N" on 86 pages, "N rows" on 48); "republished exactly as
     published" lost "exactly", because 376 of the 1,210 published raw p-values
     render rounded to three significant figures; and the units sentence says
-    what a de novo row's `controls` cell shows, because 108 of them on 36 pages
-    read "N expected", not observed / total.
+    what `controls` shows on a row tested against a mutation model, because 108
+    such cells on 36 pages read "N expected", not observed / total.
+
+    **Reworded after review, the same day.** "children" became "people": a
+    shared collection may be an adult control cohort. The overlap clause says
+    what the page can know -- collections its studies share *as this atlas has
+    recorded them* -- because `shared_cohorts` sees only shared registered ids,
+    and two studies may share individuals no record names. The synonymous
+    paragraph lost "the same uncorrected scale" (true of one study, stated in
+    general) and "a scan of that size" (no antecedent here). The units
+    parenthesis keys on what `pages._controls` keys on: the comparator, not the
+    variant's origin.
+
+    **Pinned whole, not paragraph by paragraph.** A `re.findall(r"<p>...")`
+    over the section skips any `<p class=...>` or `<details>` appended to it:
+    measured in review, a composite note, a disclosure and a "How to read these
+    numbers" fold appended to this section all passed.
     """
-    section = _section(page, "rare-variants")
-    assert section.startswith('<h2 id="rare-variants">Rare-variant association</h2><p>')
-    paragraphs = re.findall(r"<p>(.*?)</p>", section, re.S)
-    assert paragraphs == [
+    expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
         "republished as published. The atlas computes none of them and adds no assessment "
         "of them; where a study is by an author of this atlas, its block says so.",
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-        "studies draw on the same sample collection they describe partly the same children, "
-        "so combining their results would count those children twice; a gene page names any "
-        "overlap between its studies where it occurs.",
+        "studies draw on the same sample collection they describe partly the same people, "
+        "so combining their results would count those people twice; a gene page names any "
+        "sample collection its studies share, as this atlas has recorded them.",
         "In each study's table, <code>cases</code> and <code>controls</code> each show "
-        "<em>observed / total</em> (for a de novo row, <code>controls</code> is instead the "
-        "count the study's mutation model expected), and <strong>every cell names what it "
-        "counted</strong> &mdash; carriers, alleles, or de novo mutations. The three are not "
-        "interchangeable: a study counting alleles counts a person with two qualifying "
-        "variants twice, and its denominator is roughly twice the number of people "
+        "<em>observed / total</em> (for a row tested against a mutation model, "
+        "<code>controls</code> is instead the count that model expected), and <strong>every "
+        "cell names what it counted</strong> &mdash; carriers, alleles, or de novo mutations. "
+        "The three are not interchangeable: a study counting alleles counts a person with two "
+        "qualifying variants twice, and its denominator is roughly twice the number of people "
         "sequenced. A consequence class or case group with no row is one the study "
         "<strong>did not report</strong>, which is not a null result and does not always "
         "mean no such variant was seen &mdash; studies differ in which classes their "
         "gene-level tables cover.",
         "The <strong>synonymous</strong> row is a study's own negative control &mdash; "
-        "synonymous variants should show no enrichment. Read it on the same uncorrected scale "
-        "as the rows beside it: a <em>strongly</em> enriched synonymous row is a warning about "
-        "that gene's comparison, while a nominally significant one is what a scan of that size "
-        "produces by chance. <strong>Only a study that publishes one has it</strong>; a table "
-        "with no synonymous row offers no such check.",
+        "synonymous variants should show no enrichment. Read it on the same scale as the rows "
+        "beside it: a <em>strongly</em> enriched synonymous row is a warning about that "
+        "gene's comparison, while a nominally significant one is what a scan over thousands "
+        "of genes produces by chance. <strong>Only a study that publishes one has "
+        "it</strong>; a table with no synonymous row offers no such check.",
         "A <strong>damaging (LOF + missense)</strong> row is the <strong>union</strong> of "
         "the study's loss-of-function and damaging-missense rows, not a third independent "
         "result &mdash; the same variants are counted in both. It is shown because a study "
         "that defines its findings by the composite publishes a p-value for it that is not "
         "derivable from the other two.",
     ]
+    assert _section(page, "rare-variants") == (
+        '<h2 id="rare-variants">Rare-variant association</h2>'
+        + "".join(f"<p>{paragraph}</p>" for paragraph in expected)
+    )
 
 
 @pytest.mark.parametrize(
@@ -365,6 +395,10 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "these cohorts overlap",
         # The tables round to three significant figures (2026-10-26).
         "exactly as published",
+        # A shared collection may be adult controls (2026-10-26).
+        "the same children",
+        # True of one study, stated in general (2026-10-26).
+        "uncorrected scale",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -> None:

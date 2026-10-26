@@ -1696,14 +1696,21 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     the section; the full sentence, with how a gene page names an overlap, is on
     `methods.html#rare-variants`, where "these cohorts overlap" is asserted
     absent too.
+
+    **"people", not "children", since 2026-10-26.** `shared_cohorts` unions a
+    study's case *and* control collections, and a shared collection may be a
+    control cohort of adults -- UK Biobank's own note says "~500,000 UK adults
+    recruited at ages 40-69" -- so the double-counted are not always children.
+    The matrix caption and `docs/data-api.md` already said "people".
     """
     one = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
     assert "no pooled statistic across studies" in one
+    section = _burden_section_text(one)
     assert (
         "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-        "two that share a sample collection would count the same children twice.</p>"
-        in _burden_section_text(one)
+        "two that share a sample collection would count the same people twice.</p>" in section
     )
+    assert "children" not in section
     # Immediately after the matrix, not four paragraphs above it.
     assert one.index("</table>") < one.index("no pooled statistic across studies")
     # **And it must be true of a one-study page.** It used to assert "these
@@ -1896,11 +1903,26 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
     names the statistic, with the `q` it is shown as where it is a
     false-discovery rate (`_statistic`), and is pinned identical on a block with
     a forest and on one without, so it cannot come to depend on either layout.
+
+    **And it states no count (2026-10-26).** It opened "This study reported N
+    comparisons in all", and for PMID:40127276 N is `tests_reported: 248` --
+    the study's panel *genes*, each tested in two arms over three consequence
+    classes -- so the sentence was false on all 36 pages carrying that study. A
+    study that corrected every row needs no denominator from the reader; the
+    count is shown only where the reader must apply it, beside the Bonferroni
+    arithmetic, which is true of PMID:42230622 (138,609 is one Fisher test per
+    row of its Supplementary Data 3). Pinned on a corrected study whose
+    publication records no count at all, too: the sentence no longer reads
+    one, so it must not depend on it. And pinned absent where no row carries a
+    p-value at all -- a case series -- because there is then no corrected p to
+    read: with the branch keyed on "no uncorrected row" alone it told such a
+    block to read one (a mutant doing exactly that survived every other test,
+    measured 2026-10-26).
     """
     read_corrected = (
-        " Its <strong>corrected p</strong> (shown as <em>q</em> where it is a false-discovery "
-        "rate) carries the study's own correction over all of them; read it rather than the "
-        "raw p.</p>"
+        '<p class="method">Its <strong>corrected p</strong> (shown as <em>q</em> where it is a '
+        "false-discovery rate) carries the study's own correction for multiple testing; "
+        "read it rather than the raw p.</p>"
     )
     corrected = _burden_page(
         tmp_path,
@@ -1908,39 +1930,70 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
         [_burden_row(pvalue_adjusted=0.991, pvalue_adjustment="bonferroni")],
     )
     assert "<svg" in _burden_section_text(corrected), "this fixture must draw a forest"
-    assert (
-        '<p class="method">This study reported 138,609 comparisons in all.' + read_corrected
-        in corrected
-    )
+    assert read_corrected in corrected
     assert "judge the raw one against the whole scan" not in corrected
 
+    unplotted_row = _burden_row(
+        study="PMID:34324492",
+        variant_class="cnv_deletion",
+        effect=None,
+        effect_measure=None,
+        effect_bound=None,
+        ci_low=None,
+        ci_high=None,
+        pvalue_adjusted=0.991,
+        pvalue_adjustment="familywise_permutation",
+    )
     unplotted = _burden_page(
         tmp_path / "unplotted",
         facts_uncurated,
+        [unplotted_row],
+        publications=_OTHER_PUBLICATIONS,
+    )
+    assert "<svg" not in _burden_section_text(unplotted), "this fixture must draw no forest"
+    assert read_corrected in unplotted
+
+    uncounted = _OTHER_PUBLICATIONS["PMID:34324492"].model_copy(update={"tests_reported": None})
+    no_count = _burden_page(
+        tmp_path / "no_count",
+        facts_uncurated,
+        [unplotted_row],
+        publications={uncounted.id: uncounted},
+    )
+    assert read_corrected in no_count
+    for page in (corrected, unplotted, no_count):
+        assert "comparisons in all" not in page
+        assert "corrected p</strong> column" not in page
+
+    series = _burden_page(
+        tmp_path / "series",
+        facts_uncurated,
         [
             _burden_row(
-                study="PMID:34324492",
-                variant_class="cnv_deletion",
+                comparator="none",
+                n_control_carriers=None,
+                n_controls=None,
+                control_cohorts=(),
                 effect=None,
                 effect_measure=None,
                 effect_bound=None,
                 ci_low=None,
                 ci_high=None,
-                pvalue_adjusted=0.991,
-                pvalue_adjustment="familywise_permutation",
+                pvalue=None,
+                pvalue_test=None,
             )
         ],
-        publications=_OTHER_PUBLICATIONS,
     )
-    assert "<svg" not in _burden_section_text(unplotted), "this fixture must draw no forest"
-    assert (
-        '<p class="method">This study reported 11,515 comparisons in all.' + read_corrected
-        in unplotted
-    )
-    assert "corrected p</strong> column" not in corrected + unplotted
+    assert _RARE_VARIANT_H2 in series, "the case series must still render its block"
+    assert "corrected p</strong> (shown as" not in series
+    assert "comparisons in all" not in series
 
     plain = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
-    assert "judge the raw one against the whole scan" in plain
+    assert (
+        '<p class="method">This study reported 138,609 comparisons in all. Where it published '
+        "no corrected p, judge the raw one against the whole scan rather than against 0.05 "
+        "&mdash; a Bonferroni threshold over that many is p &lt; 3.6e-07.</p>" in plain
+    )
     assert "read it rather than the raw p" not in plain
 
 
@@ -2096,11 +2149,13 @@ def test_every_particular_caveat_survives_outside_the_fold(
     fold. Reuniting them would bury it one release after it was added.
 
     The pooling caveat's wording became the spec's approved short form on
-    2026-10-26 ("count the same children twice", D50, P7); the rule -- visible
-    outside every fold -- is unchanged. The scan-size assertion is pinned to the
-    method line's own words since the same day: the card's no-correction line
-    also carries "138,609" ("judge its results against its scan of 138,609
-    tests"), so the bare number would pass with the method line folded away.
+    2026-10-26 ("count the same children twice", D50, P7), and "children"
+    became "people" the same day (a shared collection may be a control cohort
+    of adults); the rule -- visible outside every fold -- is unchanged. The
+    scan-size assertion is pinned to the method line's own words since the
+    same day: the card's no-correction line also carries "138,609" ("judge its
+    results against its scan of 138,609 tests"), so the bare number would pass
+    with the method line folded away.
     """
     rows = [
         _burden_row(consequence_class="lof"),
@@ -2122,7 +2177,7 @@ def test_every_particular_caveat_survives_outside_the_fold(
     # The atlas's claim about itself.
     assert "computes none of them" in unfolded
     # The relocated pooling caption -- it qualifies the matrix directly above it.
-    assert "count the same children twice" in unfolded
+    assert "count the same people twice" in unfolded
     # A row's own method note: this is where the TAA contamination, which is not
     # congenital heart disease, reaches a reader at all.
     assert "thoracic aortic aneurysm" in unfolded
@@ -2137,15 +2192,16 @@ def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     """The other half of the rule, so "fold everything" fails as loudly as
     "fold nothing".
 
-    These paragraphs are identical on every page and teach how to read the
-    table rather than saying anything about this gene. Nothing is lost by
+    These paragraphs are identical wherever they render and teach how to read
+    the table rather than saying anything about this gene. Nothing is lost by
     moving them: the unit word is still in every count cell, and the matrix
     renders `not tested` as its own state rather than as a gap.
 
     **They left the gene page on 2026-10-26 (D50)**, and this test was named
     `test_the_general_reading_notes_are_folded_out_of_the_way` until then: they
     were folded under "How to read these numbers" on all 118 pages with a
-    rare-variant section, and are now on `methods.html#rare-variants`, where
+    rare-variant section -- the synonymous paragraph on the 113 of them with a
+    synonymous row -- and are now on `methods.html#rare-variants`, where
     `test_build_methods.py` pins them. What stays on the page is the section's
     one-line attribution, scoped to the study tables and linking there -- the
     evidence matrix beside it shows tallies the atlas derives ("n = N" on 86
@@ -3284,6 +3340,13 @@ def test_the_forest_carries_no_summary_diamond(
     caption = re.sub(r"<title>.*?</title>", "", figure, flags=re.S)
     assert "A forest plot usually ends in a summary diamond" in caption
     assert "no pooled" in caption
+    # "people", not "children" (2026-10-26): a shared collection may be an
+    # adult control cohort, and `shared_cohorts` counts control collections too.
+    assert (
+        "two studies that share a sample collection describe partly the same people, and "
+        "adding their rows would count them more than once." in caption
+    )
+    assert "children" not in caption
     # And the same scoping again, one level in: the caption and the title are
     # two sentences and a check over the figure is answered by either.
     announced = re.search(r"<title>(.*?)</title>", figure, re.S)
@@ -5857,6 +5920,12 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
     the copy is ClinGen-submitted -- folded away or listed -- so a visible ClinGen
     row is never unexplained, and be absent only for "another submitter", which is
     no copy at all.
+
+    **The notice's last sentence says "every copy" since 2026-10-26**, pinned
+    whole. It said "This gene's JSON keeps every record", beneath an intro that
+    now says the table may not be every classification the gene has -- so it
+    read as though the JSON held the out-of-scope records the intro means. It
+    holds none; it does hold every copy (`methods.html#validity` says the same).
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5870,13 +5939,17 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
         cohorts={},
     )
 
-    others = _slice_between(
-        _page(tmp_path, "HGNC_4173.html"), "<h3>Other curators (GenCC)</h3>", ("<h2",)
-    )
+    page = _page(tmp_path, "HGNC_4173.html")
+    others = _slice_between(page, "<h3>Other curators (GenCC)</h3>", ("<h2",))
     assert others.count("<tr><td>") == (1 if listed else 0)
-    assert ("listed here only where it differs" in others) is (
-        copy_overrides.get("submitter", "ClinGen") == "ClinGen"
+    notice = (
+        "<p>ClinGen also submits its own classifications to the Gene Curation Coalition; "
+        "such a copy is listed here only where it differs from the panel record above, "
+        "carries no date, or has no panel record to match. "
+        "This gene's JSON keeps every copy.</p>"
     )
+    assert (notice in others) is (copy_overrides.get("submitter", "ClinGen") == "ClinGen")
+    assert "keeps every record" not in page
 
 
 def test_a_copy_spelling_the_panels_rung_differently_is_still_folded(

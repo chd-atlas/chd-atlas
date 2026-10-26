@@ -263,7 +263,8 @@ page can link the paragraph it shortens.
 - `#validity` says how a gene page lists the mirrored validity records: in two
   groups, which of ClinGen's own GenCC copies are listed, and that a record for
   a disease outside this atlas's remit is not shown. Every gene page's validity
-  table opens with a one-sentence short form of that last point and links here.
+  table's intro carries a one-sentence short form of that last point and links
+  here.
 - `#rare-variants` says how to read a gene page's rare-variant results: that
   the counts and statistics in its study tables are the studies' own, that no
   statistic is pooled across studies, what each count unit means and what an
@@ -1385,13 +1386,29 @@ tables because the evidence matrix beneath it shows tallies the atlas derives
 (how many rows a cell summarises). The reading notes this section folded before
 this release — the count units, what an absent row means, the synonymous
 negative control — are on that page now, as is why a damaging composite row is
-shown. What stays visible, outside every fold: under the matrix, that no
-statistic is pooled across studies; any overlap between the gene's studies; on
-a block from a study by an author of this atlas, a one-line declaration; each
-study's number of comparisons, where `publications.json` records one
-(`tests_reported`), and how to read its p-values against them; where
-a block has a damaging composite, that it is the union of the two rows below
-it; and every row's `method_note` footnote.
+shown. What stays visible beside the matrix, the plots and the tables, outside
+every fold:
+
+- under the matrix, its legend — rows are independent cohort families, and no
+  enrichment at these cohort sizes is not evidence against a gene — and that
+  no statistic is pooled across studies;
+- any sample collection the gene's studies share, as this atlas has recorded
+  them;
+- on a block from a study by an author of this atlas, a one-line declaration;
+- the multiple-testing line. For a study with any row it published no
+  corrected p for, the study's number of tests (`tests_reported` in
+  `publications.json`, where one is recorded) and the Bonferroni threshold
+  over it. `tests_reported` is named on a gene page only for such a study,
+  here and in the card's line for it. For a study that
+  corrected every row, that its corrected p carries its own correction for
+  multiple testing, and no count;
+- where a block has a damaging composite, that it is the union of the two rows
+  below it;
+- a study's own combination of its arms, where it publishes one
+  ([`burden_combined`](#the-bundles-burden_combined-array-one-studys-own-combination-of-its-arms));
+- where a study publishes no effect measure for the gene, a sentence saying so
+  in place of a plot, with its counts and p-values in the table;
+- every row's `method_note` footnote.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:

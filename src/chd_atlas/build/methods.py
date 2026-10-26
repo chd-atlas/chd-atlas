@@ -8,22 +8,28 @@ every page and the part particular to the gene was buried under them. This page
 holds that explanation once; each gene page keeps a short form and a link to the
 section here that states it in full.
 
-**Every sentence below the introduction was moved off a gene page or the gene
-index, and each was re-read in this position.** A sentence's truth conditions
+**Every sentence below the introduction either was moved off a gene page or the
+gene index, or was written here to state in full what a gene page now says in
+one line -- and each was read in this position.** A sentence's truth conditions
 travel with its position (CLAUDE.md section 4.27): "the table below" was true on
 a gene page, false on the gene index and false here, and "this page" here names
-a page with no gene on it. Those that were false here were reworded: the scope
-rule's last clause, and the grade key's dispute and completeness sentences.
-The rest are unchanged because they are true anywhere -- the key's opening
-sentences, and the rung glosses (`render.GRADE_GLOSS`), which stay verbatim on
-purpose because a gene page's card glosses its headline grade from the same
-constant, and one rung must not be glossed two ways.
+a page with no gene on it.
 
-`#validity` (2026-10-26) is the one section whose gene-page sentences did not
-leave: the ClinGen-copy notice stays on the page as it is (P5), and the table's
-intro keeps a short form of its scope. The section states in full what those
-abbreviate, written for a page with no table on it -- so "a gene page lists",
-never "listed here" or "the panel record above".
+* `#scope` was moved: the scope rule and the grade key. Those that were false
+  here were reworded -- the scope rule's last clause, and the grade key's
+  dispute and completeness sentences. The rest are unchanged because they are
+  true anywhere: the key's opening sentences, and the rung glosses
+  (`render.GRADE_GLOSS`), which stay verbatim on purpose because a gene page's
+  card glosses its headline grade from the same constant, and one rung must not
+  be glossed two ways.
+* `#validity` was written new (2026-10-26). Its gene-page sentences did not
+  leave: the ClinGen-copy notice stays on the page (P5), and the table's intro
+  keeps a short form of its scope. The section states in full what those
+  abbreviate, for a page with no table on it -- so "a gene page lists", never
+  "listed here" or "the panel record above".
+* `#rare-variants` is both: three paragraphs moved off every gene page (the
+  folded reading notes and the composite note's second sentence), and two are
+  the full forms of notices a gene page keeps in one line.
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
@@ -112,18 +118,26 @@ SCOPE_RULE: Final = (
 # * "a gene page is not every classification the gene has" was false for 43 of
 #   the 119 published genes, which have no ClinGen or GenCC record for any
 #   disease outside scope. "may not be", as the gene page says.
+#
+# Reworded after review the same day. It opened "Every classification in this
+# atlas is an upstream panel's or submitter's, republished with its provenance
+# intact", which the grade key's first sentence already says two paragraphs up;
+# it is said once, there. "the ClinGen expert panel's own records" became
+# "ClinGen expert panels'", and "A panel may have classified" became "A panel or
+# submitter": the scope filter drops GenCC rows too, and most out-of-scope
+# records are GenCC's (76 published genes have one, 27 an out-of-scope ClinGen
+# record).
 _VALIDITY: Final = (
     '<h2 id="validity">Mirrored validity records</h2>'
-    "<p>Every classification in this atlas is an upstream panel's or submitter's, "
-    "republished with its provenance intact. A gene page lists them in two groups: the "
-    "ClinGen expert panel's own records first, then other curators' submissions to the "
-    "Gene Curation Coalition (GenCC). ClinGen also submits its own classifications to "
-    "GenCC; a gene page lists such a copy only where its mapped grade, date, inheritance "
-    "or disease differs from the panel's own record, or where it carries no date or has "
-    "no panel record to match. Each gene's JSON keeps every copy, listed or not.</p>"
-    "<p>Only records for diseases in this atlas's remit are listed. A panel may have "
-    "classified the same gene for a disease outside it, and that record is not shown, so "
-    "a gene page may not be every classification the gene has.</p>"
+    "<p>A gene page lists its classifications in two groups: ClinGen expert panels' own "
+    "records first, then other curators' submissions to the Gene Curation Coalition "
+    "(GenCC). ClinGen also submits its own classifications to GenCC; a gene page lists "
+    "such a copy only where its mapped grade, date, inheritance or disease differs from "
+    "the panel's own record, or where it carries no date or has no panel record to "
+    "match. Each gene's JSON keeps every copy, listed or not.</p>"
+    "<p>Only records for diseases in this atlas's remit are listed. A panel or submitter "
+    "may have classified the same gene for a disease outside it, and that record is not "
+    "shown, so a gene page may not be every classification the gene has.</p>"
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
@@ -144,37 +158,49 @@ _VALIDITY: Final = (
 #   rounded (PMID:40127276's 0.00583259259259259 reads 0.00583). Each gene's
 #   JSON carries them in full.
 # * The units sentence said `cases` and `controls` "each show observed / total".
-#   A de novo row's `controls` cell is the mutation model's expected count
-#   (`pages._controls`): 108 cells on 36 pages read "0.0358 expected" and the
-#   like. It says so.
+#   On a row tested against a mutation model the `controls` cell is the model's
+#   expected count (`pages._controls`, which keys on the comparator): 108 cells
+#   on 36 pages read "0.0358 expected" and the like. It says so.
+#
+# Reworded after review the same day: "children" -> "people", because
+# `shared_cohorts` counts shared control collections too and a control cohort
+# may be adults (UK Biobank's note: "~500,000 UK adults recruited at ages
+# 40-69"); the overlap clause says what the page can know -- collections shared
+# *as this atlas has recorded them* -- since `shared_cohorts` sees only shared
+# registry ids, and two studies may share individuals no entry names (review
+# raised DDD and DECIPHER; the registry records no link between them); the
+# synonymous paragraph
+# lost "the same uncorrected scale" (true of the one study that publishes a
+# synonymous row, stated in general) and "a scan of that size" (no antecedent
+# here).
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
     "republished as published. The atlas computes none of them and adds no assessment "
     "of them; where a study is by an author of this atlas, its block says so.</p>"
-    # was pages._POOLING_NOTICE in full; "the studies below" -> "its studies"
+    # was pages._POOLING_NOTICE in full
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-    "studies draw on the same sample collection they describe partly the same children, "
-    "so combining their results would count those children twice; a gene page names any "
-    "overlap between its studies where it occurs.</p>"
+    "studies draw on the same sample collection they describe partly the same people, "
+    "so combining their results would count those people twice; a gene page names any "
+    "sample collection its studies share, as this atlas has recorded them.</p>"
     # was pages._BURDEN_PREAMBLE; "In each study's table," anchors what it describes
     "<p>In each study's table, <code>cases</code> and <code>controls</code> each show "
-    "<em>observed / total</em> (for a de novo row, <code>controls</code> is instead the "
-    "count the study's mutation model expected), and <strong>every cell names what it "
-    "counted</strong> &mdash; carriers, alleles, or de novo mutations. The three are not "
-    "interchangeable: a study counting alleles counts a person with two qualifying "
-    "variants twice, and its denominator is roughly twice the number of people "
+    "<em>observed / total</em> (for a row tested against a mutation model, "
+    "<code>controls</code> is instead the count that model expected), and <strong>every "
+    "cell names what it counted</strong> &mdash; carriers, alleles, or de novo mutations. "
+    "The three are not interchangeable: a study counting alleles counts a person with two "
+    "qualifying variants twice, and its denominator is roughly twice the number of people "
     "sequenced. A consequence class or case group with no row is one the study "
     "<strong>did not report</strong>, which is not a null result and does not always "
     "mean no such variant was seen &mdash; studies differ in which classes their "
     "gene-level tables cover.</p>"
-    # was pages._SYNONYMOUS_NOTICE; "above it" -> "beside it", "this size" -> "that size"
+    # was pages._SYNONYMOUS_NOTICE; "above it" -> "beside it"
     "<p>The <strong>synonymous</strong> row is a study's own negative control &mdash; "
-    "synonymous variants should show no enrichment. Read it on the same uncorrected scale "
-    "as the rows beside it: a <em>strongly</em> enriched synonymous row is a warning about "
-    "that gene's comparison, while a nominally significant one is what a scan of that size "
-    "produces by chance. <strong>Only a study that publishes one has it</strong>; a table "
-    "with no synonymous row offers no such check.</p>"
+    "synonymous variants should show no enrichment. Read it on the same scale as the rows "
+    "beside it: a <em>strongly</em> enriched synonymous row is a warning about that "
+    "gene's comparison, while a nominally significant one is what a scan over thousands "
+    "of genes produces by chance. <strong>Only a study that publishes one has "
+    "it</strong>; a table with no synonymous row offers no such check.</p>"
     # was the second sentence of pages._composite_note
     "<p>A <strong>damaging (LOF + missense)</strong> row is the <strong>union</strong> of "
     "the study's loss-of-function and damaging-missense rows, not a third independent "

@@ -255,11 +255,16 @@ _NO_OTHER_CURATOR: Final = (
 # listed record is ClinGen's own submission -- so a ClinGen row under "Other
 # curators" is always explained, and the notice never describes an omission that
 # did not happen.
+#
+# "keeps every copy", not "every record", since 2026-10-26: beneath an intro
+# saying the table may not be every classification the gene has, "every record"
+# read as though the JSON held the out-of-scope records. It holds none, and
+# every copy (591 bundle records, 0 out of scope, all 121 copies).
 _CLINGEN_COPY_NOTICE: Final = (
     "<p>ClinGen also submits its own classifications to the Gene Curation Coalition; "
     "such a copy is listed here only where it differs from the panel record above, "
     "carries no date, or has no panel record to match. "
-    "This gene's JSON keeps every record.</p>"
+    "This gene's JSON keeps every copy.</p>"
 )
 
 _EVIDENCE_HEADERS: Final = ("class", "strength", "summary", "publication")
@@ -551,10 +556,13 @@ _MIRRORED_NOTICE: Final = (
 # The spec's approved short form since 2026-10-26 (D50, P7), made explicit about
 # what would double-count: the spec's "those sharing a collection would count"
 # left the pooling implicit. The full sentence, with how a gene page names an
-# overlap, is on `methods.html#rare-variants`.
+# overlap, is on `methods.html#rare-variants`. "people", not the spec's
+# "children" (2026-10-26): `shared_cohorts` unions case and control collections,
+# and a shared collection may be a control cohort of adults -- UK Biobank's
+# registry note says "~500,000 UK adults recruited at ages 40-69".
 _POOLING_NOTICE: Final = (
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-    "two that share a sample collection would count the same children twice.</p>"
+    "two that share a sample collection would count the same people twice.</p>"
 )
 
 # `_BURDEN_PREAMBLE` and `_SYNONYMOUS_NOTICE` sat here until 2026-10-26: the
@@ -1740,7 +1748,7 @@ def _burden_section(
     which a reader would otherwise get wrong:
 
     * **The rows are per study and are never pooled.** The CHD literature reuses
-      cohorts, so a pooled p-value counts the same children twice. Declining to
+      cohorts, so a pooled p-value counts the same people twice. Declining to
       compute one does not stop a reader doing it by eye, so where two studies
       share a collection the section names it (`shared_cohorts`).
     * **A consequence class with no row is one the study did not report** -- not
@@ -1766,7 +1774,9 @@ def _burden_section(
       promise a check it cannot offer.
 
     The last two bullets' sentences left the page on 2026-10-26 (D50): they
-    were the folded reading notes, identical on every page, and are now on
+    were the folded reading notes, identical wherever they rendered -- the
+    absent-row sentence on all 118 pages with a rare-variant section, the
+    synonymous one on the 113 of them with a synonymous row -- and are now on
     `methods.html#rare-variants` (`methods._RARE_VARIANTS`), stated once with
     their conditions in their own words. The first stays, as the pooling
     caption and the `shared_cohorts` notice.
@@ -1893,7 +1903,8 @@ def _burden_section(
     #
     # The general reading notes -- the units glossary, what an absent cell means,
     # and the synonymous negative control -- were folded here under "How to read
-    # these numbers", identical on all 118 pages carrying a rare-variant section.
+    # these numbers": the first two on all 118 pages carrying a rare-variant
+    # section, the third on the 113 of them with a synonymous row.
     # They moved to `methods.html#rare-variants` on 2026-10-26 (D50), which
     # `_MIRRORED_NOTICE` links; none is lost -- the unit word is still in every
     # cell and the matrix renders `not tested` as its own state.
@@ -2062,36 +2073,49 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
     # PMID:42230622 publishes no correction at all, so the reader needs the
     # denominator; PMID:34324492 corrects every row, so telling them to judge
     # the raw p against the scan would be pointing at a column they should not
-    # be reading. A study that corrected only some rows gets both halves.
+    # be reading. A study with any uncorrected row gets the denominator, worded
+    # for the rows that lack a correction.
+    #
+    # **The count is shown only where the reader must apply it** (2026-10-26).
+    # Both branches opened "This study reported N comparisons in all", and
+    # `tests_reported` does not always count comparisons: PMID:40127276's 248 is
+    # its panel *genes* (`curation/publications.yaml` says so), each tested in
+    # two arms over three consequence classes, so the sentence was false on all
+    # 36 pages carrying that study. Where a study corrected every row the reader
+    # applies no threshold of their own, so no count is needed, and none is
+    # stated; where it did not, the count is the Bonferroni denominator the
+    # sentence after it uses -- true of PMID:42230622, whose 138,609 is one
+    # Fisher test per row of the three sheets of its Supplementary Data 3
+    # (`curation/publications.yaml`). The corrected sentence therefore no
+    # longer reads `tests_reported` at all, and renders whether or not the
+    # publication records one -- but only where a corrected p exists to read.
     correction = ""
     uncorrected = [row for row in rows if row.pvalue is not None and row.pvalue_adjusted is None]
-    if publication is not None and publication.tests_reported:
+    if uncorrected and publication is not None and publication.tests_reported:
         total = publication.tests_reported
         threshold = 0.05 / total
         # "{total:,} such comparisons" until 2026-10-26: "such" pointed back at
         # the design clause, which renders after this one and folded under "How
         # this study counted", so its antecedent was a sentence the reader had
         # not met.
-        correction = f" This study reported {total:,} comparisons in all."
-        if uncorrected:
-            correction += (
-                f" Where it published no corrected p, judge the raw one against the whole "
-                f"scan rather than against 0.05 &mdash; a Bonferroni threshold over that "
-                f"many is p &lt; {threshold:.2g}."
-            )
-        else:
-            # Names the statistic, not "the corrected p column" (P9, 2026-10-26):
-            # where the study has a forest plot that column is folded under "every
-            # figure from this study", and the plot names the same number `q`
-            # where it is a false-discovery rate (`_statistic`). True with a
-            # forest and without one.
-            correction += (
-                " Its <strong>corrected p</strong> (shown as <em>q</em> where it is a "
-                "false-discovery rate) carries the study's own correction over all of them; "
-                "read it rather than the raw p."
-            )
+        correction = (
+            f" This study reported {total:,} comparisons in all. Where it published no "
+            f"corrected p, judge the raw one against the whole scan rather than against "
+            f"0.05 &mdash; a Bonferroni threshold over that many is p &lt; {threshold:.2g}."
+        )
     elif uncorrected:
         correction = " p-values are <strong>uncorrected</strong> as published."
+    elif any(row.pvalue_adjusted is not None for row in rows):
+        # Names the statistic, not "the corrected p column" (P9, 2026-10-26):
+        # where the study has a forest plot that column is folded under "every
+        # figure from this study", and the plot names the same number `q` where
+        # it is a false-discovery rate (`_statistic`). True with a forest and
+        # without one.
+        correction = (
+            " Its <strong>corrected p</strong> (shown as <em>q</em> where it is a "
+            "false-discovery rate) carries the study's own correction for multiple testing; "
+            "read it rather than the raw p."
+        )
 
     if not sentence and not correction:
         return ("", "")
@@ -2928,7 +2952,7 @@ def _forest_caption(
     parts.append(
         "A forest plot usually ends in a summary diamond. There is <strong>no pooled</strong> "
         "estimate here and none is computed anywhere on this site: two studies that share a "
-        "sample collection describe partly the same children, and adding their rows would "
+        "sample collection describe partly the same people, and adding their rows would "
         "count them more than once. "
     )
     if any(row.ci_low is None and row.ci_high is None for row in rows):
