@@ -193,8 +193,17 @@ _SCOPE_SHORT: Final = (
 #   measured 2026-10-26 against `mirrors/clingen_gene_validity.tsv`. Those
 #   records reach no page, so the page could not even show the reader the
 #   record that contradicted it. The scope clause is the grade key's `ungraded`
-#   gloss's (`render.GRADE_GLOSS`), Orphanet path included, so the card and the
-#   key on one page describe one gate.
+#   gloss's (`render.GRADE_GLOSS`, on `methods.html#scope`) and the gene
+#   index's em-dash sentence's, word for word, so the three describe one gate.
+# * **"In scope here" names the list, not a property of a disease.** The clause
+#   read "for a disease an external authority treats as congenital heart
+#   disease, or in which Orphanet records a structural heart malformation in at
+#   least 30% of cases" until 2026-10-26, which reads as a sufficient condition
+#   and was false on FLNA's card: ClinGen grades FLNA Definitive for
+#   periventricular nodular heterotopia (MONDO:0020341), which SCP007 reports
+#   would qualify through Orphanet (ORPHA:98892) and which no curator has
+#   nominated. A disease is in scope only once it is in
+#   `curation/chd_scope.yaml`; `methods.SCOPE_RULE` says how a term gets there.
 # * The opening names the lesion assertion as what is absent whenever the
 #   atlas has curated functional records for the gene; see `_card_curation`.
 _CURATION_BY_PANEL: Final = (
@@ -202,10 +211,9 @@ _CURATION_BY_PANEL: Final = (
 )
 
 _CURATION_BY_AGREEMENT: Final = (
-    "and no ClinGen expert panel has graded this gene for a disease an external authority "
-    "treats as congenital heart disease, or in which Orphanet records a structural heart "
-    "malformation in at least 30% of cases: it is published because the Gene Curation "
-    "Coalition submitters named above independently assert it."
+    "and no ClinGen expert panel has graded this gene for any of the diseases in scope "
+    "here: it is published because the Gene Curation Coalition submitters named above "
+    "independently assert it."
 )
 
 _EM_DASH: Final = "—"
@@ -674,10 +682,10 @@ def _card_curation(fact: GeneFacts) -> str:
     * **not curated, a ClinGen panel holds a record** -- every classification
       on the page is a panel's or a named curator's (97 genes);
     * **not curated, no panel record** -- no ClinGen expert panel has graded
-      the gene for a disease an external authority treats as CHD (or that
-      Orphanet's phenotype frequencies bring into scope), and it is
-      published because the submitters named in the card's `admitted by` row
-      assert it (21 genes). Scoped, because unscoped it is false; see
+      the gene for any of the diseases in scope here, and it is published
+      because the submitters named in the card's `admitted by` row assert it
+      (21 genes). Scoped, because unscoped it is false; and scoped to the
+      list, because scoped to a property of a disease it was false too; see
       `_CURATION_BY_AGREEMENT`;
     * **functional records but no lesion assertion** (latent: the committed
       corpus has no `curation/functional/` directory) -- appends "The atlas
@@ -1492,6 +1500,15 @@ def _orphanet_notes(
     are rendered at the top of the validity section, above both groups. The
     phenotype labels and bands are Orphanet's, verbatim; a subtype also says which
     syndrome its warrant is inherited from, and through which OMIM mapping.
+
+    **Each note's last sentence names its own disease.** It read "The
+    classifications below are for the syndrome, not for heart disease" until
+    2026-10-26, above a table that is not only that syndrome's: NOTCH1's lists
+    an admitting record for a term a ClinGen expert panel scoped (NOTCH1-related
+    AOS spectrum disorder) and an Orphanet record for familial bicuspid aortic
+    valve beneath its two Adams-Oliver notes. "The classifications below for
+    Adams-Oliver syndrome" is true above that table; "the classifications
+    below" was not.
     """
     diseases = sorted({record.disease for record in gene_validity.records} & set(warrants))
     notes = []
@@ -1516,8 +1533,8 @@ def _orphanet_notes(
                 f"(Orphanet, {html.escape(found.orpha)})."
             )
         notes.append(
-            f'<p class="notice-inline">{claim} The classifications below are for the '
-            "syndrome, not for heart disease.</p>"
+            f'<p class="notice-inline">{claim} The classifications below for {label} are for '
+            "the syndrome as a whole, not for heart disease.</p>"
         )
     return "".join(notes)
 

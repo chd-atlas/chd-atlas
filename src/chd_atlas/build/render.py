@@ -514,10 +514,20 @@ GRADE_CHIP_KIND: Final[dict[str, str]] = {
 # statement of what a panel meant by it will supply their own meaning.
 #
 # `ungraded` is the state, not a rung: no expert panel has graded the gene for a
-# disease this atlas treats as CHD, and it is published on submitter agreement
-# instead. Drawn as an outline rather than as the bottom of the ramp, because
-# "nobody graded it" and "graded weakest" are different facts and the second is
-# not implied by the first.
+# disease in scope, and it is published on submitter agreement instead. Drawn as
+# an outline rather than as the bottom of the ramp, because "nobody graded it"
+# and "graded weakest" are different facts and the second is not implied by the
+# first.
+#
+# Its gloss said the gene was ungraded "for a disease an external authority
+# treats as congenital heart disease, or in which Orphanet records a structural
+# heart malformation in at least 30% of cases", and that two or more submitters
+# "independently assert it", until 2026-10-26. The first reads as a property
+# of a disease, and a disease is in scope only once a curator lists it
+# (`pages._CURATION_BY_AGREEMENT` records the gene it was false for); the
+# second is weaker than the gate, which counts a submitter only at `Limited` or
+# better (`validity.agreeing_records`) -- a `Supportive` submission asserts the
+# gene and counts for nothing.
 GRADE_GLOSS: Final[dict[str, str]] = {
     "definitive": (
         "repeatedly demonstrated in research and clinical settings and upheld over time, "
@@ -537,11 +547,9 @@ GRADE_GLOSS: Final[dict[str, str]] = {
         "a panel looked and found no evidence of a relationship to this disease"
     ),
     "ungraded": (
-        "no ClinGen expert panel has graded this gene for a disease an external authority "
-        "treats as congenital heart disease, or in which Orphanet records a structural "
-        "heart malformation in at least 30% of cases. It is published because two or more "
-        "Gene Curation "
-        "Coalition submitters independently assert it, and the gene page names them"
+        "no ClinGen expert panel has graded this gene for any of the diseases in scope here. "
+        "It is published because two or more Gene Curation Coalition submitters classify it "
+        "Limited or better, and the gene page names them"
     ),
 }
 

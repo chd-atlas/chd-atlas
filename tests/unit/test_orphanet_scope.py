@@ -19,6 +19,7 @@ from chd_atlas.orphanet_scope import (
     OrphanetTables,
     Warrant,
     load_orphanet_tables,
+    pinned_structural_phenotypes,
     qualifying,
     qualifying_targets,
     reach,
@@ -26,6 +27,7 @@ from chd_atlas.orphanet_scope import (
     warrant,
 )
 from chd_atlas.tables import MONDO_XREFS, ORPHANET_OMIM, ORPHANET_PHENOTYPES
+from chd_atlas.validate.sources import load_sources
 
 # One term per branch the rule has to tell apart: the root, a septal child with
 # an alt id, the myocardium branch it excludes, and two vascular-branch terms it
@@ -264,15 +266,46 @@ def test_the_three_mirrors_load_into_the_shape_the_rule_reads(tmp_path: Path) ->
     assert tables.xrefs == {"MONDO:0012547": frozenset({"OMIM:610733"})}
 
 
-def test_the_structural_set_over_the_pinned_hpo_release_has_the_measured_size() -> None:
-    """264 terms over `hp-2026-06-23.obo`, alt ids included (measured 2026-10-25).
+def test_the_structural_set_the_build_applies_is_the_one_methods_html_states() -> None:
+    """264 terms over the pinned HPO release, alt ids included (measured 2026-10-25).
 
     An HPO upgrade that moves this changes which syndromes the rule admits
     without any line of this repository changing, so it must fail here and be
-    re-measured on purpose rather than drift in.
+    re-measured on purpose rather than drift in. Read through
+    `pinned_structural_phenotypes` and the source registry, as `build_site` and
+    SCP006 read it, since 2026-10-26; it opened `hp-2026-06-23.obo` by name
+    until then, so re-pinning a new release in `mirrors/sources.yaml` would have
+    changed the rule while this went on measuring the old file.
+
+    **`methods.html#scope` defines a structural heart malformation in words**
+    (`methods.SCOPE_RULE`, pinned as a literal in `test_build_methods.py`), and
+    every term below is a clause of that sentence, measured 2026-10-26 against
+    this release: coarctation of the aorta and a patent ductus arteriosus are
+    counted though HPO files them under vascular morphology; cardiomyopathy,
+    tumours and the pericardium are excluded; the branches kept "still hold
+    some findings that are not malformations, such as a calcified or prolapsing
+    valve"; and pulmonic stenosis, truncus arteriosus and an interrupted aortic
+    arch are not counted -- nor is any subtype this release files under them,
+    which a reader of "pulmonic stenosis is not counted" is entitled to assume
+    (valvular pulmonary stenosis among them; tetralogy of Fallot with pulmonary
+    stenosis *is* counted, as a tetralogy). So widening or narrowing the rule
+    where the sentence names it fails here, and the sentence is reworded on
+    purpose rather than left describing a rule the build no longer applies.
     """
-    obo = Path(__file__).resolve().parents[2] / "ontologies" / "hp-2026-06-23.obo"
-    structural = structural_phenotypes(obo)
+    repo = Path(__file__).resolve().parents[2]
+    registry, _ = load_sources(repo)
+    structural = pinned_structural_phenotypes(repo, registry.ontology_files())
+    assert structural is not None, "the pinned HPO release did not load"
     assert len(structural) == 264
-    assert "HP:0001638" not in structural  # cardiomyopathy
-    assert {"HP:0001631", "HP:0001643", "HP:0001680"} <= structural
+    assert "HP:0001631" in structural  # atrial septal defect
+    # Counted, though HPO files them outside Abnormal heart morphology.
+    assert {"HP:0001680", "HP:0001643"} <= structural
+    # Excluded: cardiomyopathy, a neoplasm of the heart, the pericardium.
+    assert not {"HP:0001638", "HP:0100544", "HP:0001697"} & structural
+    # Kept, and not malformations: aortic valve calcification, mitral valve prolapse.
+    assert {"HP:0004380", "HP:0001634"} <= structural
+    # Not counted, with every subtype this release files under each.
+    pulmonic_stenosis = {"HP:0001642", "HP:0034348", "HP:0034349", "HP:0034350"}
+    truncus = {"HP:0001660", "HP:0004384", "HP:0011608", "HP:0011609", "HP:0011610"}
+    interrupted_arch = {"HP:0011611", "HP:0011612", "HP:0011613", "HP:0011614"}
+    assert not (pulmonic_stenosis | truncus | interrupted_arch) & structural

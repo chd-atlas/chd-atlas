@@ -5881,6 +5881,16 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
     `methods.html#scope` on 2026-10-26 (D50), and its Orphanet clause and
     `scope.json` parenthetical are pinned there, by `test_build_methods.py`.
     The page keeps a short form that names neither.
+
+    **Each note's last sentence names its disease (2026-10-26).** It read "The
+    classifications below are for the syndrome, not for heart disease" on all
+    74 notes over 27 pages, and on NOTCH1's page the classifications below
+    include an admitting record for NOTCH1-related AOS spectrum disorder, a term
+    a ClinGen expert panel scoped, and an Orphanet record for familial bicuspid
+    aortic valve. This fixture carries the same shape: a Holt-Oram record,
+    scoped by an authority, below two Noonan notes. The subtype's literal now
+    runs to the end of its note, so a note that names the wrong one of its two
+    diseases (the syndrome its warrant is inherited from) fails too.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
@@ -5907,15 +5917,20 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
         "<strong>Noonan syndrome is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of its cases</strong>: Abnormal pulmonary valve "
         "morphology at <em>Frequent (79-30%)</em> (Orphanet, ORPHA:648). The classifications "
-        "below are for the syndrome, not for heart disease."
+        "below for Noonan syndrome are for the syndrome as a whole, not for heart disease."
     )
     subtype = (
         "<strong>Noonan syndrome 4 is in scope because Orphanet records a structural heart "
         "malformation in at least 30% of cases of Noonan syndrome</strong>, the syndrome it "
         "is a subtype of (Orphanet maps OMIM:610733 under ORPHA:648): Abnormal pulmonary "
-        "valve morphology at <em>Frequent (79-30%)</em>."
+        "valve morphology at <em>Frequent (79-30%)</em>. The classifications below for "
+        "Noonan syndrome 4 are for the syndrome as a whole, not for heart disease."
     )
     assert direct in section and subtype in section
+    # Each note names its own disease, because the table below it is not only
+    # that syndrome's: Holt-Oram syndrome's record sits under both notes here,
+    # as NOTCH1-related AOS spectrum disorder's does under NOTCH1's.
+    assert "The classifications below are for the syndrome" not in section
     # Sorted by disease id: MONDO:0012547 before MONDO:0018997.
     assert section.index(subtype) < section.index(direct)
     # Above both groups, not under either.
@@ -7454,10 +7469,8 @@ _NOT_CURATED_BY_PANEL: Final = (
                 _gencc("G2P", Classification.DEFINITIVE),
             ),
             "Not yet curated by the atlas, and no ClinGen expert panel has graded this gene for "
-            "a disease an external authority treats as congenital heart disease, or in which "
-            "Orphanet records a structural heart malformation in at least 30% of cases: it is "
-            "published because the Gene Curation Coalition submitters named above "
-            "independently assert it.",
+            "any of the diseases in scope here: it is published because the Gene Curation "
+            "Coalition submitters named above independently assert it.",
             id="not curated, admitted on agreement",
         ),
         pytest.param(
@@ -7485,9 +7498,16 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
       unscoped it is false: ClinGen grades ACTC1 Definitive for hypertrophic
       cardiomyopathy and ELN Definitive for cutis laxa, both admitted here on
       agreement (measured 2026-10-26 against the ClinGen mirror). Its scope
-      clause is the grade key's `ungraded` gloss's, word for word, Orphanet
-      path included, so the two cannot describe the gate differently on one
-      page;
+      clause is the grade key's `ungraded` gloss's and the gene index's,
+      word for word, so the three cannot describe the gate differently.
+      **Scoped to the list, not to a property of a disease**: it read "for a
+      disease an external authority treats as congenital heart disease, or
+      in which Orphanet records a structural heart malformation in at least
+      30% of cases" until 2026-10-26, false on FLNA's card -- ClinGen grades
+      FLNA Definitive for periventricular nodular heterotopia, which would
+      qualify through Orphanet and which no curator has nominated. That
+      clause is asserted absent from the whole page, so it cannot return on
+      another line of the card or in the validity section either;
     * not curated with functional records (latent: 0 genes today) -- the
       sentence names the lesion assertion as what is absent, because "not
       curated by the atlas" beside "the atlas has curated 1 functional record"
@@ -7521,6 +7541,7 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
     rail = _rail_of(page)
 
     assert re.findall(r'<p class="card-curation">(.*?)</p>', rail) == [sentence]
+    assert "in which Orphanet records" not in page
     main = page[page.index("</aside>") :]
     assert "curated by the atlas" not in main.lower()
     assert "not yet curated</strong> a lesion assertion" not in page

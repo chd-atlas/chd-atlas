@@ -120,7 +120,7 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
       restore the old sentence beside the new one and satisfy every positive.
     * **Sliced to the section, because page-wide the fragments could not
       fail.** The grade key's `ungraded` gloss carries "two or more Gene
-      Curation Coalition submitters independently assert it" in the same
+      Curation Coalition submitters classify it Limited or better" in the same
       section's `<dl>`, so the slice is the rule's own `<p>`: rewriting the
       rule to state a **one**-submitter gate survived all 796 tests when the
       check was page-wide (measured 2026-08-06, CLAUDE.md section 4.19).
@@ -132,6 +132,20 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     The full literal pins the wording; the fragments beside it are the
     claims any rewording must keep, so a deliberate edit to the literal is not
     also a silent edit to the gate it describes.
+
+    **Its first part names a list, never a property of a disease**
+    (2026-10-26). It read "for a disease that an external authority treats as
+    congenital heart disease (or in which Orphanet records a structural heart
+    malformation in at least 30% of cases)", which reads as a sufficient
+    condition the build does not apply: SCP007 lists 239 unnominated terms
+    that would qualify on Orphanet's frequencies, FLNA's periventricular
+    nodular heterotopia among them, and Orphanet's own GenCC submissions name
+    Ebstein anomaly, which is not a scope term. So the fragments now include
+    what a term needs to be listed and that a qualifying disease is not in
+    scope until it is; the retired clause is asserted absent from the whole
+    page by `test_no_sentence_the_move_retired_comes_back_here`. Its ontology
+    clauses are held to the set the build computes by
+    `test_orphanet_scope.py::test_the_structural_set_the_build_applies_is_the_one_methods_html_states`.
     """
     section = _section(page, "scope")
     rule = re.search(r'<p class="scope-rule">.*?</p>', section, re.S)
@@ -140,12 +154,21 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     assert sentence == (
         '<p class="scope-rule">A gene is published here when an external authority already '
         "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
-        "panel</strong> classifies it <strong>Limited or better</strong> for a disease that "
-        "an external authority treats as congenital heart disease (or in which "
-        "<strong>Orphanet records a structural heart malformation in at least 30% of "
-        "cases</strong>), or <strong>two or more "
-        "Gene Curation Coalition submitters</strong> independently assert it and no ClinGen "
-        "panel disputes it. "
+        "panel</strong> classifies it <strong>Limited or better</strong> for a disease in scope "
+        "here, or <strong>two or more Gene Curation Coalition submitters</strong> classify it "
+        "Limited or better for one and no ClinGen panel disputes it. A disease is in scope when "
+        "it is one of the terms this atlas lists, and a term is listed only if an external "
+        "authority treats it as congenital heart disease, or if a curator nominates a syndrome "
+        "and <strong>Orphanet records a structural heart malformation in at least 30% of its "
+        "cases</strong> (for a subtype, of the syndrome it belongs to); a disease that would "
+        "qualify is not in scope until it is listed. Here a structural heart malformation is a "
+        "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
+        "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
+        "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
+        "ductus arteriosus. The branches kept still hold some findings that are not "
+        "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
+        "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
+        "arch, are not counted. "
         "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
         "is any gene: every scope term names the authority it came from "
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
@@ -157,14 +180,13 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     )
     for claim in (
         "Limited or better",
-        "two or more Gene Curation Coalition submitters",
+        "two or more Gene Curation Coalition submitters</strong> classify it Limited or better",
         "no ClinGen panel disputes it",
-        "an external authority treats as congenital heart disease",
+        "a term is listed only if an external authority treats it as congenital heart disease",
+        "if a curator nominates a syndrome and <strong>Orphanet records",
+        "a disease that would qualify is not in scope until it is listed",
         "No disease is in scope on this atlas's own judgement",
         "not the same as definitive for congenital heart disease",
-        "for a disease that an external authority treats as congenital heart disease (or in "
-        "which <strong>Orphanet records a structural heart malformation in at least 30% of "
-        "cases</strong>)",
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>)",
     ):
         assert claim in sentence, f"the scope rule no longer says {claim!r}"
@@ -212,7 +234,7 @@ def test_scope_glosses_every_rung_as_one_label_chip_and_gloss(page: str) -> None
         (
             "not classified",
             "chip-ungraded",
-            "two or more Gene Curation Coalition submitters independently assert it",
+            "two or more Gene Curation Coalition submitters classify it Limited or better",
         ),
     )
     pairs = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", legend.group(1), re.S)
@@ -495,6 +517,12 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "the table below",
         # A one-submitter gate is not the gate (2026-08-06).
         "one or more Gene Curation",
+        # A property of a disease, read as a sufficient condition for scope:
+        # FLNA's periventricular nodular heterotopia has it and is not in
+        # scope (2026-10-26). Written to catch the scope rule's form, the grade
+        # key's and the card's alike.
+        "in which Orphanet records",
+        "in which <strong>Orphanet records",
         # The gene page's copy notice (`pages._CLINGEN_COPY_NOTICE`): "here" and
         # "the panel record above" name a table this page does not have (D50).
         "listed here only",

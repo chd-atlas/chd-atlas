@@ -90,15 +90,49 @@ from chd_atlas.models.cohort import Cohort
 # now names both places -- and says "for a gene a ClinGen panel graded", since
 # the 21 genes admitted on submitter agreement have no panel-named disease to
 # show (their card names the submitters instead).
+#
+# Its first part was rewritten on 2026-10-26, after review measured it false
+# read as a rule (each measured that day on the committed mirrors and the
+# pinned HPO release):
+#
+# * It named a *property of a disease* where the code reads a *list*. A disease
+#   is in scope only once it is in `curation/chd_scope.yaml`, on either path:
+#   SCP007 reports 239 unnominated terms that would qualify on Orphanet's
+#   frequencies (FLNA's periventricular nodular heterotopia among them), and
+#   Orphanet's own GenCC submissions name Ebstein anomaly (MONDO:0009144),
+#   which is not a scope term. So the sentence says what a term needs to be
+#   listed, and that a qualifying disease is not in scope until it is.
+# * "independently assert it" was weaker than the gate, which counts a GenCC
+#   submitter only at `Limited` or better (`validity.agreeing_records`).
+# * "Structural heart malformation" is now defined, from
+#   `orphanet_scope.structural_phenotypes` -- and two clauses are narrower
+#   than the text this was drafted from. The excluded branches are named as
+#   *excluded*, not as all the branches that are not malformations: the kept
+#   ones still hold aortic valve calcification, mitral valve prolapse and left
+#   ventricular hypertrophy, and the sentence says so. And a subtype qualifies
+#   on its syndrome's frequency (`Warrant.via == "subtype"`), which the
+#   parenthesis states. `test_the_structural_set_the_build_applies_is_the_one_
+#   methods_html_states` (`test_orphanet_scope.py`) ties every term named here
+#   to the set the build computes, so changing the rule where this names it
+#   fails there until this is reworded.
 SCOPE_RULE: Final = (
     '<p class="scope-rule">A gene is published here when an external authority already '
     "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
-    "panel</strong> classifies it <strong>Limited or better</strong> for a disease that "
-    "an external authority treats as congenital heart disease (or in which "
-    "<strong>Orphanet records a structural heart malformation in at least 30% of "
-    "cases</strong>), or <strong>two or more "
-    "Gene Curation Coalition submitters</strong> independently assert it and no ClinGen "
-    "panel disputes it. "
+    "panel</strong> classifies it <strong>Limited or better</strong> for a disease in scope "
+    "here, or <strong>two or more Gene Curation Coalition submitters</strong> classify it "
+    "Limited or better for one and no ClinGen panel disputes it. A disease is in scope when "
+    "it is one of the terms this atlas lists, and a term is listed only if an external "
+    "authority treats it as congenital heart disease, or if a curator nominates a syndrome "
+    "and <strong>Orphanet records a structural heart malformation in at least 30% of its "
+    "cases</strong> (for a subtype, of the syndrome it belongs to); a disease that would "
+    "qualify is not in scope until it is listed. Here a structural heart malformation is a "
+    "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
+    "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
+    "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
+    "ductus arteriosus. The branches kept still hold some findings that are not "
+    "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
+    "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
+    "arch, are not counted. "
     "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
     "is any gene: every scope term names the authority it came from "
     "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "

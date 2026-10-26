@@ -1437,10 +1437,8 @@ an in-scope record for. The 21 admitted on submitter agreement have no panel
 classification to describe, and say so instead:
 
 > Not yet curated by the atlas, and no ClinGen expert panel has graded this
-> gene for a disease an external authority treats as congenital heart disease,
-> or in which Orphanet records a structural heart malformation in at least 30%
-> of cases: it is published because the Gene Curation Coalition submitters
-> named above independently assert it.
+> gene for any of the diseases in scope here: it is published because the Gene
+> Curation Coalition submitters named above independently assert it.
 
 The scope in that second sentence is part of the claim. Unscoped it is false for
 five of the 21: ClinGen grades ACTC1 Definitive for hypertrophic cardiomyopathy
