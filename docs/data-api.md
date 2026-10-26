@@ -319,9 +319,11 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   dataset and not necessarily one its source declares (a profile dataset's
   record in [`datasets.json`](#datasetsjson) gives the floor and its basis);
   that percentiles are not comparable across organs or developmental stages;
-  and what the charts' axes are. A gene page keeps a one-line form of the
-  first and links here, and each expression chart's folded key ends with a
-  link here.
+  what τ measures and when none is published; what a stage's developmental
+  phases are, where their boundaries come from and how a stage is matched to
+  them; and what the charts' axes are. A gene page keeps a one-line form of
+  the first and links here, and each expression chart's folded key ends with
+  a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.

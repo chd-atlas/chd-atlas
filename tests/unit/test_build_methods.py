@@ -706,13 +706,16 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
 def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -> None:
     """The expression reading notes, moved off every gene page (2026-10-26, D50).
 
-    Four paragraphs, pinned whole. The first is the bulk-dilution notice in
+    Six paragraphs, pinned whole. The first is the bulk-dilution notice in
     full: a gene page keeps one line of it (`pages._BULK_DILUTION_NOTICE`,
     one of the ten caveats the spec keeps visible) and links here. The next
-    two were the page's folded "How to read these figures" notes. The last
-    states in general the axes each chart's visible caption line states of
-    its own figure (D57), and is where the charts' "How to read this chart"
-    toggles link.
+    two were the page's folded "How to read these figures" notes. The next
+    two define tau and the developmental phases, which 118 and 119 gene pages
+    print and nothing on the site defined until review (2026-10-26; each
+    clause's source is recorded in `methods._EXPRESSION`). The last states in
+    general the axes each chart's visible caption line states of its own
+    figure (D57), and is where the charts' "How to read this chart" toggles
+    link.
 
     Each was re-read for a page with no gene, dataset or figure on it, and
     reworded where its words assumed one: "below", "shown below", "on this
@@ -737,7 +740,11 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
       is 24 tpm at 4 wpc and 5 at adolescence, heart's 28 and 6;
     * the small multiples share one axis *within a dataset*
       (`_small_multiples` fits one per dataset block), and a trajectory follows
-      one cardiac organ, its axis fitted to the gene's placed medians there.
+      one cardiac organ, its axis fitted to the gene's placed medians there;
+    * tau's 0 and 1 are the formula's bounds, and no value between is glossed:
+      D39(c) keeps every adjective about a tau off the site;
+    * the phases' source is named in the form the trajectory's key renders
+      `attributed_to`, and a stage matches a phase on `start <= wpc < end`.
 
     Pinned whole rather than paragraph by paragraph, for the reason
     `#rare-variants` is: a `findall` over `<p>` skips an appended `<p class=...>`
@@ -769,6 +776,30 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
         "whole gene set, and an organ's reference distribution itself changes shape over "
         "development. A high percentile shown for one organ or stage says nothing about a "
         "lower one shown for another.</p>"
+        "<p><strong>τ</strong> (tau; Yanai et al. 2005) measures how concentrated a gene's "
+        "expression is across the organs a dataset sampled at one stage, computed on "
+        "log2(median + 1): it is 0 when every organ's median is equal, and 1 when one organ's "
+        "median is above zero and every other's is zero. It says nothing about <em>which</em> "
+        "organ, so beside it a gene page names the organ with the highest median, or says the "
+        "peak is tied. Every organ's median counts, even one below the detection floor; the "
+        "floor decides only whether τ is published at all, and it is not when every organ "
+        "sampled is below it. Where a stage has no τ, the page says why in its place, and each "
+        "gene's JSON carries the formula and the medians beside every τ it publishes.</p>"
+        "<p>A stage's <strong>developmental phases</strong> are the phases of heart "
+        "morphogenesis under way at its age, from a vocabulary transcribed from Buijtendijk "
+        "MFJ, Barnett P, van den Hoff MJB (2020), PMID:32048790. A phase runs from the start "
+        "of one Carnegie stage the review names to the end of another. Each boundary is "
+        "converted to weeks post conception from the day ranges the Human Developmental "
+        "Stages ontology gives its Carnegie stage, not read off the review's prose, which "
+        "counts weeks ordinally: its &ldquo;sixth week&rdquo; is five to six weeks elapsed. "
+        "Where the review names no end, as for heart looping, the atlas derives one from the "
+        "phase's Gene Ontology definition. A stage names every phase under way at its age, "
+        "from the phase's start up to but not including its end, so one stage can name "
+        "several; a stage no phase covers names none and says why, for example that it is "
+        "post-natal or after the curated window. A chart following one cardiac organ shades "
+        "each phase from the first stage "
+        "that names it to the last, and its folded key names the phases and their "
+        "source.</p>"
         "<p>Every expression chart lays its stages out left to right in curated developmental "
         "order, evenly spaced: the axis is <strong>order, not elapsed time</strong>. Within a "
         "dataset, a gene's small multiples &mdash; one panel per organ with a placed "
@@ -813,6 +844,27 @@ def test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own(
     assert (record.floor_source or "").startswith(
         "Curated, not mirrored: the Expression Atlas declares no threshold for this experiment."
     ), record.floor_source
+
+
+def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_records(
+    corpus: Corpus,
+) -> None:
+    """`#expression` names the phases' source as the trajectory's key renders it
+    and says the review names every end but heart looping's (2026-10-26).
+
+    Both are facts about `curation/cardiac_phases.yaml`, which this page is
+    built without, so this holds the sentence to the file: a new source, or a
+    second phase whose end is derived or unstated, makes the paragraph false.
+    """
+    phases = corpus.cardiac_phases
+    assert phases is not None and phases.phases, "no phase vocabulary curated"
+    assert (phases.attributed_to, phases.citation) == (
+        "Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)",
+        "PMID:32048790",
+    )
+    assert {
+        phase.id: phase.end_basis for phase in phases.phases if phase.end_basis != "stated"
+    } == {"heart_looping": "derived"}
 
 
 @pytest.mark.parametrize("built", ["page", "real_page"])
