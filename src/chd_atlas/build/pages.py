@@ -2882,6 +2882,18 @@ def _forest_caption(
 ) -> str:
     """The key. Every clause names a mark that is actually on this panel.
 
+    **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
+    key was one run of up to twelve sentences under every panel -- 185 panels
+    on 114 pages, measured on a build of 9f24190. Only the axis clause is
+    particular to its panel: the measure, its range, and what 1 means for that
+    measure. Every other clause says what a mark means in words that are the
+    same wherever that mark is drawn, so it folds under "How to read this
+    chart", which closes on a link to `methods.html#rare-variants`, where the
+    key is stated once in general. **The fold changed no clause's condition**:
+    each still renders only beside its mark, inside the toggle. The muted
+    clause alone was reworded, to name the row's role ("its negative
+    control") instead of linking the section the toggle already links.
+
     Conditional clause by clause, for the reason `_composite_note` is
     conditional (and `_SYNONYMOUS_NOTICE` was) and `_POOLING_NOTICE` had to be
     reworded when it moved (CLAUDE.md section 4.27): a sentence's truth
@@ -2993,17 +3005,28 @@ def _forest_caption(
             )
     if any(row.consequence_class == "synonymous" for row in rows):
         # What this clause owes the reader is what the *muting* means, which
-        # nothing else on the page says. Why a synonymous row calibrates the
-        # others is `methods.html#rare-variants`'s, so the clause links it. It
-        # pointed at "<em>How to read these numbers</em>, above" until
-        # 2026-10-26, a fold that left the page that day (D50) -- on 113 pages
-        # it would have pointed at nothing.
+        # nothing else on the panel says, and the row's role, in two words.
+        # Why a synonymous row calibrates the others is
+        # `methods.html#rare-variants`'s, which the toggle this clause sits in
+        # closes on a link to. It pointed at "<em>How to read these
+        # numbers</em>, above" until 2026-10-26, a fold that left the page that
+        # day (D50), and then for one revision at that section by a link of its
+        # own -- a second link to the same place, one sentence before the
+        # toggle's.
         parts.append(
-            "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, "
-            "drawn apart from the results it calibrates; "
-            '<a href="../methods.html#rare-variants">How to read these results</a> says why.'
+            "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
+            "negative control, drawn apart from the results it calibrates."
         )
-    return f"<figcaption>{''.join(parts).strip()}</figcaption>"
+    # The axis clause is first and unconditional, and the pooling clause is
+    # unconditional too, so `rest` is never empty.
+    axis, rest = parts[0], "".join(parts[1:]).strip()
+    return (
+        f"<figcaption><p>{axis.strip()}</p>"
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+        f"<p>{rest}</p>"
+        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p>'
+        "</details></figcaption>"
+    )
 
 
 def _forest(rows: Sequence[BurdenRow], measure: str, study_label: str) -> str:

@@ -29,7 +29,9 @@ a page with no gene on it.
   "listed here" or "the panel record above".
 * `#rare-variants` is both: three paragraphs moved off every gene page (the
   folded reading notes and the composite note's second sentence), and two are
-  the full forms of notices a gene page keeps in one line.
+  the full forms of notices a gene page keeps in one line. Two more state in
+  general what each forest plot's folded key says of its own marks (D57), and
+  what a block with no effect measure shows instead of a plot.
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
@@ -207,6 +209,34 @@ _RARE_VARIANTS: Final = (
     "result &mdash; the same variants are counted in both. It is shown because a study "
     "that defines its findings by the composite publishes a p-value for it that is not "
     "derivable from the other two.</p>"
+    # The forest key in general; each panel's own key, conditional clause by
+    # clause, is folded under "How to read this chart" (`pages._forest_caption`,
+    # D57). Each clause measured against a real build of 9f24190 before it was
+    # stated in general: all 29 right arrows are odds ratios with 0 control
+    # carriers and a published lower bound; all 257 left arrows have 0 case
+    # carriers; every plotted study corrects every row or none. "contains other
+    # rows in the same panel" was false for 10 union-tagged rows, on 10 panels,
+    # that contain exactly one other drawn row, so it says "at least one", as
+    # each panel's key does.
+    "<p>A forest plot shows each row's effect and interval on a logarithmic axis. A "
+    "<strong>filled</strong> marker is a row that survived its own study's correction for "
+    "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
+    "study published no correction at all &mdash; the atlas computes none of its own. A "
+    "forest plot usually ends in a summary diamond; these have none, because no pooled "
+    "estimate is computed anywhere on this site. A <strong>hatched</strong> bar means no "
+    "interval was published for that row, not a wide one. An arrow to the "
+    "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
+    "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
+    "<strong>left</strong> is an effect of zero &mdash; no case carried the variant "
+    "&mdash; which a logarithmic axis has no position for. A row tagged "
+    "<strong>union</strong> contains at least one other row in the same panel and is not "
+    "an independent finding. A <strong>muted</strong> row is a study's synonymous row, "
+    "drawn apart from the results it calibrates.</p>"
+    # The general form of `pages._NO_EFFECT_MEASURE`, which a block shows in
+    # place of a plot (77 pages, every one in PMID:34324492's block).
+    "<p>A study that publishes <strong>no effect measure</strong> for a gene &mdash; no "
+    "odds ratio, enrichment or rate ratio &mdash; has nothing to place on an effect axis, "
+    "so its block shows its counts and p-values in a table instead of a plot.</p>"
 )
 
 _INTRO: Final = (

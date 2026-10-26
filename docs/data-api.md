@@ -268,9 +268,11 @@ page can link the paragraph it shortens.
 - `#rare-variants` says how to read a gene page's rare-variant results: that
   the counts and statistics in its study tables are the studies' own, that no
   statistic is pooled across studies, what each count unit means and what an
-  absent row does not mean, the synonymous negative control, and what a
-  damaging composite row is. A gene page keeps one-line forms of the first two
-  and links here.
+  absent row does not mean, the synonymous negative control, what a
+  damaging composite row is, what each mark on a forest plot means, and what a
+  study block with no effect measure shows instead of a plot. A gene page keeps
+  one-line forms of the first two and links here, and each forest plot's
+  folded key ends with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1409,6 +1411,14 @@ every fold:
 - where a study publishes no effect measure for the gene, a sentence saying so
   in place of a plot, with its counts and p-values in the table;
 - every row's `method_note` footnote.
+
+Each forest plot — one per study and effect measure — shows one line of its
+caption: the axis, naming the effect measure, its range on a logarithmic scale
+and what the line at 1 means for that measure. The rest of its key is folded
+under *How to read this chart*: what each mark means — filled and hollow
+markers, hatched bars, arrows, muted and `union`-tagged rows — each only where
+the panel draws one, and why there is no summary diamond, ending with a link to
+[`methods.html#rare-variants`](#methodshtml), which states the key in general.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:

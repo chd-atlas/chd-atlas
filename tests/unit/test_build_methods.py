@@ -282,13 +282,13 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
     """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
 
-    Five paragraphs, each pinned whole. The first two are the full forms of the
+    Seven paragraphs, each pinned whole. The first two are the full forms of the
     two notices a gene page keeps in one line (`pages._MIRRORED_NOTICE`, which
     links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
-    "How to read these numbers" notes; the last was the second sentence of its
-    composite note. Each was re-read for a page with no table on it: "In each
-    study's table" anchors what the units sentence describes, and "the rows
-    above it" became "beside it".
+    "How to read these numbers" notes; the fifth was the second sentence of its
+    composite note; the last two are below. Each was re-read for a page with no
+    table on it: "In each study's table" anchors what the units sentence
+    describes, and "the rows above it" became "beside it".
 
     Recorded decisions that moved with them:
 
@@ -335,6 +335,18 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     over the section skips any `<p class=...>` or `<details>` appended to it:
     measured in review, a composite note, a disclosure and a "How to read these
     numbers" fold appended to this section all passed.
+
+    **Two paragraphs were added with the forest key's fold (2026-10-26,
+    D57)**: the key each forest plot now folds behind "How to read this
+    chart", stated once in general, and what a block with no effect measure
+    shows instead of a plot. Every mark clause was measured against a real
+    build of 9f24190 before it was written in general: all 29 right arrows
+    are odds ratios with 0 control carriers and a published lower bound; all
+    257 left arrows have 0 case carriers; every plotted study either corrects
+    every row or none. One clause is narrower than the plan's text: "contains
+    other rows in the same panel" was false for 10 union-tagged rows, on 10
+    panels, that contain exactly one other drawn row -- "at least one other
+    row", as each panel's own key says.
     """
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
@@ -365,6 +377,23 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "result &mdash; the same variants are counted in both. It is shown because a study "
         "that defines its findings by the composite publishes a p-value for it that is not "
         "derivable from the other two.",
+        "A forest plot shows each row's effect and interval on a logarithmic axis. A "
+        "<strong>filled</strong> marker is a row that survived its own study's correction for "
+        "multiple testing; a <strong>hollow</strong> marker is a row that did not, or whose "
+        "study published no correction at all &mdash; the atlas computes none of its own. A "
+        "forest plot usually ends in a summary diamond; these have none, because no pooled "
+        "estimate is computed anywhere on this site. A <strong>hatched</strong> bar means no "
+        "interval was published for that row, not a wide one. An arrow to the "
+        "<strong>right</strong> is an effect unbounded above &mdash; no control carried the "
+        "variant &mdash; so the study's lower bound is the whole finding; an arrow to the "
+        "<strong>left</strong> is an effect of zero &mdash; no case carried the variant "
+        "&mdash; which a logarithmic axis has no position for. A row tagged "
+        "<strong>union</strong> contains at least one other row in the same panel and is not "
+        "an independent finding. A <strong>muted</strong> row is a study's synonymous row, "
+        "drawn apart from the results it calibrates.",
+        "A study that publishes <strong>no effect measure</strong> for a gene &mdash; no "
+        "odds ratio, enrichment or rate ratio &mdash; has nothing to place on an effect axis, "
+        "so its block shows its counts and p-values in a table instead of a plot.",
     ]
     assert _section(page, "rare-variants") == (
         '<h2 id="rare-variants">Rare-variant association</h2>'
@@ -399,6 +428,10 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "the same children",
         # True of one study, stated in general (2026-10-26).
         "uncorrected scale",
+        # The forest key's own deictics: no panel and no study is in sight here,
+        # so its clauses are restated in general, never pasted (D57).
+        "in this panel",
+        "this study's",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -> None:

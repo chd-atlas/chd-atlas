@@ -2212,10 +2212,12 @@ def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     The moved paragraphs are asserted absent from the **whole** page, in both
     apostrophe spellings, by a phrase unique to each, not by "negative
     control": the forest key may name the synonymous row's role, and a
-    negative on that phrase would fail on a caption it was never about. The
-    fixture is a synonymous row, so the forest's muted clause renders, and it
-    must point at the notes where they now are rather than at a fold that has
-    left the page.
+    negative on that phrase would fail on a caption it was never about -- and
+    since the forest key folded behind its own toggle (2026-10-26, D57) it
+    does: its muted clause says "its negative control". The fixture is a
+    synonymous row, so that clause renders, and it must not point at a fold
+    that has left the page; the toggle it sits in closes on a link to the
+    notes where they now are.
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row(consequence_class="synonymous")])
     section = _burden_section_text(page)
@@ -2228,9 +2230,10 @@ def test_the_general_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
     assert '<details class="reading-notes"><summary>How to read these numbers' not in section
     figure = _forest_figures(section)[0]
     assert (
-        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, drawn "
-        "apart from the results it calibrates; "
-        '<a href="../methods.html#rare-variants">How to read these results</a> says why.' in figure
+        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
+        "negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+        in figure
     )
     for text in (page, html.unescape(page)):
         for moved in (
@@ -3291,9 +3294,13 @@ def test_the_axis_key_glosses_the_null_line_in_its_own_panels_vocabulary(
     )
 
     figure = _forest_figures(section)[0]
-    axis = re.search(r"Axis: .*?\. ", figure, re.S)
+    # The axis line's own `<p>`, the caption's one visible line (D57). Until
+    # 2026-10-26 the caption was one run of sentences and this matched up to
+    # the first ". "; the axis sentence now ends at `</p>`, so that pattern
+    # would run on into the folded key and check a slice it was not about.
+    axis = re.search(r"<figcaption><p>(Axis: .*?)</p>", figure, re.S)
     assert axis is not None, "the panel prints no axis sentence"
-    sentence = axis.group(0)
+    sentence = axis.group(1)
 
     assert f"<strong>{label}</strong>" in sentence
     assert f"the vertical line is <strong>1</strong>, {gloss}." in sentence
@@ -3353,6 +3360,129 @@ def test_the_forest_carries_no_summary_diamond(
     assert announced is not None, "the figure announces nothing to a screen reader"
     assert "no pooled summary" in announced.group(1)
     assert "a pooled summary" not in announced.group(1).replace("no pooled summary", "")
+
+
+def test_the_forest_key_folds_behind_one_visible_axis_line(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """D57: a chart caption is one visible line plus a "How to read this chart" toggle.
+
+    The key was one `<figcaption>` of up to twelve sentences under every panel
+    -- 185 panels on 114 pages, measured on a build of 9f24190. Only the axis
+    clause is particular to its panel (the measure, its range, and what 1
+    means for that measure), so it alone stays in sight; every other clause
+    describes a mark in words that are the same wherever that mark is drawn,
+    and folds. **Each clause keeps its condition**: the tests above that
+    assert a clause renders only beside its mark slice the figure, which
+    contains the toggle, so they hold unchanged; this one asserts where the
+    clauses sit.
+
+    One panel that draws every mark, so every conditional clause renders: a
+    surviving composite (filled), an arrow to the right (unbounded, its
+    correction failed: hollow), an arrow to the left (an effect of zero), a
+    stratum union whose non-syndromic half is absent (the not-fully-split
+    warning), and a synonymous row with no interval (hatched and muted).
+
+    Both halves are pinned whole, as literals, so a clause that leaves the
+    fold, drops out or changes fails here. That pins two clauses nothing
+    pinned before (inventory finding 1) -- the left arrow and the muted row --
+    and the muted clause changed on the fold: it ended "How to read these
+    results says why", a link to the same section the toggle now closes on,
+    so it names the row's role itself ("its negative control").
+    """
+    survived = {"pvalue_adjusted": 0.0037, "pvalue_adjustment": "benjamini_hochberg"}
+    placed: dict[str, object] = {"effect_bound": None}
+    page = _burden_page(
+        tmp_path,
+        facts_uncurated,
+        [
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="damaging",
+                effect=2.45,
+                ci_low=1.2,
+                ci_high=8.1,
+                **placed,
+                **survived,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="lof",
+                pvalue_adjusted=0.42,
+                pvalue_adjustment="benjamini_hochberg",
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="missense_damaging",
+                n_case_carriers=0,
+                effect=0.0,
+                ci_low=0.0,
+                ci_high=3.2,
+                pvalue_adjusted=1.0,
+                pvalue_adjustment="benjamini_hochberg",
+                **placed,
+            ),
+            _burden_row(
+                cohort_stratum="syndromic",
+                consequence_class="lof",
+                effect=3.1,
+                ci_low=1.4,
+                ci_high=9.0,
+                **placed,
+            ),
+            _burden_row(
+                cohort_stratum="all",
+                consequence_class="synonymous",
+                effect=1.1,
+                ci_low=None,
+                ci_high=None,
+                pvalue_adjusted=0.9,
+                pvalue_adjustment="benjamini_hochberg",
+                **placed,
+            ),
+        ],
+    )
+
+    figure = _forest_figures(_burden_section_text(page))[0]
+    caption = re.search(r"<figcaption>(.*?)</figcaption>", figure, re.S)
+    assert caption is not None, "the forest carries no caption"
+    visible, toggle, folded = caption.group(1).partition(
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+    )
+    assert toggle, "the forest key is not folded behind a toggle"
+    assert visible == (
+        "<p>Axis: <strong>OR</strong> on a logarithmic scale, 0.562 to 50; the vertical "
+        "line is <strong>1</strong>, no association.</p>"
+    )
+    assert folded == (
+        "<p>A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
+        "study's correction for multiple testing. "
+        "A <strong>hollow</strong> marker is a row that <strong>did not survive</strong> its "
+        "own study's correction for multiple testing, or whose study published no correction "
+        "at all &mdash; the atlas computes none of its own. "
+        "A forest plot usually ends in a summary diamond. There is <strong>no pooled</strong> "
+        "estimate here and none is computed anywhere on this site: two studies that share a "
+        "sample collection describe partly the same people, and adding their rows would "
+        "count them more than once. "
+        "A <strong>hatched</strong> bar means <strong>no interval published</strong> for "
+        "that row, not a wide one. "
+        "An arrow to the <strong>right</strong> is an effect unbounded above &mdash; no "
+        "control carried the variant &mdash; so the study's lower bound is the whole "
+        "finding and there is no point estimate to place. "
+        "An arrow to the <strong>left</strong> is an effect of zero &mdash; no case "
+        "carried the variant &mdash; which a logarithmic axis has no position for. "
+        "A row tagged <strong>union</strong> contains at least one other row in this panel "
+        "and is not an independent finding: <code>damaging</code> is the loss-of-function "
+        "and damaging-missense rows together; <code>all cases</code> is the syndromic and "
+        "non-syndromic rows together. "
+        "Here a tagged row is <strong>not fully split</strong>: at least one of the rows it "
+        "contains is not itself plotted, so what sits under a union on this panel is part of "
+        "it and not all of it. The table below carries every row this study published for "
+        "this gene. "
+        "The <strong>muted</strong> row is this study's <strong>synonymous</strong> row, its "
+        "negative control, drawn apart from the results it calibrates.</p>"
+        '<p><a href="../methods.html#rare-variants">How to read this atlas</a></p></details>'
+    )
 
 
 def test_a_forest_never_replaces_the_figures_it_summarises(
