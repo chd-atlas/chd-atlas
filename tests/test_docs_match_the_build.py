@@ -552,7 +552,21 @@ def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Pa
         symbols = {g["hgnc_id"]: g["symbol"] for g in csv.DictReader(handle, delimiter="\t")}
     assert len(empty) == 1, f"{len(empty)} rows are empty on both sides; the doc names one"
     assert f"`{empty[0]['study']}` does publish a row with zeros on both sides" in section
-    assert f"{symbols[empty[0]['gene']]}'s" in section
+    # The row named whole: its gene, class and design (review, 2026-10-26).
+    named = {"lof": "loss-of-function"}[empty[0]["consequence_class"]]
+    design = {"control_cohort": "case-control"}[empty[0]["comparator"]]
+    assert f"{symbols[empty[0]['gene']]}'s {named} {design} row" in section
+
+    # PMID:34324492's denominators, which the doc sets against the filtered set
+    # its article's methods describe. Every row of that study carries the same
+    # two, so the doc can state them once.
+    cnv = [r for r in mirror if r["study"] == "PMID:34324492"]
+    [n_cases] = {int(r["n_cases"]) for r in cnv}
+    [n_controls] = {int(r["n_controls"]) for r in cnv}
+    assert (
+        f"For `PMID:34324492` that last step is open. Its rows publish the {n_cases:,} cases "
+        f"and {n_controls:,} controls the study's S1 Table gives" in section
+    )
 
 
 def test_the_independent_datasets_section_states_the_shape_the_build_publishes(
@@ -1134,6 +1148,10 @@ def test_the_phase_paragraphs_state_each_end_basis_and_the_phases_no_stage_reach
     assert len(derived) == 1, "the doc names one `derived` phase"
     phase = derived[0]
     assert f"`{phase.id}` is the one `derived` phase" in section
+    assert (
+        f"the source states when looping starts ({phase.start_carnegie_stage}) and never "
+        "when it ends" in section
+    )
     assert f"{phase.end_carnegie_stage}, {phase.end_wpc:g} wpc (`{phase.end_hsapdv_id}`)" in section
     assert not [p for p in phases if p.end_basis.value == "not_stated"]
     assert f"None of the {six} is `not_stated` today" in section
@@ -1161,6 +1179,50 @@ def test_the_phase_paragraphs_state_each_end_basis_and_the_phases_no_stage_reach
     assert "never appears in `phase_ids` at all" not in section
 
 
+def _abridged(block: str) -> Any:
+    """A JSON example abridged with `…`, parsed, each `…` kept as a marker.
+
+    An object's trailing `, … }` becomes a `"…"` key and any other `…` an array
+    item `"…"`, so `_agrees` can tell an abridged value from a complete one.
+    """
+    keyed = re.sub(r",\s*…\s*\}", ', "…": "…" }', block)
+    return json.loads(re.sub(r'(?<!")…(?!")', '"…"', keyed))
+
+
+def _agrees(documented: Any, published: Any, at: str = "") -> None:
+    """Every value an example shows is the published one, and only `…` omits.
+
+    An object marked `…` may leave keys out and an array ending in `…` may
+    leave trailing items out; an unmarked object or array must be complete.
+    Leaves compare with their type as well as their value, because `0 ==
+    False` (CLAUDE.md section 5).
+    """
+    if isinstance(documented, dict):
+        assert isinstance(published, dict), at
+        shown = {key: value for key, value in documented.items() if key != "…"}
+        if "…" not in documented:
+            assert set(shown) == set(published), f"{at}: keys differ and nothing is marked …"
+        for key, value in shown.items():
+            assert key in published, f"{at}.{key} is not published"
+            _agrees(value, published[key], f"{at}.{key}")
+    elif isinstance(documented, list):
+        assert isinstance(published, list), at
+        abridged = bool(documented) and documented[-1] == "…"
+        shown_items = documented[:-1] if abridged else documented
+        if abridged:
+            assert len(shown_items) < len(published), f"{at}: marked … and omits nothing"
+        else:
+            assert len(shown_items) == len(published), (
+                f"{at}: {len(published)} items published, {len(shown_items)} shown, no …"
+            )
+        for index, (item, actual) in enumerate(zip(shown_items, published, strict=False)):
+            _agrees(item, actual, f"{at}[{index}]")
+    else:
+        assert (type(documented), documented) == (type(published), published), (
+            f"{at}: the doc shows {documented!r}, the build publishes {published!r}"
+        )
+
+
 def test_the_examples_that_claim_to_be_real_are_the_ones_the_build_publishes(site: Path) -> None:
     """The opening line says every example is a real build's unless it says
     otherwise. Measured 2026-10-26, four said nothing and were not: an
@@ -1169,10 +1231,21 @@ def test_the_examples_that_claim_to_be_real_are_the_ones_the_build_publishes(sit
     the build publishes (TBX5's `HOS`), and a contested browse row no
     published gene has. The bundle example also dropped three of its 23 keys.
 
-    Each real example is compared with the published object -- values where
-    the block is valid JSON, key sets where it is abridged with `…` -- and
-    each illustrative one is asserted to be labelled so and to show a shape the
+    Each real example is compared with the published object, value by value
+    -- through `_agrees` where it is abridged with `…` -- and each
+    illustrative one is asserted to be labelled so and to show a shape the
     build really has no instance of.
+
+    **The abridged bundle and `omics` examples were compared by key set alone
+    until review on 2026-10-26** (plus `admitted_by`'s values), so
+    `asserted_by`'s `count` and `omics.profiles.count` could be edited to any
+    number with every test green, and the `burden` array showed a
+    PMID:42230622 row as its only item where TBX5's first of 14 is
+    PMID:40127276's. `_agrees` reads each `…` as the one mark of an omission:
+    every value shown must be published and every unmarked array and object
+    complete. Two more unmarked abridgements in the bundle example were marked
+    with it: `burden_combined` showed one of TBX5's 3 objects, and the
+    assertion object 3 of its 13 keys.
     """
     doc = DOC.read_text()
     tbx5 = json.loads((site / "genes" / "HGNC_11604.json").read_text())
@@ -1182,15 +1255,8 @@ def test_the_examples_that_claim_to_be_real_are_the_ones_the_build_publishes(sit
         opening = text.index("```json\n") + len("```json\n")
         return text[opening : text.index("\n```", opening)]
 
-    bundle = block("## `genes/<slug>.json`")
-    assert set(re.findall(r'^  "(\w+)":', bundle, re.M)) == set(tbx5)
-    admitted = re.search(r'"admitted_by": (\{.*?\}),\n  "asserted_by"', bundle, re.S)
-    assert admitted and json.loads(admitted.group(1)) == tbx5["admitted_by"]
-
-    omics = block("## `omics/<modality>/<accession>.json`")
-    assert set(re.findall(r'^    "(\w+)": \{', omics, re.M)) == set(tbx5["omics"])
-    row = re.search(r'(\{ "dataset".*?\})', omics, re.S)
-    assert row and json.loads(row.group(1)) == tbx5["omics"]["profiles"]["top"][0]
+    _agrees(_abridged(block("## `genes/<slug>.json`")), tbx5, "bundle")
+    _agrees(_abridged(block("## `omics/<modality>/<accession>.json`")), {"omics": tbx5["omics"]})
 
     variants = json.loads((site / "variants" / "index.json").read_text())
     assert _example("## `variants/index.json`") == variants

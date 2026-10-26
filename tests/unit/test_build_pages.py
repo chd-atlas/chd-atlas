@@ -616,6 +616,30 @@ def test_a_contested_gene_is_never_chipped_as_settled(
     cells = re.findall(r"<td>(.*?)</td>", row.group(), re.S)
     assert cells[2] == (f"refuted {_CONFLICTING_EVIDENCE_CHIP}" if conflicting else "refuted")
 
+    # **A contested gene no panel graded keeps its chip, beside the em dash**
+    # (review, 2026-10-26). A GenCC dispute is no veto, so a gene admitted on
+    # submitter agreement can carry the flag with a null headline; no published
+    # gene does today, and suppressing the chip wherever the headline is null
+    # survived the full suite. `data-confidence` stays empty: the facet has no
+    # grade to match.
+    ungraded = tmp_path / "ungraded"
+    build_gene_index_page(
+        {GATA4: replace(facts[GATA4], headline_confidence=None)},
+        Emitter(root=ungraded),
+        symbols={GATA4: "GATA4"},
+        validity={GATA4: validity},
+        burden_counts={},
+    )
+    row = re.search(
+        r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>",
+        _page(ungraded, "index.html"),
+        re.S,
+    )
+    assert row is not None, "the gene index has no row for the ungraded gene"
+    assert 'data-confidence=""' in row.group()
+    cells = re.findall(r"<td>(.*?)</td>", row.group(), re.S)
+    assert cells[2] == (f"— {_CONFLICTING_EVIDENCE_CHIP}" if conflicting else "—")
+
 
 def test_every_gene_in_the_facts_gets_exactly_one_page(
     tmp_path: Path,
@@ -2517,6 +2541,17 @@ _MATRIX_CELL: Final = re.compile(
             id="TBX5: unbounded, the lower bound kept",
         ),
         pytest.param(
+            _burden_row(
+                cohort_stratum="nonsyndromic",
+                consequence_class="missense_damaging",
+                n_cases=2405,
+                ci_low=3.5212,
+                pvalue=0.0025639,
+            ),
+            "OR ∞ (CI 3.52–∞)",
+            id="ZFPM1: the lower bound at three significant figures",
+        ),
+        pytest.param(
             _burden_row(ci_low=None),
             "OR ∞",
             id="unbounded with no lower bound to keep",
@@ -2546,6 +2581,11 @@ def test_the_matrix_cell_drops_the_interval_but_never_the_measure(
     contradicts it out of sight. The bare form is left only where there is no
     bound to keep. Asserted on the cell's visible text, sliced from its `title`,
     which carries the interval wherever the row has one.
+
+    **The bound is formatted, and TBX5's cannot show it**: 0.786 prints the same
+    raw as at three significant figures, so printing `ci_low` unformatted
+    survived the full suite (review, 2026-10-26). ZFPM1's non-syndromic
+    missense row, 3.5212, is a real published bound whose two forms differ.
     """
     page = _burden_page(tmp_path, facts_uncurated, [row])
     section = _burden_section_text(page)
@@ -6976,6 +7016,24 @@ def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
             ("corrected", "OR 2.31; 0.00944 (Benjamini-Hochberg)", "OR 2.31", "q 0.00944"),
             id="corrected by its survivor, not by a lower raw p no correction cleared",
         ),
+        pytest.param(
+            [
+                _sierant_de_novo(effect=40.45, pvalue=3.68e-06, pvalue_adjusted=9.1264e-05),
+                _sierant_de_novo(
+                    consequence_class="missense_damaging",
+                    effect=54.1,
+                    pvalue=1.17e-06,
+                    pvalue_adjusted=0.00014508,
+                ),
+            ],
+            (
+                "corrected",
+                "enrichment 40.5; 9.13e-05 (Benjamini-Hochberg)",
+                "enrichment 40.5",
+                "q 9.13e-05",
+            ),
+            id="RAF1: two survivors, named by the lower q, not the lower raw p",
+        ),
     ],
 )
 def test_the_matrix_cell_names_a_row_its_state_is_true_of(
@@ -6998,6 +7056,13 @@ def test_the_matrix_cell_names_a_row_its_state_is_true_of(
     1.2e-5 sorts before the survivor's q of 0.00944. It names the survivor.
     Both read `concordance.deciding_rows`, which `family_state` reads its tier
     from, so the glyph and the named row cannot come apart again.
+
+    **Among rows that all decide, the corrected p ranks them, not the raw one.**
+    The third case is RAF1's de novo cell: its `damaging` row has the lower q
+    (9.13e-05 against 1.45e-04) and its missense row the lower raw p (1.17e-06
+    against 3.68e-06), so a sort on raw p alone names the other row. Measured
+    on a real build (review, 2026-10-26): that mutant changes the named row in
+    8 of 109 enriched cells, and survived the full suite until this case.
     """
     page = _burden_page(tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES)
     matrix = _slice_between(_burden_section_text(page), '<table class="matrix">', ("</table>",))

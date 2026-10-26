@@ -603,12 +603,13 @@ abridged, and each is documented in full further down.
                    "submitters": [] },
   "asserted_by": { "count": 6, "institutions": ["Ambry Genetics", "ClinGen", "G2P", … ] },
   "publications": ["PMID:8988165"],
-  "assertions": [ { "id": "CHDA:AST:0000001", "lesion_groups": ["septal"], "evidence": [ … ] } ],
+  "assertions": [ { "id": "CHDA:AST:0000001", "lesion_groups": ["septal"], "evidence": [ … ], … } ],
   "functional": [],
   "variants": [],
   "omics": { "profiles": { "count": 119, "shards": ["omics/profiles/E-MTAB-6814.json"], "top": [ … ] } },
-  "burden": [ { "study": "PMID:42230622", "cohort_stratum": "all", … } ],
-  "burden_combined": [ { "study": "PMID:40127276", "consequence_class": "damaging", … } ],
+  "burden": [ { "study": "PMID:40127276", "cohort_stratum": "all", "consequence_class": "damaging",
+                "comparator": "mutation_model", … }, … ],
+  "burden_combined": [ { "study": "PMID:40127276", "consequence_class": "damaging", … }, … ],
   "independent_datasets": {
     "tested": 2, "enriched": 2, "corrected": 1,
     "families": [
