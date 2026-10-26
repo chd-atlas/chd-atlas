@@ -1233,7 +1233,8 @@ def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
 # `<head>` is not prose. A block tag ends a run of text, so two paragraphs are
 # never read as one sentence. Ported from the caveat inventory's parser
 # (2026-10-25), with one difference measured below: `<br>` is not read as a
-# space, so the two lines of a matrix header cell count as one word.
+# space. Every `<br>` on a gene page sits in a table cell (measured on a build
+# of 802d694), which neither figure counts.
 _BLOCK_TAGS = frozenset(
     {
         "p", "li", "figcaption", "td", "th", "dt", "dd", "summary", "h1", "h2", "h3", "h4",
@@ -1242,16 +1243,23 @@ _BLOCK_TAGS = frozenset(
     }
 )  # fmt: skip
 _SKIPPED = frozenset({"svg", "style", "script", "head"})
+# Table and definition cells: data, not prose, and the one definition of a cell
+# both figures share. These four are every cell and term tag a gene page uses
+# (no `<caption>`), measured on a build of 802d694.
 _CELLS = frozenset({"td", "th", "dt", "dd"})
 # A word is a whitespace token carrying a letter, a digit, tau or infinity, so
 # a bare dash or middle dot between two links is not one.
 _WORD = re.compile(r"[A-Za-z0-9τ∞]")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
+# (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
+_BOILERPLATE_SHARE = 0.9
 
-# Set from the final build of WS3 PR iii (2026-10-26); see the test. Lower each
-# when a page sheds prose. Raising one is a decision, and its commit says why.
-_MEDIAN_VISIBLE_WORDS = 957
-_BOILERPLATE_SENTENCES = 21
+# Measured on the head of WS3 PR iii after review (2026-10-26), with headroom:
+# (a) 841 x 1.03 rounded up, (b) 21 + 1. See the test for the series and the
+# rule. Lower each when a page sheds prose; raising one is a decision, and its
+# commit says why.
+_MEDIAN_VISIBLE_WORDS = 867
+_BOILERPLATE_SENTENCES = 22
 
 
 class _VisibleText(HTMLParser):
@@ -1307,84 +1315,142 @@ def _visible_blocks(markup: str) -> list[tuple[str, bool]]:
     return parser.blocks
 
 
+def _prose(markup: str) -> list[str]:
+    """The visible blocks outside every cell: what both figures measure."""
+    return [text for text, cell in _visible_blocks(markup) if not cell]
+
+
 def _words(text: str) -> int:
     return sum(1 for token in text.split() if _WORD.search(token))
+
+
+def _boilerplate(pages: list[list[str]]) -> list[str]:
+    """(b): every sentence of six words or more on at least the share of `pages`
+    the budget names, each once however many pages carry it."""
+    carried: Counter[str] = Counter()
+    for blocks in pages:
+        carried.update(
+            {
+                sentence
+                for text in blocks
+                for sentence in _SENTENCE.split(text)
+                if _words(sentence) >= 6
+            }
+        )
+    return sorted(
+        sentence for sentence, n in carried.items() if n >= _BOILERPLATE_SHARE * len(pages)
+    )
 
 
 def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site: Path) -> None:
     """D50: site-wide explanation lives once, on `methods.html`; this keeps it there.
 
     Two figures over every `genes/HGNC_*.html` of the real build, each at most a
-    constant set from a measurement: (a) the median of the words visible on
-    load per page; (b) the boilerplate, the visible sentences of six words or
-    more that are identical on at least 90% of gene pages, each counted once
-    however many pages carry it. Table and definition cells are not sentences
-    and do not count towards (b); they do count towards (a).
+    constant set from a measurement, and both over **prose, not data**: the
+    visible blocks outside every table and definition cell (`_CELLS`). (a) The
+    median of the words visible on load per page; (b) the boilerplate, the
+    visible sentences of six words or more that are identical on at least 90%
+    of gene pages, each counted once however many pages carry it.
+
+    **(a) counted cells until review (2026-10-26), and so measured data.** The
+    burden, validity and stage tables a page shows are rows of mirrored data,
+    and a curation-only change failed the suite: one more GenCC row for USP44
+    (HGNC:20064), the median page at 957, moved the median to 958 -- and the
+    deploy workflow runs this test. Re-run on a `git archive` copy of the
+    branch with the row added (`SGC-999001`, PanelApp Australia, `Limited`
+    for MONDO:0005453): (a) is 841 with and without it, this test passes on
+    it, and USP44's own page falls from 862 to 844, because the sentence
+    saying no other submitter is mirrored gives way to a table.
 
     Measured with this parser on builds of `git archive` copies
     (`PYTHONPATH=<copy>/src`), 119 gene pages each:
 
-    =========================================  ======  ==========================
-    build                                      median  boilerplate
-    =========================================  ======  ==========================
-    cb326ca, `dev` before WS3 PR iii           1,456   32 sentences, 756 words
-    0fc451a, after Tasks 1-5 (#60), #62, #63   1,194   25 sentences, 506 words
-    452625c, after Task 6                        952   20 sentences, 386 words
-    the gene card's link to `methods.html`       957   21 sentences, 395 words
-    =========================================  ======  ==========================
+    =========================================  =====  =====  ======================
+    build                                      (a)    cells  (b)
+    =========================================  =====  =====  ======================
+    cb326ca, `dev` before WS3 PR iii           1,327  1,456  32 sentences, 756 words
+    0fc451a, after Tasks 1-5 (#60), #62, #63   1,066  1,194  25 sentences, 506 words
+    452625c, after Task 6                        836    952  20 sentences, 386 words
+    802d694, the gene card's link to methods     841    957  21 sentences, 395 words
+    =========================================  =====  =====  ======================
 
-    The card's last line, "How to read this page · this gene as JSON", is one
-    of the 21: nine words, on every page. The plan's baseline read 1,460 on
-    cb326ca with the inventory's parser, which reads `<br>` as a space; this
-    one does not, and reads 4 fewer at the median on each build above (1,460,
-    1,198, 956 and 961 with it). The boilerplate figures are the same under
-    both.
+    "cells" is the history: (a) with cells counted, the figure this test
+    asserted until review, 957 at zero headroom. (b) never counted them, and
+    the review's fixes to methods.html left every gene page's bytes as at
+    802d694. The card's last line, "How to read this page · this gene as
+    JSON", is one of the 21: nine words, on every page. The plan's baseline
+    read 1,460 on cb326ca with the inventory's parser, which reads `<br>` as a
+    space; under that reading the cells column is 4 higher on each build
+    (1,460, 1,198, 956 and 961) and no other figure moves, since every `<br>`
+    on a gene page sits in a table cell.
 
-    **Proved able to fail** (2026-10-26): with the full scope rule
-    (`methods.SCOPE_RULE`) rendered after the short form on every gene page,
-    this test failed on both figures -- "median visible words per gene page
-    1260 (budget 957); 27 boilerplate sentences (budget 21)". Each budget
-    lowered by one (956, 20) fails it; both raised (2000, 40) pass.
+    **Headroom, because a curation-only change must not fail the suite.**
+    (a) is held at 867, the last row's 841 x 1.03 rounded up, and (b) at 22,
+    one more than 21. **When this fails, re-measure before anything else.** If
+    the growth is a new study's or dataset's own data-driven prose, raise the
+    budget and put the measurement here. Never fold a caveat the fold rule
+    requires visible to get under it: the budget exists to keep explanation
+    off the page, not to take a warning out of sight.
 
-    The first assertion checks the instrument itself on a page this test
-    writes: a parser that recorded no text would pass the budget on any
-    pages, and one that read folded or `<svg>` text would fail it for a reason
-    that has nothing to do with the pages. **Not guarded:** that table and
-    definition cells are left out of (b). Counting them changes neither
-    figure on cb326ca or on the final build -- no cell sentence of six words
-    or more is on 90% of gene pages -- so that mutant survives here.
+    **Proved able to fail** (2026-10-26, each a build of a `git archive` copy
+    of the branch, measured with this parser): the full scope rule
+    (`methods.SCOPE_RULE`) rendered after the short form on every gene page
+    reads 1,144 and 27 sentences, over both budgets; the grade key back on the
+    page 986 and 27; the short form replaced by the full rule 1,112 and 25;
+    the trajectory's toggle unfolded 889 and 22; the small multiples' 948 and
+    24. Two now pass, and each is killed by a test of its own: the
+    rare-variant reading notes re-added under a fold, 846 and 21 (a summary
+    line is all that shows), and the pooling notice's long form, 863 and 22.
+    That is the cost of headroom, and why this test is a ceiling on growth
+    rather than a pin on any one sentence.
+
+    The first assertions check the instrument on input this test writes, so
+    a broken parser, word count, sentence split or share cannot pass the
+    budget on any pages: with `_WORD` matching nothing every page reads 0
+    words, and the short form replaced by the full scope rule passed this
+    test (review, 2026-10-26). The real pages' median must also be positive.
     """
     assert _visible_blocks(
         "<html><head><title>no</title></head><body><p>One two.</p><details>"
         "<summary>Three</summary><p>four</p><details><summary>five</summary></details>"
         "</details><table><tr><td>six</td></tr></table><svg><text>seven</text></svg>"
-        "</body></html>"
-    ) == [("One two.", False), ("Three", False), ("six", True)]
-
-    pages = sorted((site / "genes").glob("HGNC_*.html"))
-    assert len(pages) > 1, "the build published no gene pages; the budget would pass vacuously"
-    counts: list[int] = []
-    carried: Counter[str] = Counter()
-    for path in pages:
-        blocks = _visible_blocks(path.read_text(encoding="utf-8"))
-        counts.append(sum(_words(text) for text, _ in blocks))
-        carried.update(
-            {
-                sentence
-                for text, cell in blocks
-                if not cell
-                for sentence in _SENTENCE.split(text)
-                if _words(sentence) >= 6
-            }
+        "<dl><dt>eight</dt><dd>nine</dd></dl></body></html>"
+    ) == [("One two.", False), ("Three", False), ("six", True), ("eight", True), ("nine", True)]
+    assert _prose("<p>One two.</p><table><tr><th>three</th><td>four</td></tr></table>") == [
+        "One two."
+    ]
+    assert _words("τ = 0.71 — across ∞ organs · here") == 6
+    assert _SENTENCE.split("First one here. Second (one) here? Third.") == [
+        "First one here.",
+        "Second (one) here?",
+        "Third.",
+    ]
+    # (b)'s rule on ten pages written here: six words on 9 of 10 is boilerplate
+    # and on 8 is not; five words on all 10 is not; a sentence in a cell is not.
+    on_nine, on_eight = "Nine pages of ten say this.", "Eight pages of ten say this."
+    synthetic = [
+        _prose(
+            f"<p>{on_nine if n >= 1 else ''} {on_eight if n >= 2 else ''} Every page says "
+            "these five.</p><table><tr><td>This sentence sits in a table cell on all ten."
+            "</td></tr></table>"
         )
-    boilerplate = sorted(sentence for sentence, n in carried.items() if n >= 0.9 * len(pages))
+        for n in range(10)
+    ]
+    assert _boilerplate(synthetic) == [on_nine]
 
-    median = statistics.median(counts)
+    pages = [
+        _prose(path.read_text(encoding="utf-8"))
+        for path in sorted((site / "genes").glob("HGNC_*.html"))
+    ]
+    assert len(pages) > 1, "the build published no gene pages; the budget would pass vacuously"
+    median = statistics.median([sum(_words(text) for text in blocks) for blocks in pages])
+    boilerplate = _boilerplate(pages)
     # Both figures in either failure, so one run says how far over each is.
     report = (
         f"median visible words per gene page {median} (budget {_MEDIAN_VISIBLE_WORDS}); "
         f"{len(boilerplate)} boilerplate sentences (budget {_BOILERPLATE_SENTENCES}): "
         f"{boilerplate}"
     )
+    assert median > 0, report
     assert median <= _MEDIAN_VISIBLE_WORDS, report
     assert len(boilerplate) <= _BOILERPLATE_SENTENCES, report
