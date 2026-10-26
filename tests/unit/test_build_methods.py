@@ -981,6 +981,9 @@ def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_r
         # The card, the matrix and the forest fill apply a rule of the atlas's
         # own, which `#rare-variants` states (owner decision 2026-10-26, W2).
         "adds no assessment",
+        # `ddd`'s description published a plan a reader cannot check (owner
+        # decision 2026-10-26, W4); `#cohorts` renders it on the real page.
+        "plans to curate",
         # A shared collection may be adult controls (2026-10-26).
         "the same children",
         # True of one study, stated in general (2026-10-26).

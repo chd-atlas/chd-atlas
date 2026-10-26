@@ -30,6 +30,23 @@ cohorts:
       Germany and holds the associated German Heart Registry consent. Named in
       PMID:42230622 as one of the three collections its CHD cases were drawn from.
     url: https://www.kompetenznetz-ahf.de/en/
+  # Rewritten 2026-10-26 (owner decisions W4, W5). It named a plan ("the CHD
+  # exome studies this atlas plans to curate"), which a reader cannot check and
+  # which says nothing about the data. "more than one", not the draft's
+  # "several": two are verified -- PMID:42230622 names DDD among its case
+  # collections, and Sifrim et al. 2016 (Nat Genet, doi:10.1038/ng.3627) lists
+  # "the Deciphering Developmental Disorders Study" among its authors -- and no
+  # third was found. "only one study cited today names it" is held to the
+  # mirror by `test_models_cohort.py`, so a second study citing `ddd` fails
+  # there until this is reworded.
+  #
+  # The DECIPHER sentence, here and in `decipher`'s entry: DDD's own data
+  # access page (https://www.ddduk.org/accessing-ddd-data/, read 2026-10-26)
+  # says likely diagnostic variants "will be linked to individual patient
+  # records in DECIPHER", publicly with HPO terms once the family has been
+  # told. So DECIPHER's patient records include DDD participants, and a case
+  # set drawn from DECIPHER may too. The registry holds them as two ids, which
+  # `shared_cohorts` never links -- the same test holds that.
   - id: ddd
     name: Deciphering Developmental Disorders (DDD)
     description: >-
@@ -38,9 +55,12 @@ cohorts:
       Wellcome Sanger Institute. Cases are ascertained on developmental disorder
       rather than on heart disease, so its contribution is enriched for syndromic
       CHD. Individual-level data are under controlled access via the EGA. DDD
-      contributed to several of the CHD exome studies this atlas plans to
-      curate, which is the sample reuse the cohort columns exist to make
-      visible; only one study cited today names it.
+      contributed to more than one CHD exome study, which is the sample reuse the
+      cohort columns exist to make visible; only one study cited today names it.
+      DDD links its participants' likely diagnostic variants to their own patient
+      records in DECIPHER, so DECIPHER's cases may include DDD participants; this
+      registry records the two as separate collections and cannot see that
+      overlap.
     url: https://www.ddduk.org/
   - id: nottingham
     name: University of Nottingham congenital heart disease collection
@@ -62,7 +82,11 @@ cohorts:
     description: >-
       1,221 CHD cases from the DECIPHER database of submitted patient
       genotype-phenotype data. Submitted by clinical genetics centres, so
-      ascertained on a diagnostic question rather than on heart disease.
+      ascertained on a diagnostic question rather than on heart disease. The
+      Deciphering Developmental Disorders study links its participants' likely
+      diagnostic variants to their own patient records in DECIPHER, so these
+      cases may include DDD participants; this registry records the two as
+      separate collections and cannot see that overlap.
     url: https://www.deciphergenomics.org/
   - id: isca
     name: International Standards for Cytogenomic Arrays (ISCA)
