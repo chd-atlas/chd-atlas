@@ -1013,9 +1013,9 @@ Six obligations, each of which is a wrong claim if you get it wrong:
    without any of the qualifications, which is exactly the failure the cohort
    columns exist to prevent.
 
-`n_cases` and `n_controls` are the row's own denominators, as its study
-published them beside the statistic. They may differ from the figures a paper's
-abstract reports — for `PMID:42230622` they are 3,876 cases (1,471 syndromic +
+`n_cases` and `n_controls` are the row's own denominators: the cases and
+controls its study's statistic was computed on. They may differ from the figures
+a paper's abstract reports — for `PMID:42230622` they are 3,876 cases (1,471 syndromic +
 2,405 non-syndromic) against 45,082 controls, while the abstract gives 4,747 and
 52,881. The paper does not reconcile the two. Use the row's own denominators:
 for `PMID:42230622` they are the ones its statistic was computed from.
