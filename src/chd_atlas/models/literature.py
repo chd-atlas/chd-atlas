@@ -49,9 +49,10 @@ class Publication(BaseModel):
     # The card shows a study's carrier counts in a 15rem column, and the
     # caveats that qualify them -- `method_note`, the cohort descriptions --
     # are footnoted in the study's block, one click away. For PMID:34324492
-    # that left "120 carriers / 7,107" on TBX1's card with nothing saying the
-    # case set it was drawn from includes 777 thoracic aortic aneurysm
-    # probands. The gene index prints it under the strip legend too.
+    # that left "120 carriers" over the study's case count on TBX1's card with
+    # nothing saying the case set it was drawn from includes 777 thoracic
+    # aortic aneurysm probands. The gene index prints it under the strip
+    # legend too.
     #
     # Curated rather than derived from `method_note`, which is free text that
     # says different things for different studies: only a curator can say which

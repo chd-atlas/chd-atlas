@@ -557,15 +557,17 @@ def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Pa
     design = {"control_cohort": "case-control"}[empty[0]["comparator"]]
     assert f"{symbols[empty[0]['gene']]}'s {named} {design} row" in section
 
-    # PMID:34324492's denominators, which the doc sets against the filtered set
-    # its article's methods describe. Every row of that study carries the same
-    # two, so the doc can state them once.
+    # PMID:34324492's denominators, which the doc names as the filtered set its
+    # article's methods put the test on. Every row of that study carries the
+    # same two, so the doc can state them once. Until 2026-10-26 the rows
+    # carried S1 Table's deletion column instead and the doc called the choice
+    # open; a mirror re-run from a converter reverted to S1 fails here.
     cnv = [r for r in mirror if r["study"] == "PMID:34324492"]
     [n_cases] = {int(r["n_cases"]) for r in cnv}
     [n_controls] = {int(r["n_controls"]) for r in cnv}
     assert (
-        f"For `PMID:34324492` that last step is open. Its rows publish the {n_cases:,} cases "
-        f"and {n_controls:,} controls the study's S1 Table gives" in section
+        f"For `PMID:34324492` they are the {n_cases:,} cases and {n_controls:,} controls that "
+        "the article's methods say remained after filtering" in section
     )
 
 
@@ -1356,7 +1358,7 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     assert "a flag on the gene, not on a disease" in methods
     assert "Both are flags on the gene, not on a disease" in doc
     # An unsplit study's `all cases` is not its whole case set: PMID:34324492's
-    # rows count 7,107 of its 7,958 cases. The doc restated `#rare-variants`'
+    # rows count 6,746 of its 7,958 cases. The doc restated `#rare-variants`'
     # retired "whole case set" until review on 2026-10-26.
     assert "all cases is its only case group: every case the row counts, not a subgroup" in (
         methods

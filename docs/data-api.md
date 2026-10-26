@@ -1020,11 +1020,11 @@ abstract reports — for `PMID:42230622` they are 3,876 cases (1,471 syndromic +
 52,881. The paper does not reconcile the two. Use the row's own denominators:
 for `PMID:42230622` they are the ones its statistic was computed from.
 
-For `PMID:34324492` that last step is open. Its rows publish the 7,107 cases
-and 14,040 controls the study's S1 Table gives for its deletion analysis, while
-the article's methods describe its permutation test as run on a filtered set of
-6,746 cases and 14,024 controls. Which of the two the published statistic was
-computed on is not settled, and this atlas asserts neither.
+For `PMID:34324492` they are the 6,746 cases and 14,024 controls that the
+article's methods say remained after filtering, the set its permutation test was
+run on. The study's S1 Table, which the article cites for the cohort as
+assembled, gives 7,107 cases and 14,040 controls in its deletion column; earlier
+releases published those figures as the rows' denominators.
 
 ### The bundle's `burden_combined` array: one study's own combination of its arms
 

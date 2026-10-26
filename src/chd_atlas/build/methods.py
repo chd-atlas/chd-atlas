@@ -293,7 +293,7 @@ _RARE_VARIANTS: Final = (
     #
     # The last clause said `all cases` was a study's "whole case set" until
     # review on 2026-10-26: it is not a denominator. PMID:34324492's rows count
-    # 7,107 cases of the 7,958 its own note gives the study, and
+    # 6,746 cases of the 7,958 its own note gives the study, and
     # PMID:40127276's count 3,887 trios or an allele total against 11,555
     # probands. What holds of every study is the narrower claim: not a subgroup.
     "<p>Where a study splits its cases into <strong>syndromic</strong> and "

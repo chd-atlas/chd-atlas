@@ -6766,9 +6766,9 @@ def _audain2021(**overrides: object) -> BurdenRow:
         "variant_class": "cnv_deletion",
         "cohort_stratum": "all",
         "n_case_carriers": 10,
-        "n_cases": 7107,
+        "n_cases": 6746,
         "n_control_carriers": 0,
-        "n_controls": 14040,
+        "n_controls": 14024,
         "effect": None,
         "effect_measure": None,
         "effect_bound": None,
@@ -6874,7 +6874,7 @@ def test_the_card_names_each_study_and_test_by_its_first_surviving_row(
     )
     assert re.findall(r"<li>(.*?)</li>", card) == [
         "Audain E et al. 2021 · CNV burden (case-control) — loss-of-function, syndromic: "
-        "4 carriers / 1,471 vs 0 carriers / 14,040 · also surviving: loss-of-function, "
+        "4 carriers / 1,471 vs 0 carriers / 14,024 · also surviving: loss-of-function, "
         "non-syndromic, lesion group conotruncal · study by an atlas author · "
         '<a href="#study-34324492" aria-label="Caveats for Audain E et al. 2021">caveats</a>',
         "Sierant MC et al. 2025 · case-control burden test — damaging (LOF + missense): "
