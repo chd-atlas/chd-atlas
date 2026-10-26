@@ -289,9 +289,10 @@ def test_the_documented_manifest_census_is_the_census_the_build_publishes(site: 
     prose = " ".join(section.split())
     curated_clause = prose[prose.index("of its keys count a curated file") :]
     curated_clause = curated_clause[: curated_clause.index("A gene the atlas has not curated")]
-    computed_block = section[section.index("other six keys are computed") :]
+    computed_block = section[section.index("keys are computed by the build") :]
     computed_block = computed_block[: computed_block.index("`index.html` states these")]
-    assert set(re.findall(r"`(\w+)`", curated_clause)) - {"cohorts.json", "scope.json"} == curated
+    # `(\w+)` cannot match the linked `cohorts.json`/`scope.json` file names.
+    assert set(re.findall(r"`(\w+)`", curated_clause)) == curated
     assert set(re.findall(r"^  - `(\w+)`", computed_block, re.M)) == computed
     assert f"{_WORDS[len(curated)].capitalize()} of its keys count a curated file" in prose
     assert f"The other {_WORDS[len(computed)]} keys are computed by the build" in prose
