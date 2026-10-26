@@ -89,9 +89,10 @@ DENOMINATORS
 ------------
 S1 Table gives the per-CNV-type counts: 7,107 cases and 14,040 controls have
 deletion data, against 7,958 and 14,082 for CNVs of any type. The deletion
-figures are the ones this analysis was computed on, so they are the ones the
-mirror carries -- the same rule applied to PMID:42230622, whose abstract
-likewise quotes a larger set than its statistics used.
+figures are the ones S1 gives for this analysis, so they are the ones the
+mirror carries -- the rule applied to PMID:42230622, whose abstract likewise
+quotes a larger set than its statistics used. That they are also the figures
+the statistic was computed on is not established; see the next paragraph.
 
 **Unresolved since 2026-10-26.** The article's methods say the permutation test
 was run on a post-QC set of 6,746 cases and 14,024 controls, which is neither

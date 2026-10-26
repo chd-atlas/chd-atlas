@@ -454,11 +454,19 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     instruction published as a caveat, beside rows whose case set is not
     7,958. The study's S1 Table counts 7,958 cases with a CNV of any type and
     7,107 with deletion data; S2 puts this series at 777 of the 7,958; every
-    row naming the cohort is a deletion analysis over 7,107 (121 mirror rows,
-    all PMID:34324492). So the description now gives both figures, and this
-    asserts the second against every published row that cites the cohort: a
-    re-curated mirror with another denominator fails here rather than leaving
+    row naming the cohort is a deletion row publishing 7,107 cases (121 mirror
+    rows, all PMID:34324492). So the description now gives both figures, and
+    this asserts the second against every published row that cites the cohort:
+    a re-curated mirror with another denominator fails here rather than leaving
     the caveat contradicting the table beside it.
+
+    **What the rows publish, never what the statistic was computed on.** The
+    description said "a row naming this cohort is computed on the 7,107" until
+    later on 2026-10-26, when the article's methods were read: its permutation
+    test ran on a filtered set of 6,746 cases and 14,024 controls, which is
+    neither S1 pair. Which set PLINK counted is open, so the sentence now says
+    only what the rows publish, and "computed on" is asserted absent beside the
+    retired phrases.
 
     The retired phrases are asserted absent from every published byte that
     carries the description -- `cohorts.json`, `methods.html` and each gene
@@ -477,7 +485,7 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     }
     assert denominators, "no published row cites taa_cases; this measures nothing"
     for denominator in sorted(denominators):
-        assert f"the {denominator:,} of them" in description, (
+        assert f"publishes the {denominator:,} cases" in description, (
             f"rows citing taa_cases publish {denominator:,} cases; the caveat does not say so"
         )
     assert "777 of its 7,958 cases" in description
@@ -485,7 +493,12 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     published = [site / "cohorts.json", site / "methods.html", *sorted(site.glob("genes/*.html"))]
     for path in published:
         text = path.read_text(encoding="utf-8")
-        for retired in ("must say so", "explicitly out of", "puts aortopathy outside"):
+        for retired in (
+            "must say so",
+            "explicitly out of",
+            "puts aortopathy outside",
+            "is computed on the",
+        ):
             assert retired not in text and retired not in html.unescape(text), (
                 f"{retired!r} is published in {path.name}"
             )

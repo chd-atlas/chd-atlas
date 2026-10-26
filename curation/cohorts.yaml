@@ -75,10 +75,16 @@ cohorts:
   # now measured: the abstract quote against PubMed's text; S1 Table (CHD cases:
   # 7,958 with a CNV of any type, 7,107 in the deletion analysis) and S2 Table
   # (this series: 777; total 7,958) in the study's supplement; every one of the
-  # 121 mirror rows citing this cohort is a deletion row over 7,107 cases; S8
-  # Table holds only the 528 significant genes; chd_scope.yaml has no
+  # 121 mirror rows citing this cohort is a deletion row publishing 7,107 cases;
+  # S8 Table holds only the 528 significant genes; chd_scope.yaml has no
   # "aneurysm" term (its "aort" matches are aortic valve terms and
   # supravalvular aortic stenosis, both congenital).
+  #
+  # Reworded the same day: the last sentence said a row "is computed on the
+  # 7,107". The article's methods put the permutation test on a filtered set of
+  # 6,746 cases and 14,024 controls, which is neither S1 pair, so which set the
+  # statistic used is open (see `DENOMINATORS` in scripts/convert_audain2021.py)
+  # and the description now says only what the rows publish.
   - id: taa_cases
     name: Sporadic thoracic aortic aneurysm case series (PMID 21092924)
     description: >-
@@ -90,8 +96,8 @@ cohorts:
       any of these probands also has a congenital heart lesion is not recorded
       here. The study's S8 table reports the CHD-only contribution separately,
       for the 528 genes that reached significance. The study puts this series
-      at 777 of its 7,958 cases; a row naming this cohort is computed on the
-      7,107 of them in its deletion analysis.
+      at 777 of its 7,958 cases; a row naming this cohort publishes the 7,107
+      cases the study's S1 Table gives for its deletion analysis.
   - id: gain_controls
     name: Genetic Association Information Network (GAIN) controls
     description: >-
