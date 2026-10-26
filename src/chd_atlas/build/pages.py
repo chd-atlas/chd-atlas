@@ -955,12 +955,21 @@ def _card_rare_variants(
     surviving rows carries a `method_note`, `details` otherwise, with an
     accessible name naming the study (WCAG 2.4.9: the visible word alone does
     not say whose caveats). The counts on a line can need the note to be read
-    right -- PMID:34324492's cases include 777 thoracic aortic aneurysm
+    right -- PMID:34324492's case set includes 777 thoracic aortic aneurysm
     probands, PMID:40127276's case-control arm counts a proband with two
-    qualifying variants twice -- and the note is footnoted in the block, not
-    here. Measured 2026-10-26: every surviving row of both studies carries one,
-    so all 45 card lines read `caveats` and `details` is reachable from a
+    qualifying variants twice -- and the full note is footnoted in the block;
+    only a curated summary of it follows the lines (below). Measured
+    2026-10-26: every surviving row of both studies carries one, so all 45
+    card lines read `caveats` and `details` is reachable from a
     fixture only. A no-correction line links its study's name instead.
+
+    **Beneath the lines, a study's curated `Publication.summary_caveat`**,
+    once per study with a line and in the lines' study order: the one caveat
+    the curator says changes what that study's counts mean, so it travels with
+    them rather than staying one click away. Measured 2026-10-26: only
+    PMID:34324492 carries one (the 777 thoracic aortic aneurysm probands in its
+    case set, and a carrier being anyone with a deletion overlapping the
+    gene), and it reaches every card that shows its counts.
 
     With no surviving row it counts the **cohort families** with any row for
     the gene -- independent datasets, never studies, because two papers on one
@@ -1043,9 +1052,23 @@ def _card_rare_variants(
                 f'<a href="#{html.escape(_study_anchor(study))}" aria-label="{purpose}">'
                 f"{label}</a></li>"
             )
+        # A study's curated summary caveat, once per study with a line, in the
+        # lines' own study order: it qualifies the counts those lines show, so
+        # a study with no line -- a no-correction line shows no counts -- has
+        # nothing here for it to qualify.
+        notes: list[str] = []
+        for study in dict.fromkeys(study for study, _ in sorted(groups)):
+            publication = publications.get(study)
+            if publication is None or publication.summary_caveat is None:
+                continue
+            notes.append(
+                f'<p class="card-note"><a href="#{html.escape(_study_anchor(study))}">'
+                f"{html.escape(_study_label(study, publications))}</a>: "
+                f"{html.escape(publication.summary_caveat)}</p>"
+            )
         body = (
             "<p><strong>Rare variants</strong> surviving their own study's correction</p>"
-            f"<ul>{''.join(items)}</ul>"
+            f"<ul>{''.join(items)}</ul>{''.join(notes)}"
         )
     else:
         unplaced = sorted(studies - {study for family in families for study in family})
@@ -2137,6 +2160,44 @@ def _concordance_for(
             f"this' as if it had been measured"
         )
     return concordance[gene]
+
+
+def _strip_notes(
+    genes: Iterable[str],
+    concordance: Mapping[str, Mapping[str, Json]] | None,
+    publications: Mapping[str, Publication],
+) -> str:
+    """Each curated `Publication.summary_caveat` of a study the strips name, once.
+
+    The strips summarise every study's result for every gene -- PMID:34324492
+    sits in a family on all of them, and "enriched, and survives that study's
+    own correction" is a stronger summary than any count -- so the caveat the
+    gene page's card prints beside that study's counts is printed here too,
+    under the legend, in study-id order. The page has no study blocks to link
+    to, so each note names its study by label and PMID.
+    """
+    # Keys of a dict, not a set: met in row order, so the `sorted` below is what
+    # orders them, and a test can tell (CLAUDE.md section 4.42).
+    studies: dict[str, None] = {}
+    for gene in genes:
+        families = _concordance_for(concordance, gene).get("families") or ()
+        if not isinstance(families, Sequence):
+            continue
+        for entry in families:
+            named = entry.get("studies") if isinstance(entry, Mapping) else None
+            if isinstance(named, Sequence) and not isinstance(named, str):
+                studies.update(dict.fromkeys(str(study) for study in named))
+    notes: list[str] = []
+    for study in sorted(studies):
+        publication = publications.get(study)
+        if publication is None or publication.summary_caveat is None:
+            continue
+        notes.append(
+            f'<p class="strip-legend"><strong>'
+            f"{html.escape(_study_label(study, publications))}</strong> "
+            f"({html.escape(study)}): {html.escape(publication.summary_caveat)}</p>"
+        )
+    return "".join(notes)
 
 
 def _dot_strip(concordance: Mapping[str, Json]) -> str:
@@ -4780,6 +4841,7 @@ def build_gene_index_page(
     validity: Mapping[str, GeneValidity],
     burden_counts: Mapping[str, int],
     concordance: Mapping[str, Mapping[str, Json]] | None = None,
+    publications: Mapping[str, Publication] | None = None,
 ) -> None:
     """Emit `genes/index.html`: every published gene, filterable in the browser.
 
@@ -4971,7 +5033,9 @@ def build_gene_index_page(
         '<input name="q" type="search" aria-label="Search by gene symbol or HGNC id" '
         'placeholder="symbol or HGNC id">'
         f"{selects}</form>"
-        f"{data_table(_BROWSE_HEADERS, rows, table_id='gene-table')}" + _STRIP_LEGEND
+        f"{data_table(_BROWSE_HEADERS, rows, table_id='gene-table')}"
+        + _STRIP_LEGEND
+        + _strip_notes(facts, concordance, publications or {})
     )
     emitter.write_text(
         GENE_INDEX_PAGE,

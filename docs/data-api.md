@@ -54,7 +54,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.17",
+  "schema_version": "2.18",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -212,6 +212,9 @@ wrong by the next one.
   `2.17` added [`identity`](#genesslugjson) to every gene bundle — name, locus,
   Ensembl and NCBI Gene ids, UniProt accession and MANE Select transcript.
   Additive.
+  `2.18` added `summary_caveat` to every record of
+  [`publications.json`](#publicationsjson) and so to `featured.json`'s
+  embedded publications, `null` where none is curated. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -894,9 +897,9 @@ Five obligations, each of which is a wrong claim if you get it wrong:
    **These ids resolve against [`cohorts.json`](#cohortsjson), and you should
    resolve them.** `case_cohorts` and `control_cohorts` publish bare strings like
    `"taa_cases"`; that file maps each to a name, a URL where one exists, and the
-   caveats that qualify every number drawn from it. `taa_cases` is 777 thoracic
-   aortic aneurysm probands who **do not have congenital heart disease** — a row
-   citing it is not a plain CHD case set, and only the description says so.
+   caveats that qualify every number drawn from it. `taa_cases` is 777 probands
+   with **thoracic aortic aneurysm, a condition outside this atlas's scope** — a
+   row citing it is not a plain CHD case set, and only the description says so.
 
    Until schema `2.9` these ids resolved to nothing at all: the descriptions
    lived in the repository and reached a reader only through the gene *page*,
@@ -1296,7 +1299,10 @@ Top to bottom:
    the same page (`#study-<PMID digits>`, the `id` of the study's heading):
    `caveats` where any of the group's surviving rows carries a `method_note`,
    `details` otherwise, with an accessible name naming the study. Never the
-   most significant row: the atlas ranks nothing.
+   most significant row: the atlas ranks nothing. Beneath the lines, once
+   per study with a line, that study's curated `summary_caveat` from
+   `publications.json`, where it has one; the full caveat stays in the
+   study's block.
 
    **A study that published no corrected p for the gene gets a line of its
    own**, whether or not another study's results survive: "<study> publishes
@@ -1580,11 +1586,22 @@ performed once.
       "own_lab": false,
       "cohort_size": null,
       "ancestry": [],
-      "tests_reported": null
+      "tests_reported": null,
+      "summary_caveat": null
     }
   ]
 }
 ```
+
+`summary_caveat` is one curated sentence (at most 240 characters) saying what
+a reader must know to read the study's counts — PMID:34324492's case set
+includes 777 probands with thoracic aortic aneurysm, a condition outside this
+atlas's scope. A gene page's card prints it beneath that study's results, and
+the gene index under its strip legend. It is `null` where no curator has
+recorded one, which does not mean the study's results need no qualification:
+its rows' `method_note` and the [`cohorts.json`](#cohortsjson) descriptions
+remain the full caveat. A consumer showing the study's counts or results away
+from those should show this sentence too.
 
 Ordered by PMID lexically, not numerically — so `PMID:10` precedes `PMID:9`. A
 PMID is issued at indexing time, so numeric order ranks by nothing a reader
@@ -1738,7 +1755,7 @@ them. Added in schema `2.9`.
   "cohorts": [
     {
       "id": "taa_cases",
-      "name": "Sporadic thoracic aortic aneurysm case series (PMID:34324492)",
+      "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
       "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases. TAA IS NOT CONGENITAL HEART DISEASE and is explicitly out of this atlas's scope …",
       "url": null
     }

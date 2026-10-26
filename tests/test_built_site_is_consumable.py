@@ -1,6 +1,7 @@
 # tests/test_built_site_is_consumable.py
 import csv
 import gzip
+import html
 import json
 import math
 import posixpath
@@ -818,6 +819,13 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     exactly those; the old sentence appears on no card. A study by an atlas
     author carries the declaration on every card line that names it.
 
+    **A study's summary caveat follows its card lines**: once per study with a
+    line on the card, in study-id order, with exactly the text
+    `publications.json` publishes for it, and on no card without a line from
+    that study -- so PMID:34324492's thoracic aortic aneurysm probands reach
+    every card that shows its counts. The gene index, whose strips summarise
+    every study's result for every gene, prints each caveat exactly once.
+
     And every card states once what the atlas itself curated, nothing in the
     main column repeats it, and a card names who disputes the gene exactly
     where the bundle's `has_conflicting_evidence` is true.
@@ -827,11 +835,11 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     """
     entries = _read(site, "genes/index.json")["genes"]
     assert len(entries) > 1, "the build published no genes; the fixture is broken"
-    own_lab = {
-        publication["id"]: publication["own_lab"]
-        for publication in _read(site, "publications.json")["publications"]
-    }
-    listed = flagged = uncorrected_cards = 0
+    publications = _read(site, "publications.json")["publications"]
+    own_lab = {publication["id"]: publication["own_lab"] for publication in publications}
+    caveats = {publication["id"]: publication["summary_caveat"] for publication in publications}
+    listed = flagged = uncorrected_cards = noted_cards = 0
+    on_strips: set[str] = set()
     for entry in entries:
         bundle = _read(site, entry["bundle"])
         page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
@@ -868,6 +876,25 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
             marked = "· study by an atlas author" in text
             assert marked is own_lab[f"PMID:{digits.group(1)}"], (entry["gene"], text)
 
+        lined = {
+            f"PMID:{digits}" for digits in re.findall(r'<li>[^<]*<a href="#study-(\d+)"', card)
+        }
+        notes = re.findall(
+            r'<p class="card-note"><a href="#study-(\d+)">[^<]*</a>: (.*?)</p>', card
+        )
+        assert notes == [
+            (study.removeprefix("PMID:"), html.escape(caveats[study]))
+            for study in sorted(lined)
+            if caveats[study]
+        ], entry["gene"]
+        assert card.count('class="card-note"') == len(notes), entry["gene"]
+        noted_cards += bool(notes)
+        on_strips.update(
+            study
+            for family in bundle["independent_datasets"]["families"]
+            for study in family["studies"]
+        )
+
         assert rail.count('<p class="card-curation">') == 1, entry["gene"]
         main = page[page.index("</aside>") :]
         assert "curated by the atlas" not in main.lower(), entry["gene"]
@@ -879,6 +906,13 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     assert 0 < uncorrected_cards < len(entries), (
         f"{uncorrected_cards} of {len(entries)} cards name a study with no correction"
     )
+    assert 0 < noted_cards < len(entries), f"{noted_cards} of {len(entries)} cards carry a note"
+
+    browse = (site / "genes" / "index.html").read_text(encoding="utf-8")
+    assert any(caveats.get(study) for study in on_strips), "no strip names a noted study"
+    for study, caveat in caveats.items():
+        if caveat:
+            assert browse.count(html.escape(caveat)) == int(study in on_strips), study
 
 
 def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
