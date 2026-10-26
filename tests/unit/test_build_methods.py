@@ -707,7 +707,7 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
     """The expression reading notes, moved off every gene page (2026-10-26, D50).
 
     Six paragraphs, pinned whole. The first is the bulk-dilution notice in
-    full: a gene page keeps one line of it (`pages._BULK_DILUTION_NOTICE`,
+    full: a gene page keeps one line of it (`pages._BULK_TISSUE_NOTICE`,
     one of the ten caveats the spec keeps visible) and links here. The next
     two were the page's folded "How to read these figures" notes. The next
     two define tau and the developmental phases, which 118 and 119 gene pages

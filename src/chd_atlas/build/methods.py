@@ -38,12 +38,14 @@ here, and "this page" here names a page with no gene on it.
 * `#cohorts` is curated data under one written paragraph: every record of
   `curation/cohorts.yaml`, the same ones `cohorts.json` publishes. A gene page
   keeps the notes of its own cohorts, folded, and links here (P4).
-* `#expression` is both (2026-10-26): two paragraphs moved off every gene page
-  (the folded reading notes), one is the full form of the bulk-tissue notice
-  a gene page keeps in one line, and one states in general the chart axes
-  each chart's visible caption line states of its own figure (D57). Two more
-  define what the pages print and nothing defined (review, 2026-10-26): tau,
-  and the developmental phases each stage names and each trajectory shades.
+* `#expression` is both (2026-10-26): two paragraphs moved off the gene pages
+  (the folded reading notes: the placement note from every page with data,
+  the comparability notice from every page that laid out more than one
+  placement), one is the full form of the bulk-tissue notice a gene page
+  keeps in one line, and one states in general the chart axes each chart's
+  visible caption line states of its own figure (D57). Two more define what
+  the pages print and nothing defined (review, 2026-10-26): tau, and the
+  developmental phases each stage names and each trajectory shades.
 
 `tests/unit/test_build_methods.py` pins the scope rule and the key's opening
 paragraph against literals, sliced to the section; the glosses by a phrase
@@ -423,7 +425,7 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 
 # How to read a gene page's developmental expression section (2026-10-26, D50,
 # D57). The page keeps a one-line short form of the first paragraph
-# (`pages._BULK_DILUTION_NOTICE`, one of the ten caveats the spec keeps
+# (`pages._BULK_TISSUE_NOTICE`, one of the ten caveats the spec keeps
 # visible) and links here; the next two were its folded "How to read these
 # figures" notes, and left it; the next two define tau and the developmental
 # phases, which the pages print and nothing defined (review, the same day, each
@@ -481,7 +483,8 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 #   a second dataset's grid would draw its own.
 _EXPRESSION: Final = (
     '<h2 id="expression">Developmental expression</h2>'
-    # was pages._BULK_DILUTION_NOTICE in full; "below" -> "in this atlas"
+    # was pages._BULK_TISSUE_NOTICE in full, under its old name
+    # `_BULK_DILUTION_NOTICE`; "below" -> "in this atlas"
     '<p class="notice-inline"><strong>Every developmental expression measurement in this '
     "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
     "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "

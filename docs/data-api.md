@@ -313,17 +313,17 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   link here.
 - `#expression` says how to read a gene page's developmental expression
   section: that every developmental expression measurement here is from whole,
-  bulk tissue, so a low or absent figure is not evidence against a gene; how a
-  median is placed against its organ's percentile grid, and that none is placed
-  below its dataset's detection floor, a threshold this atlas records per
-  dataset and not necessarily one its source declares (a profile dataset's
-  record in [`datasets.json`](#datasetsjson) gives the floor and its basis);
-  that percentiles are not comparable across organs or developmental stages;
-  what τ measures and when none is published; what a stage's developmental
-  phases are, where their boundaries come from and how a stage is matched to
-  them; and what the charts' axes are. A gene page keeps a one-line form of
-  the first and links here, and each expression chart's folded key ends with
-  a link here.
+  bulk tissue, so a low or absent figure is not evidence a gene is unimportant
+  to heart development; how a median is placed against its organ's percentile
+  grid, and that none is placed below its dataset's detection floor, a
+  threshold this atlas records per dataset and not necessarily one its source
+  declares (a profile dataset's record in [`datasets.json`](#datasetsjson)
+  gives the floor and its basis); that percentiles are not comparable across
+  organs or developmental stages; what τ measures and when none is published;
+  what a stage's developmental phases are, where their boundaries come from
+  and how a stage is matched to them; and what the charts' axes are. A gene
+  page keeps a one-line form of the first and links here, and each expression
+  chart's folded key ends with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1362,14 +1362,14 @@ never goes through that mechanism at all: it has no gene column, so
 comparable across developmental stages.** Each organ transcribes a different
 fraction of the whole gene universe, so "top 10% in liver" and "top 10% in
 heart" describe two different reference distributions, not one ranking read
-two ways. And a reference distribution's own shape changes as the heart
-matures, so a gene with flat, unchanging absolute abundance across
-development can still show a *moving* percentile from one stage to the next,
-purely because everything else in the transcriptome is moving around it. The
-cross-stage caveat matters more here, because this layer's headline
-question — is this gene's cardiac expression distinctive, and does that
-change over development — is asked *within* one organ, across its own
-stages: reading a percentile trend without this caveat can report
+two ways. And a reference distribution's own shape changes over
+development, in every organ, so a gene with flat, unchanging absolute
+abundance across development can still show a *moving* percentile from one
+stage to the next, purely because everything else in the transcriptome is
+moving around it. The cross-stage caveat matters more here, because this
+layer's headline question — is this gene's cardiac expression distinctive,
+and does that change over development — is asked *within* one organ, across
+its own stages: reading a percentile trend without this caveat can report
 development where none occurred, or miss it where it did.
 
 **Why the quantile grid is published at all, and exactly how far that goes.**
@@ -1549,18 +1549,24 @@ The developmental expression section, last on the page, opens with one visible
 line: "Every measurement below is from whole, bulk tissue: a low or absent
 figure is not evidence a gene is unimportant to heart development." It links
 [`methods.html#expression`](#methodshtml) as *How to read these figures*; that
-section states the argument in full
-with the reading notes this section folded before this release: how a median is
-placed against its organ's percentile grid, why none is placed below a dataset's
-detection floor, and why percentiles are not comparable across organs or
-developmental stages. Each chart — a phase-banded trajectory per cardiac organ
-where one can be drawn, and the organ small multiples — shows one line of its
-caption: its axes, in stage order rather than elapsed time, and the range of its
-abundance axis. The rest of its key is folded under *How to read this chart* —
-the detection floor and its ticks, why a line breaks, the shaded phases, which
-organ is drawn heavier and which organs have no panel, each only where the
-figure shows one — ending with a link, *How to read expression figures*, to
-`methods.html#expression`.
+section states the argument in full with the reading notes this section folded
+before this release — how a median is placed against its organ's percentile
+grid, why none is placed below a dataset's detection floor, and why percentiles
+are not comparable across organs or developmental stages — and defines τ and
+the developmental phases each stage names. Each chart — a phase-banded
+trajectory per cardiac organ where one can be drawn, and the organ small
+multiples — shows one line of its caption: its axes, in stage order rather than
+elapsed time, and the range of its abundance axis. The rest of its key is
+folded under *How to read this chart*, ending with a link, *How to read
+expression figures*, to `methods.html#expression`. Under a trajectory the fold
+always names the shaded phases and their source; what a tick on the axis means,
+and why the line breaks where this dataset has no row for the organ, it adds
+only where the figure shows one. Under the small multiples it always says why
+the panels share one axis, which organ is drawn heavier as this atlas's
+declared cardiac tissue (or, where this dataset placed nothing there, that no
+panel is drawn heavier), that only medians placed against the percentile grid
+are drawn, and that every figure is in the table below; why a line breaks, and
+which sampled organs have no panel, it adds only where the panels show one.
 
 For the 118 genes published today with no curation here, the card's curation
 sentence says exactly that:

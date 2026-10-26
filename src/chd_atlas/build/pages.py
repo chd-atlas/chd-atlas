@@ -3498,14 +3498,17 @@ _NOT_CURATED_EXPRESSION: Final = (
 #
 # The spec's short form since 2026-10-26 (D50, spec section 5), one of the ten
 # caveats it keeps visible: the claim a reader acts on -- bulk tissue, and a low
-# or absent figure is not evidence against the gene -- and a link. The dilution
-# argument, which lineages a whole heart averages over, is on
-# `methods.html#expression` in full (`methods._EXPRESSION`). The short form
-# drops "never a single cell type", which "whole, bulk tissue" already says, and
-# "bulk" before "figure", which the bold clause before it already scopes.
-# "below" stays true in this position: the notice opens the section, above
-# every dataset block.
-_BULK_DILUTION_NOTICE: Final = (
+# or absent figure is not evidence the gene is unimportant to heart development
+# -- and a link. The dilution argument, which lineages a whole heart averages
+# over, is on `methods.html#expression` in full (`methods._EXPRESSION`). The
+# short form drops "never a single cell type", which "whole, bulk tissue"
+# already says, and "bulk" before "figure", which the bold clause before it
+# already scopes. "below" stays true in this position: the notice opens the
+# section, above every dataset block.
+#
+# Named `_BULK_DILUTION_NOTICE` until review (2026-10-26): the one line it keeps
+# says nothing of dilution, so the name described text that had left it.
+_BULK_TISSUE_NOTICE: Final = (
     '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
     "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
     'heart development. <a href="../methods.html#expression">How to read these '
@@ -3704,8 +3707,10 @@ def _stage_block(
     if spec is not None:
         specificity_html = _specificity_sentence(spec, cardiac_tissues)
     else:
-        # The first unit the stage's own measurements carry: one dataset quotes
-        # every organ in one unit, as `_dominant_unit` records.
+        # The first unit the stage's own measurements carry. One dataset quotes
+        # every organ in one unit because validation makes it: PRF008 is an
+        # ERROR for a dataset whose `profiles.median_abundance` comes in more
+        # than one unit, and the build refuses a corpus with any error.
         unit = next((cell["unit"] for cell in stage["tissues"] if cell["unit"]), "")
         gap = _specificity_gap_sentence(stage["specificity_unavailable_reason"], floor, unit)
         specificity_html = f'<p class="method">{gap}</p>'
@@ -4061,7 +4066,8 @@ def _chart_notes(notes: str) -> str:
     One implementation for the trajectory and the small multiples, so the two
     toggles on one page cannot word their summary or their link two ways. The
     link names its section, as the forest's toggle names `#rare-variants`: the
-    nav's "How to read this atlas" is the text for the top of `methods.html`.
+    nav's "How to read this atlas" and the gene card's "How to read this page"
+    are the two texts that open the top of `methods.html`.
     Both paragraphs are `method`, because unlike the forest's these sit outside
     a `<figcaption>`, and a bare `<p>` would render at body size under the
     caption line it continues.
@@ -4128,7 +4134,10 @@ def _band_caption(
     **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
     caption was one paragraph of four or five sentences, 108 to 151 words,
     under the trajectory on 112 pages; the visible line is 61 on every one of
-    them (measured on builds of 0fc451a and of this change). The two axis
+    them (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 107 to 149 and 60. The two axis
     sentences stay in sight: they say what every point on the figure is, and
     the second is particular to this gene. The floor, tick and no-row clauses
     and the shaded phases fold under "How to read this chart", which closes on
@@ -4450,11 +4459,15 @@ def _no_trajectory_sentence(
     USP44, DAW1, FGF8, GDF1, NODAL. Their headline grades are `definitive`
     (ZIC3, NODAL), `moderate` (DAW1, FGF8), `limited` (USP44) and none at all
     (SEMA3E, GDF1). They are laterality and outflow-tract genes acting in rare
-    lineages, which is exactly the dilution `_BULK_DILUTION_NOTICE` describes
-    (in one line since 2026-10-26; in full on `methods.html#expression`).
-    An empty chart beside a definitive chip asserts the thing that caption
-    denies, so this tier states the fact and repeats the caveat rather than
-    showing a frame with nothing in it.
+    lineages, which is exactly the dilution `methods.html#expression` states
+    in full. `_BULK_TISSUE_NOTICE`, the line above every dataset block, has
+    said nothing of dilution since 2026-10-26 (bulk tissue, and a low figure
+    is not evidence the gene is unimportant, then the link), so on these
+    pages this sentence is the only statement of the mechanism: measured on a
+    build of 802d694, "diluted" appears on 7 gene pages, these seven, once
+    each, all in this sentence. An empty chart beside a definitive chip
+    asserts the thing that caveat denies, so this tier states the fact and
+    the mechanism rather than showing a frame with nothing in it.
 
     **Two branches, because "nothing placed" is not one fact.** All seven of
     those genes are below the floor, and that is what earns the dilution
@@ -4745,7 +4758,10 @@ def _spark_caption(
     **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
     caption was one paragraph of five or six sentences, 133 to 175 words,
     under the grid on 118 pages; the visible line is 41 on every one of them
-    (measured on builds of 0fc451a and of this change). What stays in sight
+    (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 131 to 174 and 40. What stays in sight
     is what every panel is: one per organ with a placed measurement, in stage
     order, all on one abundance axis whose range is printed. Why the axis is
     shared, the highlight, the breaks and the organs with no panel fold under
@@ -4944,7 +4960,7 @@ def _expression_section(
     how to read the figures and say nothing about this gene, so both are on
     `methods.html#expression`, where the conditional went too: stated once in
     general, the comparability sentence has no position to be false in. What
-    stays is `_BULK_DILUTION_NOTICE`'s short form, visible and unconditional,
+    stays is `_BULK_TISSUE_NOTICE`'s short form, visible and unconditional,
     which links there.
     """
     entries = profile["datasets"]
@@ -4954,7 +4970,7 @@ def _expression_section(
     blocks = "".join(
         _dataset_block(entry, datasets.get(entry["dataset"]), phases) for entry in entries
     )
-    return "<h2>Developmental expression</h2>" + _BULK_DILUTION_NOTICE + blocks
+    return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
 
 
 def build_gene_pages(

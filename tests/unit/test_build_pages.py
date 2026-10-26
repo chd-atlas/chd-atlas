@@ -4789,7 +4789,7 @@ def _dataset_lede(section: str) -> str:
     """One dataset block's opening: its chart, or the sentence instead of one.
 
     Sliced off the stage tables the way `_validity_table` is sliced, and for
-    the same reason (CLAUDE.md section 4.19). `_BULK_DILUTION_NOTICE` sits
+    the same reason (CLAUDE.md section 4.19). `_BULK_TISSUE_NOTICE` sits
     above every dataset block, and until 2026-10-26 it contained "not evidence
     that", so a section-wide assertion on that phrase passed whether or not
     the sentence under test was rendered at all. Its short form (D50) says
@@ -5402,7 +5402,7 @@ def test_nothing_placed_says_which_of_the_two_facts_it_is(
     and passes for any rewording.
 
     Sliced to the dataset block's own lede before asserting, because
-    `_BULK_DILUTION_NOTICE` carried "not evidence that" over every gene page
+    `_BULK_TISSUE_NOTICE` carried "not evidence that" over every gene page
     on this site, charted or not, until its short form (2026-10-26); the slice
     stays, so the full notice pasted back cannot answer for this sentence.
     """
