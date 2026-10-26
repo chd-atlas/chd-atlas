@@ -252,7 +252,10 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
-    assert "not yet curated" in page.lower()
+    assert (
+        "<p>The atlas has <strong>not yet curated</strong> a lesion assertion for this gene. "
+        in page
+    )
     assert "Holt-Oram syndrome" in page
     assert "GATA4" in page
 
@@ -2246,6 +2249,10 @@ def test_the_gene_page_matrix_carries_its_own_key_and_caption(
         )
     # It sits with the matrix, not at the far end of the page.
     assert section.index("</table>") < section.index("not evidence against a gene")
+    # Cohort families, not studies: two papers on one sample collection are one
+    # row, never two replications. Literal, beside the matrix it qualifies.
+    assert "Rows are <strong>independent cohort families</strong>, not studies" in section
+    assert section.index("</table>") < section.index("independent cohort families")
 
 
 def test_a_family_wise_corrected_p_is_not_labelled_q(
@@ -3005,7 +3012,12 @@ def test_the_forest_carries_no_summary_diamond(
     # screen above, so the section-wide assertion above passes with or without
     # a word from this figure (CLAUDE.md section 4.19).
     figure = _forest_figures(section)[0]
-    assert "no pooled" in figure
+    # The caption alone: the `<title>` below makes the same claim and answered
+    # for the caption until 2026-10-26 (a deletion probe of the caption
+    # survived every test).
+    caption = re.sub(r"<title>.*?</title>", "", figure, flags=re.S)
+    assert "A forest plot usually ends in a summary diamond" in caption
+    assert "no pooled" in caption
     # And the same scoping again, one level in: the caption and the title are
     # two sentences and a check over the figure is answered by either.
     announced = re.search(r"<title>(.*?)</title>", figure, re.S)
@@ -4257,6 +4269,8 @@ def test_a_phase_the_source_never_ended_bands_nothing(tmp_path: Path) -> None:
     )
     assert section.count('class="chart-band"') == 1
     assert "Atrial septum morphogenesis" in section
+    caption = re.sub(r"<svg.*?</svg>", "", section, flags=re.S)
+    assert "Shaded: Atrial septum morphogenesis" in caption
     assert "Heart looping" not in section
 
     # And with nothing else to band, there is no admissible chart at all.
@@ -5725,6 +5739,13 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
     )
     assert "<td>2024-11-07</td>" in section and "T17:00" not in section
     assert "<td>2018-05-31</td>" in section and "20:04:32" not in section
+    intro = (
+        "<p>Every classification below is an upstream panel's or submitter's, "
+        "republished with its provenance intact.</p>"
+    )
+    assert intro in section
+    # "below" is true only above both groups.
+    assert section.index(intro) < section.index("<h3>Expert panel (ClinGen)</h3>")
     assert section.count("<td>Autosomal dominant</td>") == 2
     assert "<td>AD</td>" not in section
     assert ">SOP11 report</a>" in section

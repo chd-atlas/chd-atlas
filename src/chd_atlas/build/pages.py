@@ -663,15 +663,27 @@ def _not_curated(fact: GeneFacts) -> str:
     Measured 2026-08-04 by restoring the old paragraph and returning it
     unconditionally: 1 failed, 621 passed --
     `test_an_uncurated_notice_never_denies_functional_records_the_rail_counts`
-    is its unique killer, and
-    `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it` does not
+    was its unique killer then, and
+    `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it` did not
     notice, because "not yet curated" is true of both wordings.
 
     Two further mutants, measured the same day, because the two branches are
     guarded separately: returning `""` for the `functional_count == 0` case
-    fails only `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`
-    (1 failed, 621 passed), and returning `""` unconditionally fails both tests
-    (2 failed, 620 passed). Neither branch rests on the other's guard.
+    failed only `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`
+    (1 failed, 621 passed), and returning `""` unconditionally failed both tests
+    (2 failed, 620 passed).
+
+    **Remeasured 2026-10-26, and the first sentence above no longer describes
+    who guards what.** The page test's old `"not yet curated" in page.lower()`
+    was also answered by the expression section's own "not yet curated"
+    notice, so it did not guard this paragraph at all; it now asserts this
+    notice's own opening literal. Replacing `_NOT_CURATED` with `"<p></p>"` and
+    running `tests/unit/test_build_pages.py` and
+    `tests/test_docs_match_the_build.py` (164 tests) gives 3 failed, 161
+    passed: `test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it`,
+    `test_an_uncurated_notice_never_denies_functional_records_the_rail_counts`
+    and `test_the_documented_uncurated_notice_is_the_sentence_the_page_actually_shows`.
+    So no single test is the unique killer of this paragraph.
     """
     notice = (
         _NOT_CURATED
