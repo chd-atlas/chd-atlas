@@ -1367,7 +1367,7 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "sample collection would count the same people twice.",
         "Declaration: this study is by an author of this atlas; republished as published, "
         "no assessment added.",
-        "Every measurement below is from whole, bulk tissue: a low or absent figure is not "
+        "Every measurement below is from bulk tissue: a low or absent figure is not "
         "evidence a gene is unimportant to heart development.",
     ):
         assert f'"{sentence}"' in doc, sentence

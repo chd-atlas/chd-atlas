@@ -3508,17 +3508,23 @@ _NOT_CURATED_EXPRESSION: Final = (
 # The spec's short form since 2026-10-26 (D50, spec section 5), one of the ten
 # caveats it keeps visible: the claim a reader acts on -- bulk tissue, and a low
 # or absent figure is not evidence the gene is unimportant to heart development
-# -- and a link. The dilution argument, which lineages a whole heart averages
+# -- and a link. The dilution argument, which lineages a heart sample averages
 # over, is on `methods.html#expression` in full (`methods._EXPRESSION`). The
-# short form drops "never a single cell type", which "whole, bulk tissue"
-# already says, and "bulk" before "figure", which the bold clause before it
-# already scopes. "below" stays true in this position: the notice opens the
-# section, above every dataset block.
+# short form drops "never a single cell type", which "bulk tissue" already
+# says, and "bulk" before "figure", which the bold clause before it already
+# scopes. "below" stays true in this position: the notice opens the section,
+# above every dataset block.
+#
+# "whole, bulk tissue" until the owner's decision of 2026-10-26 (E2): the
+# dataset's own curation record sets the Expression Atlas's organ tokens
+# (forebrain, hindbrain) against the paper's (brain, cerebellum), so "whole"
+# need not hold of every organ and stage, and the dilution argument rests on
+# bulk -- mixed cell types -- alone.
 #
 # Named `_BULK_DILUTION_NOTICE` until review (2026-10-26): the one line it keeps
 # says nothing of dilution, so the name described text that had left it.
 _BULK_TISSUE_NOTICE: Final = (
-    '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
+    '<p class="notice-inline"><strong>Every measurement below is from bulk '
     "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
     'heart development. <a href="../methods.html#expression">How to read these '
     "figures</a>.</p>"
@@ -3686,7 +3692,7 @@ def _percentile_cell(tissue: TissueProfileEntry, floor: float | None) -> str:
         qualifier = (
             f" (detection floor {_fmt(floor)} {tissue['unit']})" if floor is not None else ""
         )
-        return f"below the detection floor in whole {tissue['tissue']} at this stage{qualifier}"
+        return f"below the detection floor in {tissue['tissue']} at this stage{qualifier}"
     fallback = "no percentile is available for this measurement"
     return _PLACEMENT_GAP_CLAUSE.get(reason or "", fallback)
 
@@ -4137,8 +4143,8 @@ def _band_caption(
     differ on exactly the genes where the wording matters most. `_axis_bounds`
     widens a flat series by half a decade either side, because `LogScale`
     refuses a zero-span axis; 3 of the 85 charted genes are flat (TFAP2B and
-    MMP21 at 1 tpm, FOXH1 at 2), and "median abundance in whole heart, 0.316
-    to 3.16 tpm" would attribute to their medians a spread neither end of
+    MMP21 at 1 tpm, FOXH1 at 2), and "median abundance in heart, 0.316 to
+    3.16 tpm" would attribute to their medians a spread neither end of
     which anyone measured.
 
     **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
@@ -4226,7 +4232,7 @@ def _band_caption(
     visible = (
         f'<p class="method">Left to right: {span} in curated developmental '
         "order, evenly spaced &mdash; the axis is <strong>order, not elapsed time</strong>. "
-        f"Vertical: median abundance in whole {html.escape(tissue)}, {unit}, on a log scale; "
+        f"Vertical: median abundance in {html.escape(tissue)}, {unit}, on a log scale; "
         f"the axis runs {_fmt(low)} to {_fmt(high)} and is fitted to <strong>this gene</strong>, "
         f"so a curve's height compares nothing to another gene's.{floor_clause}</p>"
     )
@@ -4376,7 +4382,7 @@ def _trajectory(
     floor = dataset.detection_floor if dataset is not None else None
     floor_words = f", above a detection floor of {_fmt(floor)} {unit}" if floor is not None else ""
     title = (
-        f"Median abundance in whole {tissue}, {series[0].label} to {series[-1].label}: "
+        f"Median abundance in {tissue}, {series[0].label} to {series[-1].label}: "
         f"{len(placed)} of {len(series)} sampled developmental stages placed against this "
         f"dataset's percentile grid{floor_words}, banded by this atlas's own curated "
         "cardiac phases."
@@ -4410,7 +4416,7 @@ def _sampled_cardiac(entry: DatasetProfileEntry, cardiac: frozenset[str]) -> lis
 
 
 def _sampled_organs_clause(sampled: Sequence[tuple[str, int]]) -> str:
-    """ "whole heart (19 stages sampled)" -- the organ clause both refusals open with.
+    """ "heart (19 stages sampled)" -- the organ clause both refusals open with.
 
     One implementation, because the two sentences name the same organs for
     two different reasons and a reader who sees one never sees the other; two
@@ -4422,7 +4428,7 @@ def _sampled_organs_clause(sampled: Sequence[tuple[str, int]]) -> str:
     lapsing in the one place nothing was reading.
     """
     return ", ".join(
-        f"whole {html.escape(tissue)} ({count} stage{'' if count == 1 else 's'} sampled)"
+        f"{html.escape(tissue)} ({count} stage{'' if count == 1 else 's'} sampled)"
         for tissue, count in sampled
     )
 
@@ -4539,7 +4545,7 @@ def _no_trajectory_sentence(
         )
     # The floor's own value is a separate sentence rather than a parenthesis
     # inside the first, because the organ clause already ends in one -- "in
-    # whole heart (19 stages sampled) (detection floor 1 tpm)" is what nesting
+    # heart (19 stages sampled) (detection floor 1 tpm)" is what nesting
     # them produced, and a reader stops reading at the second bracket.
     qualifier = (
         f" This dataset's detection floor is {_fmt(floor)} "
@@ -4552,9 +4558,9 @@ def _no_trajectory_sentence(
         f"floor at every stage sampled</strong> in {organs}, so there is no trajectory to "
         f"draw.{qualifier} That is "
         "<strong>not evidence that</strong> the gene is unimportant to heart development, and it "
-        "is not a measured zero: every figure here is a whole-organ median, and a gene "
+        "is not a measured zero: every figure here is a median over bulk tissue, and a gene "
         "transcribed intensely in one rare cardiac lineage still reads below a bulk floor once "
-        "diluted across the whole organ. Every per-stage figure is in the table below.</p>"
+        "diluted across the sample. Every per-stage figure is in the table below.</p>"
     )
 
 
@@ -4718,7 +4724,7 @@ def _small_multiples(entry: DatasetProfileEntry, dataset: Dataset | None) -> str
             ", this atlas's declared cardiac tissue for this dataset" if tissue in cardiac else ""
         )
         title = (
-            f"Median abundance in whole {tissue}{role}: {len(placed)} of "
+            f"Median abundance in {tissue}{role}: {len(placed)} of "
             f"{sampled_at[tissue]} sampled developmental stages placed, on the abundance "
             "axis every organ here shares."
         )

@@ -485,14 +485,18 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 _EXPRESSION: Final = (
     '<h2 id="expression">Developmental expression</h2>'
     # was pages._BULK_TISSUE_NOTICE in full, under its old name
-    # `_BULK_DILUTION_NOTICE`; "below" -> "in this atlas"
+    # `_BULK_DILUTION_NOTICE`; "below" -> "in this atlas". "whole" left it on
+    # the owner's decision of 2026-10-26 (E2): E-MTAB-6814's curation record
+    # sets the Expression Atlas's organ tokens (forebrain, hindbrain) against
+    # the paper's (brain, cerebellum), so a sample need not be a whole organ;
+    # the dilution argument rests on bulk, mixed cell types, alone.
     '<p class="notice-inline"><strong>Every developmental expression measurement in this '
-    "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
-    "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "
+    "atlas is from bulk tissue, never a single cell type.</strong> An embryonic heart "
+    "sample mixes cardiomyocytes with endocardium, epicardium, cardiac neural crest, "
     "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
     "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
     "the conduction system. A gene expressed intensely in one such lineage can still read "
-    "low, or fall below the detection floor, once diluted across the whole organ: "
+    "low, or fall below the detection floor, once diluted across the sample: "
     "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
     "development.</p>"
     # was pages._EXPRESSION_READING_NOTES

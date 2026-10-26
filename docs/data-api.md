@@ -312,8 +312,8 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   these cohorts, and the caveats recorded for them*, and that fold ends with a
   link here.
 - `#expression` says how to read a gene page's developmental expression
-  section: that every developmental expression measurement here is from whole,
-  bulk tissue, so a low or absent figure is not evidence a gene is unimportant
+  section: that every developmental expression measurement here is from bulk
+  tissue, so a low or absent figure is not evidence a gene is unimportant
   to heart development; how a median is placed against its organ's percentile
   grid, and that none is placed below its dataset's detection floor, a
   threshold this atlas records per dataset and not necessarily one its source
@@ -1546,7 +1546,7 @@ to [`methods.html#rare-variants`](#methodshtml), which states the key in
 general.
 
 The developmental expression section, last on the page, opens with one visible
-line: "Every measurement below is from whole, bulk tissue: a low or absent
+line: "Every measurement below is from bulk tissue: a low or absent
 figure is not evidence a gene is unimportant to heart development." It links
 [`methods.html#expression`](#methodshtml) as *How to read these figures*; that
 section states the argument in full with the reading notes this section folded

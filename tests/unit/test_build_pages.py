@@ -4400,7 +4400,7 @@ def test_a_below_floor_tissue_names_the_organ_and_the_floor_value_and_never_says
     )
     section = _expression_section_text(page)
 
-    assert "below the detection floor in whole Liver at this stage" in section
+    assert "below the detection floor in Liver at this stage" in section
     assert "detection floor 1 rpkm" in section
     assert "not detected" not in page.lower()
 
@@ -4619,7 +4619,7 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
         )
     )
     caveat = (
-        '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
+        '<p class="notice-inline"><strong>Every measurement below is from bulk '
         "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
         'heart development. <a href="../methods.html#expression">How to read these '
         "figures</a>.</p>"
@@ -4713,7 +4713,7 @@ def test_the_expression_reading_notes_are_on_methods_html_and_not_on_the_gene_pa
             "travels with every percentile",
             "the rank of an unreliable measurement",
             # The bulk notice in full: the short form keeps its claim and
-            # drops the argument. Not "once diluted across the whole organ":
+            # drops the argument. Not "once diluted across the sample":
             # `_no_trajectory_sentence` says that of its own gene, rightly.
             "never a single cell type",
             "cardiac neural crest",
@@ -4997,8 +4997,8 @@ def test_the_trajectory_says_what_its_vertical_axis_spans(tmp_path: Path) -> Non
     # Stated as the **axis's** range and not as the medians'. `_axis_bounds`
     # widens a flat series by half a decade either side, because `LogScale`
     # refuses a zero-span axis, and 3 of the 85 charted genes are flat: for
-    # TFAP2B, placed at 1 tpm and nowhere else, "median abundance in whole
-    # heart, 0.316 to 3.16 tpm" attributes to its medians a spread neither
+    # TFAP2B, placed at 1 tpm and nowhere else, "median abundance in heart,
+    # 0.316 to 3.16 tpm" attributes to its medians a spread neither
     # end of which anyone measured. The third fixture is that gene's shape.
     assert "the axis runs 5 to 275 and is fitted to" in wide
     assert "the axis runs 1 to 2 and is fitted to" in narrow
@@ -5012,7 +5012,7 @@ def test_the_trajectory_says_what_its_vertical_axis_spans(tmp_path: Path) -> Non
         )
     )
     assert "the axis runs 0.316 to 3.16 and is fitted to" in flat
-    assert "median abundance in whole heart, tpm, on a log scale" in flat
+    assert "median abundance in heart, tpm, on a log scale" in flat
 
 
 def test_a_phase_the_source_never_ended_bands_nothing(tmp_path: Path) -> None:
@@ -5226,7 +5226,7 @@ def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> 
     assert visible == (
         '<p class="method">Left to right: 4wpc to 9wpc, all 6 of this dataset\'s stages in '
         "curated developmental order, evenly spaced &mdash; the axis is <strong>order, not "
-        "elapsed time</strong>. Vertical: median abundance in whole heart, tpm, on a log "
+        "elapsed time</strong>. Vertical: median abundance in heart, tpm, on a log "
         "scale; the axis runs 5 to 275 and is fitted to <strong>this gene</strong>, so a "
         "curve's height compares nothing to another gene's. Ticks on the axis mark stages "
         "below this dataset's detection floor (1 tpm), beneath the foot of the scale rather "
@@ -6008,14 +6008,14 @@ def _trajectory_organs(section: str) -> list[str]:
     Matched on the trajectory's own 560x150 `viewBox` rather than on `<svg`,
     for the reason `_trajectory_figure` is (CLAUDE.md section 4.19): the organ
     small multiples are 96x40 `<svg>`s in the same section, and a *cardiac*
-    organ's panel opens `Median abundance in whole <organ>,` exactly as its
+    organ's panel opens `Median abundance in <organ>,` exactly as its
     trajectory does -- identical through the comma this pattern stops at. An
     unscoped search would return every cardiac organ twice, interleaved in an
     order the trajectories do not decide.
     """
     return re.findall(
         r'<svg class="chart" viewBox="0 0 560 150"[^>]*><title>'
-        r"Median abundance in whole ([^,]+),",
+        r"Median abundance in ([^,]+),",
         section,
     )
 
@@ -6163,10 +6163,10 @@ def test_both_sentences_that_list_every_cardiac_organ_list_them_in_one_order(
     )
 
     assert (
-        "whole aorta (3 stages sampled), whole atrium (3 stages sampled), "
-        "whole endocardium (3 stages sampled), whole epicardium (3 stages sampled), "
-        "whole myocardium (3 stages sampled), whole septum (3 stages sampled), "
-        "whole ventricle (3 stages sampled)"
+        "aorta (3 stages sampled), atrium (3 stages sampled), "
+        "endocardium (3 stages sampled), epicardium (3 stages sampled), "
+        "myocardium (3 stages sampled), septum (3 stages sampled), "
+        "ventricle (3 stages sampled)"
     ) in section
     assert (
         "this atlas declares aorta, atrium, endocardium, epicardium, myocardium, "

@@ -754,12 +754,12 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
     assert _section(page, "expression") == (
         '<h2 id="expression">Developmental expression</h2>'
         '<p class="notice-inline"><strong>Every developmental expression measurement in this '
-        "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
-        "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "
+        "atlas is from bulk tissue, never a single cell type.</strong> An embryonic heart "
+        "sample mixes cardiomyocytes with endocardium, epicardium, cardiac neural crest, "
         "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
         "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
         "the conduction system. A gene expressed intensely in one such lineage can still read "
-        "low, or fall below the detection floor, once diluted across the whole organ: "
+        "low, or fall below the detection floor, once diluted across the sample: "
         "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
         "development.</p>"
         "<p>A gene's median abundance in an organ is placed against that organ's own "
@@ -817,7 +817,7 @@ def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(
     corpus: Corpus,
 ) -> None:
     """`#expression` opens "Every developmental expression measurement in this
-    atlas is from whole, bulk tissue", and so does every gene page's short form.
+    atlas is from bulk tissue", and so does every gene page's short form.
 
     Both are unconditional by design -- a caveat beside only the bad news reads
     as an excuse -- so neither reads the data it describes. This is what does:
@@ -842,8 +842,8 @@ def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(
     )
     assert not other, (
         "re-read methods.html#expression's 'Every developmental expression measurement in "
-        "this atlas is from whole, bulk tissue' and the gene page's 'Every measurement below "
-        f"is from whole, bulk tissue' (pages._BULK_TISSUE_NOTICE) against: {other}"
+        "this atlas is from bulk tissue' and the gene page's 'Every measurement below "
+        f"is from bulk tissue' (pages._BULK_TISSUE_NOTICE) against: {other}"
     )
 
 

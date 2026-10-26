@@ -848,7 +848,7 @@ def test_every_trajectory_mark_sits_where_the_payload_puts_it(site: Path) -> Non
         # Every cardiac organ this dataset declares, in the order the page draws
         # them; one trajectory each, so figure i belongs to organ i.
         for figure in figures:
-            title = re.search(r"<title>Median abundance in whole ([^:,]+)", figure)
+            title = re.search(r"<title>Median abundance in ([^:,]+)", figure)
             assert title is not None, "a trajectory names the organ it draws"
             organ = title.group(1).strip()
 
@@ -1224,6 +1224,48 @@ def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
             fragments += 1
             assert target in ids, f"{page_path.name} links #{target}, which no element carries"
     assert fragments, "no gene page carries a fragment link; the sweep would pass vacuously"
+
+
+def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
+    """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".
+
+    Every expression sentence said a sample was a whole organ -- "from whole,
+    bulk tissue", "median abundance in whole heart", "below the detection floor
+    in whole liver", methods.html's "A whole embryonic heart is ...", "diluted
+    across the whole organ" -- while E-MTAB-6814's own curation record sets the
+    Expression Atlas's organ tokens (forebrain, hindbrain) against the paper's
+    (brain, cerebellum), so "whole" need not hold of every organ and stage. The
+    dilution argument rests on bulk, mixed cell types, alone.
+
+    Over the whole text of every gene page and `methods.html`, `<title>`s of
+    the charts included: "whole" before "bulk", an organ, a tissue, a sample,
+    "embryonic" or any organ token a published bundle names. Measured with
+    this pattern on a build of 3b766ba: all 119 gene pages and methods.html
+    matched; on a build of the change, none. The other meanings of "whole" --
+    a whole scan, a syndrome as a whole, the whole gene set -- name none of
+    these and are untouched.
+    """
+    tissues = {
+        cell["tissue"]
+        for path in sorted((site / "genes").glob("HGNC_*.json"))
+        for dataset in json.loads(path.read_text(encoding="utf-8"))["expression_profile"][
+            "datasets"
+        ]
+        for stage in dataset["stages"]
+        for cell in stage["tissues"]
+    }
+    assert tissues, "no bundle names an organ; the check would pass vacuously"
+    whole = re.compile(
+        r"\bwhole[\s,-]+(?:bulk|organs?|tissues?|samples?|embryonic|"
+        + "|".join(re.escape(tissue) for tissue in sorted(tissues, key=len, reverse=True))
+        + r")\b",
+        re.IGNORECASE,
+    )
+    pages = [*sorted((site / "genes").glob("HGNC_*.html")), site / "methods.html"]
+    for path in pages:
+        text = " ".join(html.unescape(path.read_text(encoding="utf-8")).split())
+        found = sorted(set(whole.findall(text)))
+        assert not found, f"{path.name} still says a sample was a whole {found}"
 
 
 # --- The gene page's prose budget (D50, D57) ----------------------------------
