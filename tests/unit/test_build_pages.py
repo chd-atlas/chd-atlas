@@ -1820,6 +1820,30 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     )
     assert "no pooled statistic across studies" in two
 
+    # **The caption also says the cell and the card lead differently** (owner
+    # decision 2026-10-26, R4): the cell names the most significant row behind
+    # its state, the card a study's surviving rows in table order. Pinned as a
+    # literal, sliced to the caption -- from the matrix's end to the first
+    # study block -- and rendered with the matrix alone: two studies with no
+    # evidence axes draw no matrix, and keep the pooling sentence without it.
+    caption = section[section.index("</table></div>") : section.index("<h3")]
+    assert (
+        "<p>A cell names the most significant of the rows behind its state; where the card "
+        "lists surviving rows, it keeps each study table's order, a damaging union before its "
+        "parts, so the two can lead with different rows.</p>" in caption
+    )
+    bare = _burden_section_text(
+        _burden_page(
+            tmp_path / "bare",
+            facts_uncurated,
+            [_burden_row(), _burden_row(study="PMID:8988165", case_cohorts=("ddd", "pcgc"))],
+            axes=(),
+        )
+    )
+    assert '<table class="matrix">' not in bare
+    assert "no pooled statistic across studies" in bare
+    assert "A cell names the most significant" not in bare
+
 
 def test_the_consequence_column_is_headed_for_the_column_it_renders(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]

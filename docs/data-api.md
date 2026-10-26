@@ -1524,7 +1524,11 @@ every fold:
   enrichment at these cohort sizes is not evidence against a gene — and that
   no statistic is pooled across studies: "The atlas computes no pooled
   statistic across studies: pooling two that share a sample collection would
-  count the same people twice.";
+  count the same people twice." — and that a cell and the card can lead with
+  different rows: "A cell names the most significant of the rows behind its
+  state; where the card lists surviving rows, it keeps each study table's
+  order, a damaging union before its parts, so the two can lead with
+  different rows.";
 - any sample collection the gene's studies share, as this atlas has recorded
   them;
 - on a block from a study by an author of this atlas, a one-line declaration:

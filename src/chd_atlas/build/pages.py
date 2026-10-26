@@ -600,6 +600,27 @@ _POOLING_NOTICE: Final = (
     "two that share a sample collection would count the same people twice.</p>"
 )
 
+# The matrix and the card each lead with one row, by two rules the owner kept
+# (owner decision 2026-10-26, R4), so the caption says they differ rather than
+# leaving a reader to find the two disagreeing. A cell names the most
+# significant of the rows that give it its state (`_matrix_cell`: among
+# `concordance.deciding_rows`, by corrected p where published and raw p
+# otherwise); the card lists a study's surviving rows in its table's reading
+# order (`_card_rare_variants`, `burden._sort_key`), in which the `damaging`
+# union sorts before its components. Measured on a build of 3b766ba: of the 45
+# card lines on 32 pages, 15 lead with a different row from their matrix cell,
+# on 13 pages. The owner's draft said "its strongest supporting row": the cell
+# names a surviving row in a `corrected` cell, ranked by p, not by effect --
+# "most significant", the word `docs/data-api.md` uses for it. "where the card
+# lists surviving rows", because 86 of the 118 pages with a matrix list none.
+# Rendered with every matrix, whatever this gene's rows: as worded it is true
+# on every page that shows one.
+_MATRIX_LEAD_NOTE: Final = (
+    "<p>A cell names the most significant of the rows behind its state; where the card "
+    "lists surviving rows, it keeps each study table's order, a damaging union before its "
+    "parts, so the two can lead with different rows.</p>"
+)
+
 # `_BURDEN_PREAMBLE` and `_SYNONYMOUS_NOTICE` sat here until 2026-10-26: the
 # rare-variant reading notes every gene page folded under "How to read these
 # numbers". They moved, with their histories, to `methods._RARE_VARIANTS` (D50).
@@ -1989,7 +2010,7 @@ def _burden_section(
         # it. Rendered whenever there is a matrix, because the matrix is what it
         # qualifies -- unlike its previous home, where it was conditional on
         # there being more than one study to pool.
-        + (_POOLING_NOTICE if matrix else pooling)
+        + (_POOLING_NOTICE + _MATRIX_LEAD_NOTE if matrix else pooling)
         + shared
         + "".join(blocks)
         + _cohort_notes(rows, cohorts)

@@ -1365,6 +1365,9 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "republished as published; the atlas computes none of them.",
         "The atlas computes no pooled statistic across studies: pooling two that share a "
         "sample collection would count the same people twice.",
+        "A cell names the most significant of the rows behind its state; where the card "
+        "lists surviving rows, it keeps each study table's order, a damaging union before its "
+        "parts, so the two can lead with different rows.",
         "Declaration: this study is by an author of this atlas; republished as published, "
         "no assessment added.",
         "Every measurement below is from bulk tissue: a low or absent figure is not "
