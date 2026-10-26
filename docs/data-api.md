@@ -234,8 +234,9 @@ not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 carrying rare-variant evidence, and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
 than written by hand. It links to
-`genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json` and the
-repository. Self-contained: no external request, no build timestamp,
+`genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
+[`methods.html`](#methodshtml) (from the navigation bar every page shares) and
+the repository. Self-contained: no external request, no build timestamp,
 byte-identical between two builds of one commit like everything else here.
 
 It also carries a key to the four evidence glyphs, built from the same constant
@@ -485,12 +486,14 @@ that gene's page — the symbol, `headline_confidence`, `validity_state`,
 matching id or symbol and five menus (lesion group, confidence, validity state,
 atlas curation, rare-variant evidence), whose options are the values actually present
 in the build rather than every value the vocabulary allows. Above them, one
-line says each classification is an external authority's, for the disease named,
-which is not the same as for CHD, and links
+line says each classification is an external authority's, for the disease it
+names, which for many genes here is a syndrome rather than CHD, and links
 [`methods.html#scope`](#methodshtml) for the admission rule and the grade key.
-The confidence menu now includes genes with no headline at all: 21 of the 119
-are admitted on submitter agreement and carry `null`, and the browse page
-renders those with a `not classified` chip rather than an empty cell.
+21 of the 119 genes have no headline at all — they are admitted on submitter
+agreement and carry `null` — and the browse page renders an em dash (—) in
+their confidence and graded-for cells, as it does for every empty cell. Cells
+are plain text, not chips. The confidence menu offers no value for them: only
+*any confidence* shows them.
 
 **Every row is rendered by the build, and the inline script only hides rows.**
 There is no empty `<tbody>` filled in by a fetch, so `curl`, a crawler and a
@@ -1345,8 +1348,8 @@ as rows; every one of them is in the bundle, which remains the record.
 
 Beside the card, the main column opens with the same one-line short form of the
 scope rule as the gene index, linking [`methods.html#scope`](#methodshtml),
-which states the rule in full and carries the grade key; until `2.18` every gene
-page carried both itself. Below it, the mirrored validity table in two groups —
+which states the rule in full and carries the grade key; before this release,
+every gene page carried both. Below it, the mirrored validity table in two groups —
 **Expert panel (ClinGen)** first, then **Other curators (GenCC)** — each row
 giving who curated it, the disease, the mode of inheritance in one vocabulary
 (ClinGen's `AD` reads as GenCC's "Autosomal dominant"), the authority's own

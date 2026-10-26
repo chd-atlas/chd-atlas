@@ -79,7 +79,9 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
 
     Its last clause said the disease "is shown beside the gene", true on a gene
     page and on the gene index and unanchored here, so it now names both
-    places. The full literal pins the wording; the fragments beside it are the
+    places -- and only for a gene a ClinGen panel graded: the 21 genes admitted
+    on submitter agreement have no panel-named disease to show (2026-10-26).
+    The full literal pins the wording; the fragments beside it are the
     claims any rewording must keep, so a deliberate edit to the literal is not
     also a silent edit to the gate it describes.
     """
@@ -101,9 +103,9 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
         "page names the authority that admitted the gene. A classification is not the same "
         "as definitive for congenital heart disease: for many of these genes the disease "
-        "graded is a syndrome of which a cardiac lesion is one feature, and the disease the "
-        "panel actually named is shown beside each gene, on its page and in the gene "
-        "index.</p>"
+        "graded is a syndrome of which a cardiac lesion is one feature, and for a gene a "
+        "ClinGen panel graded, the disease the panel named is shown beside the gene, on "
+        "its page and in the gene index.</p>"
     )
     for claim in (
         "Limited or better",
@@ -185,6 +187,15 @@ def test_scope_states_where_a_dispute_is_listed_without_pointing_below(page: str
     the table below", which was false on the gene index (no validity table) and
     is false here; it now names the gene's validity table. "This page is not a
     complete account" became "a gene page", for the same reason.
+
+    **And its condition named one path of two.** "Where that disease is one an
+    external authority treats as congenital heart disease" excluded the
+    Orphanet path -- and Costello and cardiofaciocutaneous syndrome, the
+    diseases all six disputed genes (BRAF, KRAS, MAP2K1, PTPN11, RAF1, SOS1) are
+    disputed for, are in scope only through it (`admitted_by:
+    orphanet_phenotype_frequency`). It now reads "in scope here, by either path
+    above", which `test_the_key_follows_the_rule_its_dispute_sentence_points_back_to`
+    keeps true.
     """
     section = _section(page, "scope")
     key = re.search(r'<div class="grade-key"><p>(.*?)</p>', section, re.S)
@@ -199,9 +210,9 @@ def test_scope_states_where_a_dispute_is_listed_without_pointing_below(page: str
         "and which this atlas maps to no rung. "
         "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
         "may still have disputed the same gene for a different disease. Where that disease "
-        "is one an external authority treats as congenital heart disease, the record is in "
-        "that gene&#x27;s validity table, marked <em>Disputed</em> or <em>Refuted</em>, and "
-        "the gene carries a <em>conflicting evidence</em> flag. Where it is not, the record "
+        "is in scope here, by either path above, the record is in that gene&#x27;s validity "
+        "table, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries a "
+        "<em>conflicting evidence</em> flag. Where it is not, the record "
         "is not shown: a gene page lists only records for diseases in this atlas&#x27;s "
         "remit, so it is not a complete account of what ClinGen has said about the gene."
     )
@@ -233,3 +244,16 @@ def test_no_sentence_the_move_retired_comes_back_here(page: str, retired: str) -
     """
     assert retired not in page
     assert retired not in html.unescape(page)
+
+
+def test_the_key_follows_the_rule_its_dispute_sentence_points_back_to(page: str) -> None:
+    """The rule renders above the key, because the key says "by either path above".
+
+    The key's dispute sentence names no path; it points back at the rule, which
+    names both. Rendered above the rule -- or anywhere the rule is not above it
+    -- "above" points at nothing, the same defect "the table below" was.
+    """
+    section = _section(page, "scope")
+    rule = section.index('<p class="scope-rule">')
+    key = section.index('<div class="grade-key">')
+    assert rule < key, "the grade key renders before the rule it says is above it"

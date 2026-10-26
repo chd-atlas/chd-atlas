@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from dataclasses import replace
 from datetime import date
@@ -731,8 +732,6 @@ def test_browse_facet_options_are_ordered_against_a_literal(
 
 def test_the_browse_page_says_whose_classification_the_confidence_column_carries(
     tmp_path: Path,
-    facts_two: dict[str, GeneFacts],
-    validity_two: dict[str, GeneValidity],
 ) -> None:
     """23 rows reading `definitive` under a column headed `confidence`, unattributed.
 
@@ -746,22 +745,43 @@ def test_the_browse_page_says_whose_classification_the_confidence_column_carries
     and the pointer to the column that says whether the atlas has curated the
     gene at all. `_BROWSE_HEADERS` is checked in the same breath so the sentence
     cannot come to name a column the table stopped rendering.
+
+    **The attribution itself was wrong, and is pinned as a literal since
+    2026-10-26.** The paragraph said "Every confidence below is an upstream
+    panel's or submitter's" and "A blank confidence means ...". The column is
+    `headline_confidence`, the admitting ClinGen panel's grade and never a
+    submitter's, and a gene no panel graded renders an em dash there, not a
+    blank -- 21 of the 119 rows on a real build. So the fixture now carries one
+    gene of each kind, and the em-dash cell is asserted beside the sentence
+    that describes it: the two fail together.
     """
+    graded, graded_validity = _limited(TBX5)
+    admitted, admitted_validity = _submitter_admitted(GATA4)
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
-        facts_two,
+        {TBX5: graded, GATA4: admitted},
         emitter,
         symbols={TBX5: "TBX5", GATA4: "GATA4"},
-        validity=validity_two,
+        validity={TBX5: graded_validity, GATA4: admitted_validity},
         burden_counts={},
     )
-
     page = _page(tmp_path, "index.html")
-    assert "upstream panel's or submitter's" in page
-    assert "the atlas authors no validity classification of its own" in page
-    assert "<strong>atlas curation</strong> column" in page
+
+    intro = _slice_between(page, "<p>Every confidence below", ("</p>",))
+    assert intro == (
+        " is a ClinGen expert panel's, republished with its provenance intact "
+        "&mdash; the atlas authors no validity classification of its own. The "
+        "<strong>atlas curation</strong> column is what says whether the atlas has "
+        "curated a gene itself, and the <strong>graded for</strong> column names the "
+        "disease each panel actually graded. A confidence shown as &mdash; means no "
+        "ClinGen expert panel has graded the gene for any of the diseases in scope "
+        "here; its page names the submitters whose agreement admitted it."
+    )
     assert '<th scope="col">atlas curation</th>' in page
     assert '<th scope="col">confidence</th>' in page
+    row = re.search(r"<tr[^>]*>(?:(?!</tr>).)*HGNC_4173\.html(?:(?!</tr>).)*</tr>", page, re.S)
+    assert row, "the submitter-admitted gene has no browse row"
+    assert re.findall(r"<td>(.*?)</td>", row.group(0), re.S)[2] == "—"
 
 
 def test_no_browse_row_states_a_bare_definitive_without_the_disease_it_is_for(
@@ -896,30 +916,30 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
     facts_two: dict[str, GeneFacts],
     validity_two: dict[str, GeneValidity],
 ) -> None:
-    """No page on the site said what the published set is. `docs/data-api.md` did.
+    """Both page kinds say whose classification they show, and link the rule in full.
 
-    A reader of the HTML never sees that document, so the browse page and every
-    gene page now carry the rule themselves: a gene is published when a ClinGen
-    expert panel classifies it Limited or better for a disease an external
-    authority treats as CHD, or when two GenCC submitters agree and no panel
-    disputes it. Neither is the same as definitive for congenital heart disease.
+    No page on the site said what the published set is until 2026-08-04;
+    `docs/data-api.md` did, and a reader of the HTML never sees that document.
+    Until 2026-10-26 both page kinds carried the whole admission rule and a
+    folded grade key. Both moved to `methods.html#scope` (D50), where
+    `test_build_methods.py` pins them; each page kind now carries a one-line
+    short form and a link to that section.
 
-    Both page kinds are checked from one constant, `pages._SCOPE_RULE`, because
-    the rule is one editorial claim and two copies of it are two things that
-    drift. What is asserted here is that the constant *reaches both kinds of
-    page* -- the drift this cannot catch is the constant itself being reworded,
-    which is what the phrase assertions below are for. They are deliberately not
-    the whole string: this must fail when the sentence stops distinguishing the
-    two claims, not merely when a comma moves.
+    What this asserts, on the browse page and on two gene pages: the short form
+    as a literal, sliced to its `<p class="scope-rule">` element and present
+    exactly once; the link inside it; that the full rule has not come back
+    beside it (a page carrying both is the page D50 exists to slim); and the
+    retired "this atlas's CHD scope" absent in both spellings of its
+    apostrophe.
 
-    **The rule moved to `methods.html#scope` on 2026-10-26 (D50).** Both page
-    kinds now carry its short form -- the classification is an external
-    authority's, for the disease named, which is not the same as for CHD --
-    and a link to the full rule, which `test_build_methods.py` pins together
-    with the phrase assertions that used to live here. What this asserts now is
-    the short form as a literal, sliced to its element, the link inside it,
-    and that the full rule is not also on the page: a page carrying both is the
-    page D50 exists to slim.
+    **The short form must be true on a page whose panel graded CHD itself.**
+    The spec's first wording -- "for the disease named, which is not the same
+    as for CHD" -- contradicted the card on 53 of the 119 gene pages, whose
+    panel graded congenital heart disease (ISL1: "definitive for congenital
+    heart disease", one line above a sentence saying that is not CHD; measured
+    2026-10-26). GATA4 here is graded for "structural congenital heart
+    disease", so it is that page, independent of the real corpus: its card is
+    asserted to name the disease, and its short form not to deny it.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
@@ -942,6 +962,9 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
 
     for name in ("index.html", "HGNC_11604.html", "HGNC_4173.html"):
         page = _page(tmp_path, name)
+        # Both spellings: the build writes one apostrophe `'` and another
+        # `&#x27;`, and a retired phrase must not pass by changing which.
+        texts = (page, html.unescape(page))
         # **The published provenance claim, corrected 2026-08-06.** Every page
         # used to say a gene is definitive "for a disease in this atlas's CHD
         # scope", which told 24 published pages that this atlas decides what
@@ -953,7 +976,7 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
         # The negative assertion is the load-bearing half. Without it a future
         # edit could restore the old sentence beside the new one and satisfy
         # every positive check here.
-        assert "this atlas's CHD scope" not in page
+        assert all("this atlas's CHD scope" not in text for text in texts)
         # **Both warrants, or the sentence describes a gate the site does not
         # have**, and **sliced to the scope-rule element, because page-wide the
         # phrase checks could not fail** (CLAUDE.md section 4.19): both
@@ -966,13 +989,22 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
         assert rule, f"{name} carries no scope-rule element"
         sentence = rule.group(0)
         assert sentence == (
-            '<p class="scope-rule">Published on an external authority&#x27;s classification: '
-            "for the disease named, which is not the same as for CHD. "
-            '<a href="../methods.html#scope">How a gene is admitted, and what each grade '
-            "means</a>.</p>"
+            '<p class="scope-rule">Published on an external authority&#x27;s classification '
+            "for the disease it names, which for many genes here is a syndrome rather than "
+            'CHD. <a href="../methods.html#scope">How a gene is admitted, and what each '
+            "grade means</a>.</p>"
         ), f"{name}: the scope short form changed"
         assert 'href="../methods.html#scope"' in sentence
-        assert "No disease is in scope on this atlas's own judgement" not in page
+        assert all(
+            "No disease is in scope on this atlas's own judgement" not in text for text in texts
+        )
+
+    # A page whose panel graded CHD itself: the card says so, and the short form
+    # must not deny it.
+    gata4 = _page(tmp_path, "HGNC_4173.html")
+    assert "<dt>definitive for</dt><dd>structural congenital heart disease</dd>" in gata4
+    short = _slice_between(gata4, '<p class="scope-rule">', ("</p>",))
+    assert "not the same as for CHD" not in short
 
 
 def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
@@ -1495,12 +1527,15 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     """
     page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
 
-    assert "survivorship bias against severe CHD" in page
-    assert "enriched for syndromic CHD" in page
     # In a `<details>`, so the caveats are one click from every table rather than
     # repeated at full length above 23 of them -- and still in the document for
-    # a crawler, a `curl`, and a reader with no JavaScript.
-    assert "<details" in page
+    # a crawler, a `curl`, and a reader with no JavaScript. Sliced to the
+    # cohort-notes fold itself (2026-10-26): `"<details" in page` passed on any
+    # other fold on the page, the rare-variant reading notes among them, with
+    # the caveats printed anywhere at all.
+    notes = _slice_between(page, '<details class="cohort-notes">', ("</details>",))
+    assert "survivorship bias against severe CHD" in notes
+    assert "enriched for syndromic CHD" in notes
 
 
 def test_the_page_says_what_was_counted_not_only_how_many(
@@ -3434,9 +3469,11 @@ def test_both_page_kinds_leave_the_grade_key_to_methods_html(tmp_path: Path) -> 
         # Unqualified it was false for 5 published genes carrying an
         # out-of-scope ClinGen `Disputed`; and its in-scope half went false on
         # 2026-10-25, when six published RASopathy genes gained an in-scope
-        # `Disputed` for Costello or CFC.
-        assert "No gene here was disputed or refuted" not in page
-        assert "not published here at all" not in page
+        # `Disputed` for Costello or CFC. Both spellings, as everywhere a
+        # retired phrase is asserted absent.
+        for text in (page, html.unescape(page)):
+            assert "No gene here was disputed or refuted" not in text
+            assert "not published here at all" not in text
 
 
 # --- Developmental expression -----------------------------------------------

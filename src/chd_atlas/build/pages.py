@@ -134,17 +134,26 @@ from chd_atlas.vocab import (
 #
 # What the short form keeps is the half a reader needs on every page, because it
 # is the half whose absence did the damage: whose classification this is (an
-# external authority's, not the atlas's) and what it is for (the disease named,
-# not congenital heart disease). A green `definitive` under a title reading "CHD
-# Atlas" read as definitive for CHD, which measured 2026-08-04 was false for
-# most of the first 23 genes.
+# external authority's, not the atlas's) and what it is for (the disease it
+# names). A green `definitive` under a title reading "CHD Atlas" read as
+# definitive for CHD, which measured 2026-08-04 was false for most of the first
+# 23 genes.
+#
+# **It is hedged, because the plain form was false on 53 pages.** The spec's
+# short form read "for the disease named, which is not the same as for CHD".
+# On 53 of the 119 gene pages the panel graded congenital heart disease itself
+# -- ISL1's card reads "definitive for congenital heart disease" one line above
+# it (measured 2026-10-26) -- so the sentence denied the card. "Which for many
+# genes here is a syndrome rather than CHD" is true on every page: it says what
+# the disease often is, not what it is on this one, and the card beside it says
+# that.
 #
 # Both page kinds sit in `genes/`, hence `../`. One constant for both, for the
 # reason the full rule was one: two copies of one claim are two things that
 # drift.
 _SCOPE_SHORT: Final = (
-    '<p class="scope-rule">Published on an external authority&#x27;s classification: for '
-    "the disease named, which is not the same as for CHD. "
+    '<p class="scope-rule">Published on an external authority&#x27;s classification for '
+    "the disease it names, which for many genes here is a syndrome rather than CHD. "
     '<a href="../methods.html#scope">How a gene is admitted, and what each grade '
     "means</a>.</p>"
 )
@@ -4864,13 +4873,15 @@ def build_gene_index_page(
     mirrors would let this page and the gene page it links to name different
     diseases for the same gene.
 
-    Since the gate widened the column answers a second question too. A blank
-    `confidence` cell now means something specific -- no ClinGen panel graded the
-    gene, which is why `_graded_diseases` returns nothing for it -- and an em
-    dash beside a blank is the only pair on this table that is not a gap in the
-    data. The paragraph under the heading says so, and `render.grade_key` glosses
-    it on `methods.html#scope`, which both page kinds link from their short form
-    (it was a folded key on both pages until 2026-10-26, D50).
+    Since the gate widened the column answers a second question too. An empty
+    `confidence` -- rendered as an em dash, like every empty cell here -- now
+    means something specific: no ClinGen panel graded the gene, which is why
+    `_graded_diseases` returns nothing for it either, and that pair of dashes is
+    the only one on this table that is not a gap in the data. The paragraph
+    under the heading says so (it said "a blank confidence" until 2026-10-26),
+    and `render.grade_key` glosses it on `methods.html#scope`, which both page
+    kinds link from their short form (it was a folded key on both pages until
+    2026-10-26, D50).
 
     Two couplings to `render.FILTER_SCRIPT` that nothing in the type system
     holds, both pinned by
@@ -5003,12 +5014,15 @@ def build_gene_index_page(
     body = (
         "<h1>Genes</h1>"
         + _SCOPE_SHORT
-        + "<p>Every confidence below is an upstream panel's or submitter's, republished "
+        # Corrected 2026-10-26: it said "an upstream panel's or submitter's" for a
+        # column that is only ever the admitting ClinGen panel's grade, and "a
+        # blank confidence" for a cell that renders an em dash (21 rows).
+        + "<p>Every confidence below is a ClinGen expert panel's, republished "
         "with its provenance intact &mdash; the atlas authors no validity classification "
         "of its own. The <strong>atlas curation</strong> column is what says whether the "
         "atlas has curated a gene itself, and the <strong>graded for</strong> column "
-        "names the disease each panel actually graded. A blank confidence means no "
-        "ClinGen expert panel has graded the gene for any of the diseases in scope here; "
+        "names the disease each panel actually graded. A confidence shown as &mdash; means "
+        "no ClinGen expert panel has graded the gene for any of the diseases in scope here; "
         "its page names the submitters whose agreement admitted it.</p>"
         + f'<p>Showing <span id="shown">{len(rows)}</span> of {len(rows)} genes.</p>'
         '<form id="filters" class="filters">'

@@ -119,6 +119,10 @@ STYLESHEET: Final = """
   }
   .notice p { margin: 0; }
   .scope-rule { color: var(--muted); font-size: 0.9rem; }
+  /* On methods.html the rule is the section's content, not a gloss beside a
+     gene: body colour and size there, and only there. The gene pages' and the
+     gene index's short form keeps the muted style above. */
+  h2#scope + .scope-rule { color: var(--fg); font-size: 1rem; }
   /* The burden section's four paragraph kinds. `.notice-inline` and
      `.provenance` were emitted by `pages.py` with no rule at all, so the single
      most important safety message this site can print -- "these two studies are
@@ -272,7 +276,9 @@ STYLESHEET: Final = """
   }
   .chip-warn { background: var(--warn); color: #fff; }
   .grade-key { margin: 1rem 0; font-size: 0.9rem; }
-  .grade-key dt { margin-top: 0.5rem; }
+  /* A row gap rather than a margin on `dt`: the margin pushed each chip below
+     the first line of its own gloss, since `dd` had none. */
+  .grade-key dl { row-gap: 0.6rem; }
   .layout { display: grid; grid-template-columns: 15rem 1fr; gap: 2rem; }
   @media (max-width: 46rem) { .layout { grid-template-columns: 1fr; } }
   .rail { font-size: 0.9rem; }
@@ -563,6 +569,16 @@ def grade_key() -> str:
     headline grade in the key's words (`GRADE_GLOSS`). Rendered open, because on
     the page that exists to explain it the key is not a digression to fold.
 
+    **It must render after `methods.SCOPE_RULE`.** The dispute sentence's
+    condition read "Where that disease is one an external authority treats as
+    congenital heart disease", which named one path into scope of two: Costello
+    and cardiofaciocutaneous syndrome, the diseases the six disputed genes are
+    disputed for, are in scope only on Orphanet's phenotype frequencies. It now
+    reads "in scope here, by either path above" (2026-10-26), which points at
+    the rule rather than restating it -- so it is true only below the rule, and
+    `test_the_key_follows_the_rule_its_dispute_sentence_points_back_to` pins
+    that order.
+
     `disputed` and `refuted` are deliberately not listed. They are in
     `GRADE_CHIP_KIND` as a guard, but no gene headlined by either is published,
     so the key says that instead of glossing a state a reader cannot meet.
@@ -617,9 +633,9 @@ def grade_key() -> str:
         "and which this atlas maps to no rung. "
         "<strong>No gene here is published on a disputed or refuted grade.</strong> A panel "
         "may still have disputed the same gene for a different disease. Where that disease "
-        "is one an external authority treats as congenital heart disease, the record is in "
-        "that gene&#x27;s validity table, marked <em>Disputed</em> or <em>Refuted</em>, and "
-        "the gene carries a <em>conflicting evidence</em> flag. Where it is not, the record "
+        "is in scope here, by either path above, the record is in that gene&#x27;s validity "
+        "table, marked <em>Disputed</em> or <em>Refuted</em>, and the gene carries a "
+        "<em>conflicting evidence</em> flag. Where it is not, the record "
         "is not shown: a gene page lists only records for diseases in this atlas&#x27;s "
         "remit, so it is not a complete account of what ClinGen has said about the gene.</p>"
         f"<dl>{rows}</dl></div>"

@@ -9,12 +9,20 @@ holds that explanation once; each gene page keeps a short form and a link to the
 section here that states it in full.
 
 **Every sentence below the introduction was moved off a gene page or the gene
-index, and reworded for this position.** A sentence's truth conditions travel
-with its position (CLAUDE.md section 4.27): "the table below" was true on a gene
-page, false on the gene index and false here, and "this page" here names a page
-with no gene on it. So nothing is pasted from the constant it replaced, and
-`tests/unit/test_build_methods.py` pins each section against literals, sliced to
-the section, with the phrases the move retired asserted absent from the page.
+index, and each was re-read in this position.** A sentence's truth conditions
+travel with its position (CLAUDE.md section 4.27): "the table below" was true on
+a gene page, false on the gene index and false here, and "this page" here names
+a page with no gene on it. Those that were false here were reworded: the scope
+rule's last clause, and the grade key's dispute and completeness sentences.
+The rest are unchanged because they are true anywhere -- the key's opening
+sentences, and the rung glosses (`render.GRADE_GLOSS`), which stay verbatim on
+purpose because a gene page's card glosses its headline grade from the same
+constant, and one rung must not be glossed two ways.
+
+`tests/unit/test_build_methods.py` pins the scope rule and the key's opening
+paragraph against literals, sliced to the section; the glosses by a phrase
+unique to each, as one label-chip-gloss triple per rung; and the phrases the
+move retired as absent from the whole page.
 
 Written through `Emitter.write_text`, for the reason `pages.py` gives: `Json`'s
 union includes `str`, so `write_json` would type-check and publish the page as a
@@ -58,7 +66,9 @@ from chd_atlas.models.cohort import Cohort
 # Moved from `pages._SCOPE_RULE` (2026-10-26, D50), where it was one constant
 # for both page kinds. Its last clause said the disease "is shown beside the
 # gene", true on a gene page and on the gene index and unanchored here, so it
-# now names both places.
+# now names both places -- and says "for a gene a ClinGen panel graded", since
+# the 21 genes admitted on submitter agreement have no panel-named disease to
+# show (their card names the submitters instead).
 SCOPE_RULE: Final = (
     '<p class="scope-rule">A gene is published here when an external authority already '
     "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
@@ -73,9 +83,9 @@ SCOPE_RULE: Final = (
     "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
     "page names the authority that admitted the gene. A classification is not the same "
     "as definitive for congenital heart disease: for many of these genes the disease "
-    "graded is a syndrome of which a cardiac lesion is one feature, and the disease the "
-    "panel actually named is shown beside each gene, on its page and in the gene "
-    "index.</p>"
+    "graded is a syndrome of which a cardiac lesion is one feature, and for a gene a "
+    "ClinGen panel graded, the disease the panel named is shown beside the gene, on "
+    "its page and in the gene index.</p>"
 )
 
 _INTRO: Final = (
