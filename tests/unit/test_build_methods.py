@@ -25,7 +25,7 @@ from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import Cohort
-from chd_atlas.vocab import DatasetDesign, Technology
+from chd_atlas.vocab import Technology
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -723,8 +723,9 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
     code and a build of 0fc451a (`methods._EXPRESSION` records each):
 
     * the bulk claim is scoped to *developmental* expression, the profile
-      datasets the gene page's section renders, and held to the curation by
-      `test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say`;
+      datasets the gene page's section renders, and held to every curated
+      dataset by
+      `test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say`;
     * "the number of genes measured" is the number the grid was built from
       (`Placement.n_genes`: 58,735 in every cell of E-MTAB-6814's grid);
     * "a dataset's own detection floor" read as the source's, and the only
@@ -812,7 +813,7 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
     )
 
 
-def test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say(
+def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(
     corpus: Corpus,
 ) -> None:
     """`#expression` opens "Every developmental expression measurement in this
@@ -820,13 +821,30 @@ def test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say(
 
     Both are unconditional by design -- a caveat beside only the bad news reads
     as an excuse -- so neither reads the data it describes. This is what does:
-    a profile dataset of any other technology (single-cell, proteomics) makes
-    both sentences false, and fails here rather than on a reader. Measured
-    2026-10-26: one profile dataset, E-MTAB-6814, `bulk_rnaseq`.
+    a dataset of any other technology (single-cell, proteomics) can make both
+    sentences false, and fails here rather than on a reader. Measured
+    2026-10-26: one curated dataset, E-MTAB-6814, `bulk_rnaseq`.
+
+    **Every curated dataset, whatever its design** (review, 2026-10-26). It
+    checked profile datasets alone, while the sentence covers every
+    developmental measurement in the atlas, and a contrast dataset of
+    developmental tissue is one; nothing in a dataset's record says whether
+    its tissue is developmental, so the check takes them all. The error runs
+    the safe way: a bulk microarray, or an adult contrast dataset, fails here
+    though the sentence may still be true, and a person re-reads it; the
+    opposite error would publish a false sentence.
     """
-    profiles = [dataset for dataset in corpus.datasets if dataset.design is DatasetDesign.PROFILE]
-    assert profiles, "no profile dataset curated; the check would pass vacuously"
-    assert {dataset.technology for dataset in profiles} == {Technology.BULK_RNASEQ}
+    assert corpus.datasets, "no dataset curated; the check would pass vacuously"
+    other = sorted(
+        f"{dataset.id} ({dataset.technology.value}, {dataset.design.value})"
+        for dataset in corpus.datasets
+        if dataset.technology is not Technology.BULK_RNASEQ
+    )
+    assert not other, (
+        "re-read methods.html#expression's 'Every developmental expression measurement in "
+        "this atlas is from whole, bulk tissue' and the gene page's 'Every measurement below "
+        f"is from whole, bulk tissue' (pages._BULK_TISSUE_NOTICE) against: {other}"
+    )
 
 
 def test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own(

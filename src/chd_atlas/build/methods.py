@@ -440,8 +440,9 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 # * The bulk claim names *developmental* expression: the profile datasets the
 #   gene page's section renders, all `bulk_rnaseq` today (E-MTAB-6814 alone).
 #   Unconditional by design, it reads no data, so
-#   `test_every_profile_dataset_is_the_bulk_tissue_the_expression_notes_say`
-#   holds it to the curation instead. Its "the detection floor" was "a
+#   `test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say`
+#   holds it to the curation instead -- every curated dataset, whatever its
+#   design, since review (2026-10-26). Its "the detection floor" was "a
 #   dataset's" for one revision and is "the" again since review (2026-10-26):
 #   "a dataset's" read as the source's, and the second paragraph now says
 #   whose a floor is.
