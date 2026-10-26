@@ -1405,12 +1405,12 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured on the head of WS3 PR iii after review (2026-10-26), with headroom:
-# (a) 841 x 1.03 rounded up, (b) 21 + 1. See the test for the series and the
-# rule. Lower each when a page sheds prose; raising one is a decision, and its
-# commit says why.
-_MEDIAN_VISIBLE_WORDS = 867
-_BOILERPLATE_SENTENCES = 22
+# Measured after the owner's wording decisions of 2026-10-26, with the headroom
+# owner decision E4 keeps: (a) 895 x 1.03 rounded up, (b) 22 + 1. See the test
+# for the series and the rule. Lower each when a page sheds prose; raising one
+# is a decision, and its commit says why.
+_MEDIAN_VISIBLE_WORDS = 922
+_BOILERPLATE_SENTENCES = 23
 
 
 class _VisibleText(HTMLParser):
@@ -1523,7 +1523,20 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     0fc451a, after Tasks 1-5 (#60), #62, #63   1,066  1,194  25 sentences, 506 words
     452625c, after Task 6                        836    952  20 sentences, 386 words
     802d694, the gene card's link to methods     841    957  21 sentences, 395 words
+    2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
     =========================================  =====  =====  ======================
+
+    The last row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
+    R6, R7), measured on a build of the clean tree at each commit: 3b766ba
+    read 841 and 21 / 395, as at 802d694. E1 lifted two particular caveats
+    out of the chart folds (+12, to 853); E2 dropped "whole" (-2, to 851); R4's
+    matrix caption sentence is on all 118 pages with a matrix (+38, to 889) and
+    is the 22nd boilerplate sentence (38 words); R7's declaration on the
+    card's tested line is on 86 cards (+6, to 895). R6's line is on one card
+    and E3's section intro on one page, and neither moves either figure; R10,
+    W2, W4 and W5 change no gene page's visible prose (W4's and W5's cohort
+    descriptions render folded). Growth from owner-decided sentences is deliberate (E4), and
+    none of them was folded or cut to fit.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
@@ -1536,8 +1549,9 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 867, the last row's 841 x 1.03 rounded up, and (b) at 22,
-    one more than 21. **When this fails, re-measure before anything else.** If
+    (a) is held at 922, the last row's 895 x 1.03 rounded up, and (b) at 23,
+    one more than 22 (owner decision E4 keeps both margins; they were 867 and
+    22 over 802d694's row). **When this fails, re-measure before anything else.** If
     the growth is a new study's or dataset's own data-driven prose, raise the
     budget and put the measurement here. Never fold a caveat the fold rule
     requires visible to get under it: the budget exists to keep explanation
