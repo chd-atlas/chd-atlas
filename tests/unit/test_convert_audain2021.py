@@ -1,11 +1,16 @@
 # tests/unit/test_convert_audain2021.py
-"""The Audain 2021 converter's row note, on the row it builds and in the mirror.
+"""The Audain 2021 converter's row note and denominators, on the row it builds and in the mirror.
 
-The note renders unfolded under "N carriers / 7,107" on every gene page carrying
+The note renders unfolded under "N carriers / 6,746" on every gene page carrying
 this study, so it has to be true of that row. Until 2026-10-26 it read "777
 sporadic thoracic aortic aneurysm probands (of 7,958 contributing individuals)",
 which put all 777 in the case count printed above it -- and no test read the
 note at all, because nothing had ever driven this converter (CLAUDE.md §4.23).
+
+The denominators are the 6,746 cases and 14,024 controls the article's methods
+say the permutation test was run on, after filtering. The rows carried S1
+Table's deletion column, 7,107 and 14,040, until 2026-10-26; each test below
+fails on that pair, one on the converter and one on a mirror not re-run.
 """
 
 from __future__ import annotations
@@ -38,7 +43,7 @@ _METHOD_NOTE = (
 )
 
 
-def test_the_row_the_converter_builds_carries_the_current_note(
+def test_the_row_the_converter_builds_carries_the_current_note_and_denominators(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Driven through `convert` on two synthetic S6 records: one registered gene, one not."""
@@ -58,12 +63,17 @@ def test_the_row_the_converter_builds_carries_the_current_note(
     (row,) = rows
     assert row["method_note"] == _METHOD_NOTE
     assert "taa_cases" in row["case_cohorts"].split(";")
+    # Literals, not `N_CASES`/`N_CONTROLS`: a test reading the constants
+    # compares the converter to itself.
+    assert (row["n_cases"], row["n_controls"]) == ("6746", "14024")
 
 
-def test_every_committed_row_carries_the_current_note() -> None:
+def test_every_committed_row_carries_the_current_note_and_denominators() -> None:
     """Reads the committed mirror, so a converter edited without being re-run fails here."""
     frame, issues = read_table(REPO_ROOT / "mirrors" / "burden.tsv", BURDEN)
     assert frame is not None, issues
     mine = frame.filter(pl.col("study") == STUDY)
     assert mine.height, f"no rows for {STUDY}; did the merge drop them?"
     assert mine["method_note"].unique().to_list() == [_METHOD_NOTE]
+    assert mine["n_cases"].unique().to_list() == [6746]
+    assert mine["n_controls"].unique().to_list() == [14024]

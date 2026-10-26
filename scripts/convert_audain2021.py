@@ -87,17 +87,21 @@ representation, and their cohorts will name the overlap between them properly.
 
 DENOMINATORS
 ------------
-S1 Table gives the per-CNV-type counts: 7,107 cases and 14,040 controls have
-deletion data, against 7,958 and 14,082 for CNVs of any type. The deletion
-figures are the ones S1 gives for this analysis, so they are the ones the
-mirror carries -- the rule applied to PMID:42230622, whose abstract likewise
-quotes a larger set than its statistics used. That they are also the figures
-the statistic was computed on is not established; see the next paragraph.
+Every row carries 6,746 cases and 14,024 controls, the set the article's
+Methods put the permutation test on: "After filtering, 6,746 cases (3,929
+harbouring CNV deletions) and 14,024 controls (12,585 harbouring CNV
+deletions) remained for further analysis. A region-based permutation test
+(using PLINK version 1.07 ...) was used on the filtered set to perform a
+case-control association analysis." That is the rule applied to PMID:42230622,
+whose abstract likewise quotes a larger set than its statistics used: a row's
+denominators are the ones its statistic was computed on.
 
-**Unresolved since 2026-10-26.** The article's methods say the permutation test
-was run on a post-QC set of 6,746 cases and 14,024 controls, which is neither
-S1 pair. The mirror still carries 7,107 and 14,040 until the study's authors
-say which set PLINK counted; see the comment on `METHOD_NOTE`.
+S1 Table ("Number of probands in the CNV cohort", by CNV type) is not that set.
+The article cites it for the cohort as assembled, 7,958 cases and 14,082
+controls, before describing the quality-control filters, and its deletion
+column gives 7,107 cases and 14,040 controls. The mirror carried that column
+until 2026-10-26, when this was resolved: the statistic was computed on the
+filtered set the Methods state, so the filtered set is what the rows publish.
 """
 
 from __future__ import annotations
@@ -123,11 +127,13 @@ SOURCE: Final = "audain2021_s6"
 CASE_COHORTS: Final = "decipher;isca;signature;taa_cases"
 CONTROL_COHORTS: Final = "gain_controls;ottawa_controls;wtccc_controls"
 
-# S1 Table, the deletion column.
-N_CASES: Final = 7107
-N_CONTROLS: Final = 14040
+# The Methods' filtered set, on which the permutation test was run; see
+# DENOMINATORS above. Not S1 Table's deletion column (7,107 and 14,040), which
+# counts the cohort as assembled and which the mirror carried until 2026-10-26.
+N_CASES: Final = 6746
+N_CONTROLS: Final = 14024
 
-# Renders unfolded directly under "N carriers / 7,107" on every gene page that
+# Renders unfolded directly under "N carriers / 6,746" on every gene page that
 # carries this study. It read "777 sporadic thoracic aortic aneurysm probands
 # (of 7,958 contributing individuals)" until 2026-10-26, which put all 777 in
 # the case count printed above it. Measured 2026-10-26: S2 Table gives the
@@ -136,11 +142,11 @@ N_CONTROLS: Final = 14040
 # the analysis. How many of the 777 are is stated nowhere read -- S1, S2, S3,
 # S6, S8, S10, S11 and the article's text and table captions.
 #
-# The note deliberately names no case count of its own. `N_CASES` is S1
-# Table's deletion column, but the article's methods say the permutation test
-# ran "on the filtered set": "6,746 cases (3,929 harbouring CNV deletions) and
-# 14,024 controls (12,585 harbouring CNV deletions)". Which figure is this
-# row's denominator is unresolved, so the note does not repeat one.
+# The note deliberately names no case count for the row. `n_cases` prints
+# directly above it, and the 7,958 the note does name is the assembled cohort
+# S2 Table counts the 777 against, not the 6,746 the test ran on. How many of
+# the 777 survived the filtering is stated nowhere read (above), which is why
+# the note says so rather than putting a count on it.
 METHOD_NOTE: Final = (
     "Cases combine congenital heart disease with a series of 777 sporadic "
     "thoracic aortic aneurysm probands among the study's 7,958 cases; the study "

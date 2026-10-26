@@ -452,21 +452,20 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     It said "Any row naming this cohort has a case set that is about 10%
     non-CHD (777 of 7,958), and the page must say so" -- a curator's
     instruction published as a caveat, beside rows whose case set is not
-    7,958. The study's S1 Table counts 7,958 cases with a CNV of any type and
-    7,107 with deletion data; S2 puts this series at 777 of the 7,958; every
-    row naming the cohort is a deletion row publishing 7,107 cases (121 mirror
-    rows, all PMID:34324492). So the description now gives both figures, and
-    this asserts the second against every published row that cites the cohort:
-    a re-curated mirror with another denominator fails here rather than leaving
-    the caveat contradicting the table beside it.
+    7,958. S2 puts this series at 777 of the 7,958; every row naming the
+    cohort is a PMID:34324492 deletion row (121 mirror rows), and those rows
+    publish the 6,746 cases and 14,024 controls the article's methods say the
+    permutation test was run on, after filtering. So the description gives
+    both figures, and this asserts the second pair against every published row
+    that cites the cohort: a re-curated mirror with other denominators fails
+    here rather than leaving the caveat contradicting the table beside it.
 
-    **What the rows publish, never what the statistic was computed on.** The
-    description said "a row naming this cohort is computed on the 7,107" until
-    later on 2026-10-26, when the article's methods were read: its permutation
-    test ran on a filtered set of 6,746 cases and 14,024 controls, which is
-    neither S1 pair. Which set PLINK counted is open, so the sentence now says
-    only what the rows publish, and "computed on" is asserted absent beside the
-    retired phrases.
+    **The denominator changed the same day.** The rows published S1 Table's
+    deletion column, 7,107 cases and 14,040 controls, and the description said
+    a row "publishes the 7,107 cases the study's S1 Table gives for its
+    deletion analysis" until the filtered set was settled as the one the
+    statistic was computed on. That clause is asserted absent beside the other
+    retired phrases, so it cannot come back beside the new one.
 
     The retired phrases are asserted absent from every published byte that
     carries the description -- `cohorts.json`, `methods.html` and each gene
@@ -478,15 +477,16 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
     }
     description = registry["taa_cases"]["description"]
     denominators = {
-        row["n_cases"]
+        (row["n_cases"], row["n_controls"])
         for bundle in sorted((site / "genes").glob("HGNC_*.json"))
         for row in json.loads(bundle.read_text(encoding="utf-8"))["burden"]
         if "taa_cases" in row["case_cohorts"]
     }
     assert denominators, "no published row cites taa_cases; this measures nothing"
-    for denominator in sorted(denominators):
-        assert f"publishes the {denominator:,} cases" in description, (
-            f"rows citing taa_cases publish {denominator:,} cases; the caveat does not say so"
+    for cases, controls in sorted(denominators):
+        assert f"is computed on the {cases:,} cases and {controls:,} controls" in description, (
+            f"rows citing taa_cases publish {cases:,} cases and {controls:,} controls; "
+            "the caveat does not say so"
         )
     assert "777 of its 7,958 cases" in description
 
@@ -497,7 +497,7 @@ def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path)
             "must say so",
             "explicitly out of",
             "puts aortopathy outside",
-            "is computed on the",
+            "S1 Table gives for its deletion analysis",
         ):
             assert retired not in text and retired not in html.unescape(text), (
                 f"{retired!r} is published in {path.name}"

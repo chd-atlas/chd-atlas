@@ -431,7 +431,7 @@ class CountUnit(StrEnum):
     """What a burden row's numerator and denominator actually count.
 
     **A count without its unit is the same defect as an effect without its
-    measure** -- see `EffectMeasure`. "12 / 21,768" and "6 / 7,107" are both
+    measure** -- see `EffectMeasure`. "12 / 21,768" and "6 / 6,746" are both
     plausible burden cells, and read side by side they claim to be the same kind
     of measurement. They are not, and no other column in this schema
     distinguishes them.

@@ -493,7 +493,7 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     filled and muted, not hollow, so it says "a non-synonymous row". And the
     case-group paragraph called an unsplit study's `all cases` its "whole case
     set", a denominator equivalence no study's rows bear out (PMID:34324492's
-    count 7,107 of its 7,958 cases); it now says only that the group is not a
+    count 6,746 of its 7,958 cases); it now says only that the group is not a
     subgroup, and the old phrase is asserted absent.
     """
     expected = [
@@ -720,7 +720,7 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         # True of one study, stated in general (2026-10-26).
         "uncorrected scale",
         # `all cases` is not a study's denominator (2026-10-26): PMID:34324492's
-        # rows count 7,107 of its 7,958 cases, PMID:40127276's 3,887 trios or an
+        # rows count 6,746 of its 7,958 cases, PMID:40127276's 3,887 trios or an
         # allele total against 11,555 probands.
         "whole case set",
         # The forest key's own deictics: no panel and no study is in sight here,
