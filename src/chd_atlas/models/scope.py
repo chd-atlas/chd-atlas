@@ -50,6 +50,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from chd_atlas.duplicates import duplicates
 from chd_atlas.identifiers import DiseaseId, OrphaId
+from chd_atlas.models.review import ReviewStatus, check_review
 
 # Non-blank after stripping: a value of all whitespace passes a bare
 # `min_length` and renders as nothing, which is worse than an absent field
@@ -138,6 +139,17 @@ class ScopeEntry(BaseModel):
     # Orphanet-scoped term needs no mark, its warrant already says it.
     syndrome: bool = False
     admitted_on: date
+    # An open question about this term (owner's standing rule, 2026-10-27;
+    # `models/review.py`): both or neither, the note stating only what is
+    # unresolved. Published in `scope.json` only -- no card line, since the
+    # owner wants no speculation on a gene's card.
+    review_status: ReviewStatus | None = None
+    review_note: _NonBlankStr | None = None
+
+    @model_validator(mode="after")
+    def a_review_status_carries_its_note(self) -> ScopeEntry:
+        check_review(self.id, self.review_status, self.review_note)
+        return self
 
     @model_validator(mode="after")
     def orphanet_code_matches_the_warrant(self) -> ScopeEntry:

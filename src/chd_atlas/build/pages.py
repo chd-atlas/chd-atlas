@@ -108,6 +108,7 @@ from chd_atlas.build.render import (
     definition_list,
     document,
     evidence_legend,
+    review_status_note,
 )
 from chd_atlas.build.validity import (
     GeneValidity,
@@ -3927,15 +3928,22 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     2026-10-26), which lists every cohort in the registry. Only this gene's
     cohorts are here; the full list is a second place a caveat reaches, never
     a replacement for this one (CLAUDE.md section 9).
+
+    **A record's open question follows its description here too** (owner's
+    standing rule, 2026-10-27): its status's label and the curator's note,
+    escaped, by `render.review_status_note`, the function the methods page's
+    list uses. It reaches the same pages the description does, and a
+    collection with no question recorded gets nothing.
     """
     cited = sorted(
         {identifier for row in rows for identifier in (*row.case_cohorts, *row.control_cohorts)}
     )
     items = [
-        f"<li><strong>{html.escape(cohorts[identifier].name)}</strong> &mdash; "
-        f"{html.escape(cohorts[identifier].description)}</li>"
+        f"<li><strong>{html.escape(cohort.name)}</strong> &mdash; "
+        f"{html.escape(cohort.description)}"
+        f"{review_status_note(cohort.id, cohort.review_status, cohort.review_note)}</li>"
         for identifier in cited
-        if identifier in cohorts
+        if (cohort := cohorts.get(identifier)) is not None
     ]
     if not items:
         return ""

@@ -620,7 +620,8 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     collection has no public page (11 of the 20 on 2026-10-27), because an
     object whose shape varies is a trap for a consumer reading a field off one
     record and expecting it on the next -- the rule `admission_provenance` and
-    `burden_payload` already follow.
+    `burden_payload` already follow. `review_status` and `review_note` follow
+    it too: both `null` on a record no open question is recorded for.
     """
     emitter.write_json(
         COHORTS,
@@ -635,6 +636,13 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
                     # 2026-10-27, I3), sorted, `[]` where none: the edges
                     # `cohort_families` merges on besides a shared id.
                     "overlaps_with": sorted(str(other) for other in cohort.overlaps_with),
+                    # An open question about the record's sources (owner's
+                    # standing rule, 2026-10-27), `null` and `null` where none
+                    # is recorded -- never omitted, like `url`.
+                    "review_status": (
+                        None if cohort.review_status is None else cohort.review_status.value
+                    ),
+                    "review_note": cohort.review_note,
                 }
                 for cohort in sorted(cohorts, key=lambda item: str(item.id))
             ]

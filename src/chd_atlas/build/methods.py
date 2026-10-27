@@ -80,7 +80,7 @@ from typing import Final
 from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import COHORTS, DATASETS, METHODS_PAGE
-from chd_atlas.build.render import document, grade_key
+from chd_atlas.build.render import document, grade_key, review_status_note
 from chd_atlas.models.cohort import Cohort
 
 # What the published set *is*, stated in full here and in one line on both page
@@ -531,6 +531,12 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     collection's home page, and "source" beside a description reads as the
     citation for it.
 
+    A record carrying an open question (owner's standing rule, 2026-10-27)
+    says so right after its description, before any link: its status's label
+    ("Pending review:" or "Source not accessible:") and the curator's note,
+    escaped (`render.review_status_note`, which a gene page's cohort notes
+    share). A record with none gets nothing.
+
     `cohort-list` is layout only. The base `dl` is a two-column grid whose label
     column grows to its widest label, which suits the grade key's chips and
     would give a cohort's full name most of the line.
@@ -538,6 +544,7 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     items = "".join(
         f"<dt>{html.escape(cohort.name)} (<code>{html.escape(cohort.id)}</code>)</dt>"
         f"<dd>{html.escape(cohort.description)}"
+        + review_status_note(cohort.id, cohort.review_status, cohort.review_note)
         + (f' <a href="{html.escape(cohort.url)}">website</a>' if cohort.url else "")
         + "</dd>"
         for cohort in sorted(cohorts.values(), key=lambda cohort: cohort.id)

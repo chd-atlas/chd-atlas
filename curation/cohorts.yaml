@@ -21,6 +21,16 @@
 # rows name the three collections the cohort description names and no more,
 # because inventing a fourth from an ethics approval would be the atlas asserting
 # something the study did not.
+#
+# REVIEW STATUS (owner's standing rule, 2026-10-27; `models/review.py`). Where a
+# record rests on a source that disagrees with the paper it cites, or on a
+# source that could not be read, it carries `review_status` -- `pending_review`
+# (the sources disagree, awaiting an expert) or `not_accessible` (the source
+# could not be read) -- and a `review_note` stating exactly what is unresolved,
+# and nothing more. Never assert either side, never speculate, never drop the
+# record. Both fields or neither: loading refuses one without the other.
+# `cohorts.json` publishes both (`null` where absent), and the note renders
+# after the description on methods.html and in each gene page's cohort notes.
 cohorts:
   - id: cnchd
     name: German Competence Network for Congenital Heart Defects
@@ -125,30 +135,58 @@ cohorts:
   # and none is declared. No url: a series has no home page of its own, and
   # the cohort list's link reads "website". The ids are the cited PMIDs; the
   # one S2 cites under two PMIDs carries both.
+  #
+  # Two of the seven carry `review_status: pending_review` (owner's answer,
+  # 2026-10-27): for `pmid22939634_cases` and `pmid22969434_cases`, S2 and the
+  # cited paper's PubMed abstract (read 2026-10-27) disagree, and each note
+  # says how and nothing more. The other five list no more individuals than
+  # their papers' abstracts report -- 742 against PMID:22318994's 945; 340
+  # against PMID:22912587's 433, 340 being that abstract's own count of its
+  # Caucasian probands; 123 against PMID:22929023's 203; 91 against
+  # PMID:26655555's 101; and 63, the 20 and 43 children PMID:18535492 and
+  # PMID:22349727 recruited, together -- a subset, or for the last the whole,
+  # not a disagreement, so they carry no status.
   - id: pmid22318994_cases
     name: CHD case series of PMID:22318994
     description: >-
       742 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+  # Pending review: S2's platform and 432 cases against the abstract's Illumina
+  # arrays and 2,256 individuals (the comment heading these seven says why this
+  # record and not the other five).
   - id: pmid22939634_cases
     name: CHD case series of PMID:22939634
     description: >-
       432 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix 6.0 array, Agilent CGH 44k/105K.
+    review_status: pending_review
+    review_note: >-
+      S2 gives the platform as Affymetrix 6.0 array, Agilent CGH 44k/105K and
+      lists 432 cases; the paper's abstract reports Illumina 660W-Quad SNP
+      arrays in 2,256 individuals with CHD. Which of the paper's individuals S2
+      lists, and on which platform, is not stated.
   - id: pmid22912587_cases
     name: CHD case series of PMID:22912587
     description: >-
       340 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+  # Pending review: S2's 178 individuals with CHD against the abstract's 174
+  # affecteds among 464 individuals (the comment heading these seven says why
+  # this record and not the other five).
   - id: pmid22969434_cases
     name: CHD case series of PMID:22969434
     description: >-
       178 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+    review_status: pending_review
+    review_note: >-
+      S2 lists 178 individuals with CHD from this source; the paper's abstract
+      reports 464 individuals with 174 affecteds in 59 multiplex families and 8
+      trios. How S2's 178 relate to these is not stated.
   - id: pmid22929023_cases
     name: CHD case series of PMID:22929023
     description: >-

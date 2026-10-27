@@ -53,7 +53,9 @@ import html
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, assert_never
+
+from chd_atlas.models.review import ReviewStatus
 
 # What `data_table` accepts as a `data-*` attribute name. Deliberately narrower
 # than HTML permits: every name this build passes is a literal, so the only way
@@ -473,6 +475,32 @@ EVIDENCE_POWER_CAVEAT: Final = (
     "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
     "functional evidence."
 )
+
+
+def review_status_note(record: str, status: ReviewStatus | None, note: str | None) -> str:
+    """A curated record's open question, for after its description; `""` where none.
+
+    The owner's standing rule (2026-10-27, `models/review.py`): a record whose
+    sources disagree, or one of which could not be read, says so where it is
+    read. One function, so the methods page's cohort list and a gene page's
+    cohort notes cannot come to word it differently. The label says which
+    question, the note what is unresolved; the note is curator's free text and
+    is escaped. A status arriving without its note means the model's refusal
+    was bypassed, and that raises rather than printing a label with nothing
+    after it.
+    """
+    if status is None:
+        return ""
+    if note is None:
+        raise ValueError(f"{record}: review_status {status.value!r} has no review_note to render")
+    match status:
+        case ReviewStatus.PENDING_REVIEW:
+            label = "Pending review"
+        case ReviewStatus.NOT_ACCESSIBLE:
+            label = "Source not accessible"
+        case _:
+            assert_never(status)
+    return f" <strong>{label}:</strong> {html.escape(note)}"
 
 
 def evidence_legend(*, swatches: bool) -> str:

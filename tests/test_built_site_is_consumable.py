@@ -578,7 +578,9 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
     and that every record reaches the page whole. Equality on the id list, so
     a cohort missing, listed twice or out of `cohorts.json`'s order (sorted by
     id) fails; then each name, description and url, escaped as the page
-    escapes them, so a description cut short or a url dropped fails too.
+    escapes them, so a description cut short or a url dropped fails too. A
+    record's open question (owner's standing rule, 2026-10-27) follows its
+    description, before the link, where `cohorts.json` carries one.
     """
     cohorts = json.loads((site / "cohorts.json").read_text(encoding="utf-8"))["cohorts"]
     assert cohorts, "the build published no cohort registry; this measures nothing"
@@ -592,9 +594,115 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
     for (name, _, entry), cohort in zip(listed, cohorts, strict=True):
         assert name == html.escape(cohort["name"])
         expected = html.escape(cohort["description"])
+        if cohort["review_status"] is not None:
+            label = _REVIEW_LABELS[cohort["review_status"]]
+            expected += f" <strong>{label}:</strong> {html.escape(cohort['review_note'])}"
         if cohort["url"] is not None:
             expected += f' <a href="{html.escape(cohort["url"])}">website</a>'
         assert entry == expected, f"{cohort['id']} is not listed whole"
+
+
+# How a page labels each review status, as a literal (CLAUDE.md section 4.38).
+_REVIEW_LABELS: dict[str, str] = {
+    "pending_review": "Pending review",
+    "not_accessible": "Source not accessible",
+}
+
+_SYNDROME_QUESTION = (
+    "Whether this term names a syndrome -- which decides whether a gene page calls a grade "
+    "for it a grade for a syndrome as a whole -- is left open for clinical review."
+)
+
+
+def test_exactly_the_four_records_the_owner_marked_carry_an_open_question(site: Path) -> None:
+    """The owner's answer of 2026-10-27, on the real corpus, read from what is published.
+
+    Four records carry `pending_review`, each note stating only the measured
+    disagreement. Two are S2 case series whose S2 Table entry disagrees with
+    the cited paper's PubMed abstract (both read 2026-10-27: S2's platform and
+    432 cases against Illumina 660W-Quad arrays in 2,256 individuals; S2's
+    178 against 174 affecteds among 464 individuals). The other five series
+    S2 identifies by PMID list no more individuals than their papers report,
+    a subset rather than a disagreement, and carry none. Two are scope terms
+    whose syndromic status the owner left open for clinical review; their
+    `syndrome` mark stays unset.
+
+    Pinned whole, as literals: every other record publishes both fields as
+    `null`, never omits them. A cohort's question renders where its
+    description does -- `methods.html`'s list, checked with every record by
+    `test_methods_html_lists_every_cohort_cohorts_json_publishes`, and the
+    cohort notes of every gene page whose rows cite it, here: the 77 pages
+    carrying PMID:34324492 on the build this was written against (every one
+    of its rows names all seven series), each note once, inside the fold and
+    nowhere else on the page. A scope term's question is published in
+    `scope.json` only, so its note is asserted absent from every page.
+    """
+    cohorts = {cohort["id"]: cohort for cohort in _read(site, "cohorts.json")["cohorts"]}
+    terms = {term["id"]: term for term in _read(site, "scope.json")["terms"]}
+    records = {**cohorts, **terms}
+    for identifier, record in records.items():
+        assert "review_status" in record and "review_note" in record, identifier
+    marked = {
+        identifier: (record["review_status"], record["review_note"])
+        for identifier, record in records.items()
+        if record["review_status"] is not None or record["review_note"] is not None
+    }
+    assert marked == {
+        "pmid22939634_cases": (
+            "pending_review",
+            "S2 gives the platform as Affymetrix 6.0 array, Agilent CGH 44k/105K and lists 432 "
+            "cases; the paper's abstract reports Illumina 660W-Quad SNP arrays in 2,256 "
+            "individuals with CHD. Which of the paper's individuals S2 lists, and on which "
+            "platform, is not stated.",
+        ),
+        "pmid22969434_cases": (
+            "pending_review",
+            "S2 lists 178 individuals with CHD from this source; the paper's abstract reports "
+            "464 individuals with 174 affecteds in 59 multiplex families and 8 trios. How S2's "
+            "178 relate to these is not stated.",
+        ),
+        "MONDO:1010098": ("pending_review", _SYNDROME_QUESTION),
+        "MONDO:1060150": ("pending_review", _SYNDROME_QUESTION),
+    }
+    assert terms["MONDO:1010098"]["syndrome"] is False
+    assert terms["MONDO:1060150"]["syndrome"] is False
+
+    # GATA4's page, sliced to the cohort-notes fold and then to the item.
+    page = (site / "genes" / "HGNC_4173.html").read_text(encoding="utf-8")
+    fold = page[page.index('<details class="cohort-notes">') :]
+    fold = fold[: fold.index("</details>")]
+    start = fold.index("<li><strong>CHD case series of PMID:22969434</strong>")
+    assert fold[start : fold.index("</li>", start) + 5] == (
+        "<li><strong>CHD case series of PMID:22969434</strong> &mdash; 178 individuals with "
+        "congenital heart disease, listed in PMID:34324492&#x27;s S2 Table as a source of its "
+        "CNV case set; S2 gives the platform as Affymetrix Array 6.0. <strong>Pending "
+        "review:</strong> S2 lists 178 individuals with CHD from this source; the paper&#x27;s "
+        "abstract reports 464 individuals with 174 affecteds in 59 multiplex families and 8 "
+        "trios. How S2&#x27;s 178 relate to these is not stated.</li>"
+    )
+
+    carrying = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        cited = {
+            c for row in bundle["burden"] for c in (*row["case_cohorts"], *row["control_cohorts"])
+        }
+        expected = sum(
+            1 for cohort in ("pmid22939634_cases", "pmid22969434_cases") if cohort in cited
+        )
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        notes = ""
+        if '<details class="cohort-notes">' in page:
+            notes = page[page.index('<details class="cohort-notes">') :]
+            notes = notes[: notes.index("</details>")]
+        assert notes.count("<strong>Pending review:</strong>") == expected, entry["gene"]
+        assert page.count("Pending review") == expected, entry["gene"]
+        carrying += bool(expected)
+    assert carrying == 77
+    for path in sorted(site.rglob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        for question in (_SYNDROME_QUESTION, html.escape(_SYNDROME_QUESTION)):
+            assert question not in text, path.name
 
 
 def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path) -> None:

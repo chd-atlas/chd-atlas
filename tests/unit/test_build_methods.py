@@ -26,6 +26,7 @@ from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.vocab import Technology
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,13 +46,18 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> str:
 # dropped sort fails here under every PYTHONHASHSEED (CLAUDE.md section 4.42),
 # and the names sort differently from the ids (D, G, U against c, d, u), so a
 # sort on the name fails too. Every curated field a reader sees carries a
-# character that must be escaped.
+# character that must be escaped. One cohort carries an open question (owner's
+# standing rule, 2026-10-27) and two do not, so a status rendered on every
+# cohort fails as surely as one rendered on none; it is the one with a url, so
+# the note's place between the description and the link is pinned too.
 _REGISTRY: Final = {
     "ukbb": Cohort(
         id="ukbb",
         name="UK Biobank & partners",
         description="Adults recruited at 40-69.",
         url="https://example.org/ukbb?a=1&b=2",
+        review_status=ReviewStatus.PENDING_REVIEW,
+        review_note="S2 lists <432> & the abstract 2,256.",
     ),
     "ddd": Cohort(
         id="ddd",
@@ -719,6 +725,10 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
     "website" (2026-10-26): it leads to the collection's home page, and
     "source" beside a description read as the citation for it.
 
+    **A record's open question follows its description** (owner's standing
+    rule, 2026-10-27), before the link, escaped like every curated field, and
+    only on the record carrying one.
+
     The intro's numbers are pinned against the mirror and the registry by
     `test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`; here
     they are only the literal the fixture renders, since the intro is a
@@ -739,7 +749,8 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "<dt>Deciphering Developmental Disorders (DDD) (<code>ddd</code>)</dt>"
         "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
         "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
-        '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
+        "<dd>Adults recruited at 40-69. <strong>Pending review:</strong> S2 lists "
+        '&lt;432&gt; &amp; the abstract 2,256. <a href="https://example.org/ukbb?a=1&amp;b=2">'
         "website</a></dd>"
         "</dl>"
     )

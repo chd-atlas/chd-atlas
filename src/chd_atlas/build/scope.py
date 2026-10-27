@@ -84,7 +84,9 @@ def build_scope(
 
     Sorted by id because `encode_json`'s `sort_keys` orders dict keys and never
     list elements. `orphanet` is `null`, not absent, on a term an authority
-    curated, so every object has one shape; `syndrome` is always a boolean.
+    curated, so every object has one shape; `syndrome` is always a boolean, and
+    `review_status` and `review_note` are `null` together on a term with no open
+    question recorded.
     """
     emitter.write_json(
         SCOPE,
@@ -99,6 +101,13 @@ def build_scope(
                     # A curated mark, `false` unless set (R5): the term names a
                     # syndrome, so a grade for it is a grade for the syndrome.
                     "syndrome": entry.syndrome,
+                    # An open question about the term (owner's standing rule,
+                    # 2026-10-27), `null` and `null` where none is recorded.
+                    # Published here only: no page renders it.
+                    "review_status": (
+                        None if entry.review_status is None else entry.review_status.value
+                    ),
+                    "review_note": entry.review_note,
                 }
                 for entry in sorted(entries, key=lambda entry: entry.id)
             ]

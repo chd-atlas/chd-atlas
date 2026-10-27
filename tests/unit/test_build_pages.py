@@ -49,6 +49,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset, Stage
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile, EndBasis
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.models.scope import ScopeEntry
 from chd_atlas.orphanet_scope import Annotation, Warrant
 from chd_atlas.vocab import (
@@ -1694,8 +1695,23 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
 
     This is the project's characteristic failure in its purest form: the work
     was done, it was correct, it was validated, and no reader could reach it.
+
+    **A record's open question reaches the same place** (owner's standing
+    rule, 2026-10-27): after its description, escaped, on the one cohort of
+    the three this row cites that carries one, and on no other. It is the
+    `not_accessible` status here, so its label is pinned by literal too;
+    `test_build_methods.py` pins `pending_review`'s.
     """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
+    registry = {
+        **_COHORTS,
+        "ukbb": _COHORTS["ukbb"].model_copy(
+            update={
+                "review_status": ReviewStatus.NOT_ACCESSIBLE,
+                "review_note": "The <S2> sheet & its notes could not be read.",
+            }
+        ),
+    }
+    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()], cohorts=registry)
 
     # In a `<details>`, so the caveats are one click from every table rather than
     # repeated at full length above 23 of them -- and still in the document for
@@ -1714,6 +1730,12 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     )
     assert "qualifies every number" not in page
     assert "enriched for syndromic CHD" in notes
+    assert (
+        "<li><strong>UK Biobank</strong> &mdash; Adults recruited at 40-69; survivorship bias "
+        "against severe CHD. <strong>Source not accessible:</strong> The &lt;S2&gt; sheet "
+        "&amp; its notes could not be read.</li>"
+    ) in notes
+    assert notes.count("<strong>Source not accessible:</strong>") == 1
     # The fold stays (P4: narrowing where a cohort caveat reaches is what this
     # test exists to stop) and ends on a link to the whole registry on
     # methods.html, so this section links its anchor like every other

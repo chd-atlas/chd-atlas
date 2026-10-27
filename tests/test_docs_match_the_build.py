@@ -1042,6 +1042,37 @@ def test_the_cohorts_example_quotes_the_record_the_build_publishes(site: Path) -
     assert published["description"].startswith(quoted)
 
 
+@pytest.mark.parametrize(
+    ("heading", "payload", "key", "pattern"),
+    [
+        ("## `cohorts.json`", "cohorts.json", "cohorts", r"`(pmid\w+)`"),
+        ("## `scope.json`", "scope.json", "terms", r"(MONDO:\d+)"),
+    ],
+)
+def test_the_review_status_bullets_name_the_records_the_build_marks(
+    site: Path, heading: str, payload: str, key: str, pattern: str
+) -> None:
+    """Each section's `review_status` bullet names its records with an open question.
+
+    Names, not a count, are what a reader acts on, and a count written beside
+    them ("Two records carry one today") expires the day a curator marks a
+    third. Read from the bullet itself, so a record marked or cleared in the
+    curation fails here until the bullet is reworded. Measured on the build it
+    was written against: two cohorts and two scope terms, each `pending_review`.
+    """
+    section = _section(heading)
+    start = section.index("- `review_status` and `review_note`")
+    bullet = section[start : section.find(" - ", start + 1)]
+    marked = sorted(
+        record["id"]
+        for record in json.loads((site / payload).read_text())[key]
+        if record["review_status"] is not None
+    )
+    assert marked, f"no {payload} record carries a review status; this checks nothing"
+    assert sorted(set(re.findall(pattern, bullet))) == marked
+    assert f"{_WORDS[len(marked)].capitalize()} " in bullet
+
+
 def test_the_contested_section_names_each_contested_gene_and_what_its_headline_is(
     site: Path, mirrored: dict[str, GeneValidity]
 ) -> None:
