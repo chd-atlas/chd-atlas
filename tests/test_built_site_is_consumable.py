@@ -553,6 +553,45 @@ def test_a_gene_an_authority_reported_no_association_for_says_so_in_both_payload
     for bundle_path in sorted((site / "genes").glob("HGNC_*.json")):
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         assert payload["has_no_association_report"] == bool(payload["no_association_reported_by"])
+        # And the card says it exactly where the bundle does (owner decision
+        # 2026-10-26, R6): one line, naming every authority behind a no-known-
+        # disease-relationship record, as the card names them -- a panel record
+        # by its panel, a GenCC one by its submitter. **Read off the validity
+        # records, not `no_association_reported_by`** (review, 2026-10-27): the
+        # bundle names a panel record's GenCC copy "ClinGen", and the card folds
+        # that copy into the panel's own clause, so the bundle's list fails here
+        # the day a published gene carries a panel's record (RXRA has one, and
+        # is not published). A copy folds where the panel holds a record for
+        # the same disease; one that differs from it is listed in the table,
+        # and the card may name it, which this does not require.
+        rail = bundle_path.with_suffix(".html").read_text(encoding="utf-8")
+        rail = rail[rail.index('<aside class="rail">') : rail.index("</aside>")]
+        lines = re.findall(r'<p class="card-no-association">(.*?)</p>', rail)
+        assert len(lines) == int(payload["has_no_association_report"]), payload["gene"]
+        if not lines:
+            continue
+        silent = [
+            record
+            for record in payload["validity"]["records"]
+            if record["classification"] == "no_known_association"
+        ]
+        panel = {record["disease"] for record in silent if record["source"] == "clingen"}
+        authorities = {
+            (f"the {record['gcep']}" if record["gcep"] else "ClinGen")
+            if record["source"] == "clingen"
+            else record["submitter"]
+            for record in silent
+            if not (record["submitter"] == "ClinGen" and record["disease"] in panel)
+        }
+        assert authorities, payload["gene"]
+        for authority in sorted(authorities):
+            clause = f"{html.escape(authority)} reports no known disease relationship"
+            assert clause in lines[0] or clause[0].upper() + clause[1:] in lines[0], authority
+    page = (site / "genes" / "HGNC_4214.html").read_text(encoding="utf-8")
+    assert (
+        '<p class="card-no-association">Illumina reports no known disease relationship for '
+        "congenital heart defects, multiple types, 6 (2021); see the validity table.</p>"
+    ) in page
 
 
 # Every attribute the chart renderers position anything with. `points` and
@@ -848,7 +887,7 @@ def test_every_trajectory_mark_sits_where_the_payload_puts_it(site: Path) -> Non
         # Every cardiac organ this dataset declares, in the order the page draws
         # them; one trajectory each, so figure i belongs to organ i.
         for figure in figures:
-            title = re.search(r"<title>Median abundance in whole ([^:,]+)", figure)
+            title = re.search(r"<title>Median abundance in ([^:,]+)", figure)
             assert title is not None, "a trajectory names the organ it draws"
             organ = title.group(1).strip()
 
@@ -1226,6 +1265,175 @@ def test_every_fragment_link_on_a_gene_page_lands_on_one_element_of_that_page(
     assert fragments, "no gene page carries a fragment link; the sweep would pass vacuously"
 
 
+def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare(
+    site: Path,
+) -> None:
+    """The landing's own-lab sentence, against the blocks it vouches for (R7).
+
+    "Of the 3 rare-variant studies whose results this atlas publishes, 2 are
+    by an author of this atlas, and a gene page says so in each of their
+    blocks." Both numbers are read here off the gene pages -- the distinct
+    study blocks they render, and which of those `publications.json` marks
+    `own_lab` -- and every block of such a study must carry the declaration,
+    while no other study's block may. Measured on a real build the day it was
+    written: 190 own-lab blocks, all declared; 36 others, none.
+
+    The declaration said "republished as published, no assessment added"
+    until review (2026-10-27), on every one of those blocks, while
+    `methods.html#rare-variants` states the rule the atlas applies to every
+    study's rows. The phrase is asserted absent from every page built.
+    """
+    own = {
+        entry["id"]
+        for entry in json.loads((site / "publications.json").read_text(encoding="utf-8"))[
+            "publications"
+        ]
+        if entry["own_lab"]
+    }
+    declaration = "Declaration: this study is by an author of this atlas"
+    rendered: set[str] = set()
+    for path in sorted((site / "genes").glob("HGNC_*.html")):
+        page = path.read_text(encoding="utf-8")
+        start = page.find('<h2 id="rare-variants">')
+        if start == -1:
+            continue
+        stop = page.find("<h2", start + 1)
+        section = page[start : stop if stop != -1 else len(page)]
+        heads = list(re.finditer(r'<h3 id="study-(\d+)">', section))
+        ends = [head.start() for head in heads[1:]] + [len(section)]
+        for head, end in zip(heads, ends, strict=True):
+            block = section[head.start() : end]
+            study = f"PMID:{head.group(1)}"
+            rendered.add(study)
+            assert (declaration in block) == (study in own), (path.name, study)
+    assert rendered, "no gene page renders a study block; the check would pass vacuously"
+    mine = len(rendered & own)
+    assert mine, "no rendered study is by an atlas author; the sentence's main form is unmeasured"
+    landing = " ".join(
+        html.unescape(re.sub(r"<[^>]+>", "", (site / "index.html").read_text())).split()
+    )
+    assert (
+        f"Of the {len(rendered)} rare-variant studies whose results this atlas publishes, "
+        f"{mine} {'is' if mine == 1 else 'are'} by an author of this atlas"
+    ) in landing
+    built = [*sorted((site / "genes").glob("*.html")), site / "index.html", site / "methods.html"]
+    for path in built:
+        assert "no assessment added" not in path.read_text(encoding="utf-8"), path.name
+
+
+# Per source `sources.json` records as `permitted_with_attribution`, a phrase
+# the front page must carry: its name, and its licence where that is CC BY.
+_ATTRIBUTED_ON_THE_FRONT_PAGE: dict[str, str] = {
+    "hpo": "Human Phenotype Ontology",
+    "orphanet_product1": "mirrored under CC BY 4.0 — Orphadata Science",
+    "orphanet_product4": "mirrored under CC BY 4.0 — Orphadata Science",
+    "mondo_sssom": "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored "
+    "under CC BY 4.0",
+    "expression_atlas_e_mtab_6814": "EMBL-EBI Expression Atlas's (experiment E-MTAB-6814), "
+    "under EMBL-EBI's Terms of Use",
+    "audain2026_sd3": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
+    "sierant2025_ds6": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
+}
+# A source the sentence names though `sources.json` requires no attribution for
+# it, beside the two supplements that do.
+_ALSO_ON_THE_FRONT_PAGE: dict[str, str] = {"audain2021_s6": "and of Audain et al. 2021, CC0."}
+# The words the sentence states each `sources.json` licence in. HPO's licence is
+# a URL the sentence does not state, so it is the one source held to its name
+# alone.
+_LICENCE_WORDS: dict[str, str] = {
+    "CC-BY-4.0": "CC BY 4.0",
+    "CC0-1.0": "CC0",
+    "EMBL-EBI Terms of Use": "EMBL-EBI's Terms of Use",
+}
+_LICENCE_NOT_STATED: frozenset[str] = frozenset({"hpo"})
+
+
+def test_the_front_page_names_every_source_that_requires_attribution(site: Path) -> None:
+    """The attribution sentence is hand-written, so it is held to `sources.json` (R10).
+
+    Owner decision 2026-10-26: "Where this data comes from" named ClinGen,
+    GenCC, HPO and Orphanet, and not Mondo, the Expression Atlas or the CC BY
+    rare-variant supplements, all of which `sources.json` records as
+    `permitted_with_attribution`. One hand-written sentence now names them.
+    The set of attribution-required sources must equal the keys pinned above,
+    so a source added to `mirrors/sources.yaml` with that term fails here until
+    the page names it and a phrase is pinned; each phrase must be on the page,
+    with the licence where it is CC BY. Measured on a real build the day it was
+    written: 7 such sources.
+
+    **Every licence the sentence states is held to `sources.json`** (review,
+    2026-10-27), not only CC BY: "Audain et al. 2021, CC0" and "EMBL-EBI's
+    Terms of Use" were pinned by a unit literal alone, so a licence changed in
+    `mirrors/sources.yaml` left the hand-written sentence stating the old one
+    on a green build. Each phrase must carry the words for the licence its
+    source records, and a licence the sentence has no words for fails here.
+    """
+    sources = json.loads((site / "sources.json").read_text(encoding="utf-8"))["sources"]
+    required = {
+        source["id"]
+        for source in sources
+        if source["redistribution"] == "permitted_with_attribution"
+    }
+    assert required == set(_ATTRIBUTED_ON_THE_FRONT_PAGE), (
+        "sources.json's attribution-required sources changed; name each on index.html "
+        f"and pin a phrase here: {sorted(required ^ set(_ATTRIBUTED_ON_THE_FRONT_PAGE))}"
+    )
+    licences = {source["id"]: source["licence"] for source in sources}
+    page = (site / "index.html").read_text(encoding="utf-8")
+    where = page[page.index("<h2>Where this data comes from</h2>") :]
+    where = " ".join(html.unescape(re.sub(r"<[^>]+>", "", where[: where.index("<h2", 4)])).split())
+    named = {**_ATTRIBUTED_ON_THE_FRONT_PAGE, **_ALSO_ON_THE_FRONT_PAGE}
+    for source, phrase in sorted(named.items()):
+        assert phrase in where, f"{source}: {phrase!r} is not on the front page"
+        if source in _LICENCE_NOT_STATED:
+            continue
+        licence = licences[source]
+        assert licence in _LICENCE_WORDS, f"{source}: the front page states no {licence!r}"
+        assert _LICENCE_WORDS[licence] in phrase, f"{source}: {licence} is not what it states"
+
+
+def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
+    """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".
+
+    Every expression sentence said a sample was a whole organ -- "from whole,
+    bulk tissue", "median abundance in whole heart", "below the detection floor
+    in whole liver", methods.html's "A whole embryonic heart is ...", "diluted
+    across the whole organ" -- while E-MTAB-6814's own curation record sets the
+    Expression Atlas's organ tokens (forebrain, hindbrain) against the paper's
+    (brain, cerebellum), so "whole" need not hold of every organ and stage. The
+    dilution argument rests on bulk, mixed cell types, alone.
+
+    Over the whole text of every gene page and `methods.html`, `<title>`s of
+    the charts included: "whole" before "bulk", an organ, a tissue, a sample,
+    "embryonic" or any organ token a published bundle names. Measured with
+    this pattern on a build of 3b766ba: all 119 gene pages and methods.html
+    matched; on a build of the change, none. The other meanings of "whole" --
+    a whole scan, a syndrome as a whole, the whole gene set -- name none of
+    these and are untouched.
+    """
+    tissues = {
+        cell["tissue"]
+        for path in sorted((site / "genes").glob("HGNC_*.json"))
+        for dataset in json.loads(path.read_text(encoding="utf-8"))["expression_profile"][
+            "datasets"
+        ]
+        for stage in dataset["stages"]
+        for cell in stage["tissues"]
+    }
+    assert tissues, "no bundle names an organ; the check would pass vacuously"
+    whole = re.compile(
+        r"\bwhole[\s,-]+(?:bulk|organs?|tissues?|samples?|embryonic|"
+        + "|".join(re.escape(tissue) for tissue in sorted(tissues, key=len, reverse=True))
+        + r")\b",
+        re.IGNORECASE,
+    )
+    pages = [*sorted((site / "genes").glob("HGNC_*.html")), site / "methods.html"]
+    for path in pages:
+        text = " ".join(html.unescape(path.read_text(encoding="utf-8")).split())
+        found = sorted(set(whole.findall(text)))
+        assert not found, f"{path.name} still says a sample was a whole {found}"
+
+
 # --- The gene page's prose budget (D50, D57) ----------------------------------
 #
 # What a reader sees on load: text outside every `<details>`, or inside the
@@ -1254,11 +1462,12 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured on the head of WS3 PR iii after review (2026-10-26), with headroom:
-# (a) 841 x 1.03 rounded up, (b) 21 + 1. See the test for the series and the
-# rule. Lower each when a page sheds prose; raising one is a decision, and its
-# commit says why.
-_MEDIAN_VISIBLE_WORDS = 867
+# Measured after the review fixes of 2026-10-27, with the headroom owner decision
+# E4 keeps: (a) 882 x 1.03 rounded up, (b) 21 + 1 -- both lowered from 922 and
+# 23, so the ratchet stays tight. See the test for the series and the rule.
+# Lower each when a page sheds prose; raising one is a decision, and its commit
+# says why.
+_MEDIAN_VISIBLE_WORDS = 909
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -1372,7 +1581,31 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     0fc451a, after Tasks 1-5 (#60), #62, #63   1,066  1,194  25 sentences, 506 words
     452625c, after Task 6                        836    952  20 sentences, 386 words
     802d694, the gene card's link to methods     841    957  21 sentences, 395 words
+    2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
+    9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
     =========================================  =====  =====  ======================
+
+    The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
+    R6, R7), measured on a build of the clean tree at each commit: 3b766ba
+    read 841 and 21 / 395, as at 802d694. E1 lifted two particular caveats
+    out of the chart folds (+12, to 853); E2 dropped "whole" (-2, to 851); R4's
+    matrix caption sentence is on all 118 pages with a matrix (+38, to 889) and
+    is the 22nd boilerplate sentence (38 words); R7's declaration on the
+    card's tested line is on 86 cards (+6, to 895). R6's line is on one card
+    and E3's section intro on one page, and neither moves either figure; R10,
+    W2, W4 and W5 change no gene page's visible prose (W4's and W5's cohort
+    descriptions render folded). Growth from owner-decided sentences is deliberate (E4), and
+    none of them was folded or cut to fit.
+
+    The row after it is the review of those decisions (2026-10-27), measured
+    on a fresh build of the clean tree at that commit against one of ad03128
+    (895, 1,016, 22 / 432, as at 2f6300a). R4's caption now renders only where
+    the card lists a surviving row, so it left 86 pages (-38 each) and the
+    boilerplate (-1 sentence, -38 words); the own-lab declaration's corrected
+    wording is 10 words longer in each own-lab block (+10 or +20 on 118 pages,
+    +10 boilerplate words). Per page: -28 on 27, -18 on 40, +16 on 16, and
+    smaller moves elsewhere; the median fell by 13. Both constants were lowered
+    to the new measurement, not left at their old headroom.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
@@ -1385,10 +1618,12 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 867, the last row's 841 x 1.03 rounded up, and (b) at 22,
-    one more than 21. **When this fails, re-measure before anything else.** If
-    the growth is a new study's or dataset's own data-driven prose, raise the
-    budget and put the measurement here. Never fold a caveat the fold rule
+    (a) is held at 909, the last row's 882 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 922 and
+    23 over 2f6300a's row, and 867 and 22 over 802d694's). **When this fails,
+    re-measure before anything else.** If the growth is a new study's or
+    dataset's own data-driven prose, raise the budget and put the measurement
+    here. Never fold a caveat the fold rule
     requires visible to get under it: the budget exists to keep explanation
     off the page, not to take a warning out of sight.
 

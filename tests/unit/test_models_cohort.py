@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 from ruamel.yaml import YAML
 
-from chd_atlas.build.burden import load_burden
+from chd_atlas.build.burden import load_burden, shared_cohorts
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import CohortFile
 
@@ -161,3 +161,39 @@ def test_taa_cases_says_no_scope_term_is_an_aortic_aneurysm_and_none_is(corpus: 
     assert "outside this atlas's scope, which lists no aortic aneurysm" in description
     assert corpus.chd_scope, "no scope terms loaded; this guard would pass vacuously"
     assert [term.label for term in corpus.chd_scope if "aneurysm" in term.label.lower()] == []
+
+
+def test_ddd_and_decipher_state_what_the_registry_cannot_see(corpus: Corpus) -> None:
+    """Two claims in curated text, each held to the data (owner decisions W4, W5).
+
+    `ddd` says "only one study cited today names it", a count that expires the
+    day a second study's rows cite the collection: measured 2026-10-26, every
+    mirrored row naming `ddd` is PMID:42230622's. It fails here then, and the
+    sentence is reworded rather than left false.
+
+    `ddd` and `decipher` both say the registry "cannot see" that DECIPHER's
+    cases may include DDD participants: DDD links its participants' likely
+    diagnostic variants to their own DECIPHER patient records (its data access
+    page, cited beside the entry). That is true because the two are separate
+    ids and `shared_cohorts` compares ids: a study naming one and a study
+    naming the other share nothing it can find, so they count as independent
+    datasets. A registry that learns to link them -- one id, or an alias --
+    fails here, and both sentences must be re-read.
+    """
+    described = {cohort.id: cohort.description for cohort in corpus.cohorts}
+    assert "only one study cited today names it" in described["ddd"]
+    assert "plans to curate" not in described["ddd"]
+    rows = [row for rows in load_burden(REPO_ROOT).values() for row in rows]
+    naming = {row.study for row in rows if "ddd" in (*row.case_cohorts, *row.control_cohorts)}
+    assert len(naming) == 1, f"{sorted(naming)} name ddd; 'only one study' is false"
+
+    unseen = (
+        "this atlas's cohort registry records the two as separate collections and cannot see "
+        "that overlap"
+    )
+    assert unseen in described["ddd"]
+    assert unseen in described["decipher"]
+    ddd = next(row for row in rows if "ddd" in row.case_cohorts)
+    decipher = next(row for row in rows if "decipher" in row.case_cohorts)
+    assert ddd.study != decipher.study
+    assert shared_cohorts([ddd, decipher]) == {}

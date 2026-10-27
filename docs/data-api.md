@@ -257,7 +257,9 @@ the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 carrying rare-variant evidence, and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
-than written by hand. It links to
+than written by hand. Its *Where this data comes from* names every source
+[`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
+the licence where it is CC BY. It links to
 `genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
 [`methods.html`](#methodshtml) (from the navigation bar every page shares) and
 the repository. Self-contained: no external request, no build timestamp,
@@ -265,7 +267,11 @@ byte-identical between two builds of one commit like everything else here.
 
 It also carries a key to the four evidence glyphs, built from the same constant
 as the browse page's strip legend and the gene page's matrix legend. The three
-cannot come to describe the same four states in different words.
+cannot come to describe the same four states in different words. And it says
+how many of the rare-variant studies whose results the site publishes are by
+an author of this atlas — both counts computed, from the studies with a row on
+a published gene and their `own_lab` in [`publications.json`](#publicationsjson)
+— and that a gene page says so in each such study's block.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
 build behind this document publishes 122 of them — this one, `genes/index.html`,
@@ -278,7 +284,7 @@ output, so it is verifiable output.
 "How to read this atlas": the explanation every gene page assumes, written once
 at the site root rather than repeated on each page (design decision D50), and
 linked from the navigation bar on every page and from the foot of every gene
-page's card, as *How to read this page*. It has five sections, in this order,
+page's card, as *How to read this page*. It has six sections, in this order,
 and each carries an `id`, so a page can link the paragraph it shortens.
 
 - `#scope` states in full the rule that admits a gene to this atlas and the rule
@@ -293,8 +299,24 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   here. It also says what the card's two flags mean, `conflicting evidence` and
   `sources disagree`: each is a flag on the gene, not on a disease, and the
   records behind it may be for different diseases.
+- `#curated-evidence` says what a curated gene's page adds: a lesion
+  assertion is a curator's record that the gene belongs to one or more
+  lesion groups, with its inheritance, mechanism and syndromic status, and each
+  item of evidence behind it cites one publication with its class, the
+  curator's grading of its strength and the curator's summary; an assertion
+  changes nothing mirrored — a gene is published and its grade headlined on
+  the upstream validity records alone; and the *Publications* section lists
+  every publication that evidence cites. A curated gene's evidence section
+  opens with a line linking here, *How to read curated evidence*.
 - `#rare-variants` says how to read a gene page's rare-variant results: that
-  the counts and statistics in its study tables are the studies' own, that no
+  the counts and statistics in its study tables are the studies' own, and the
+  one rule the atlas applies to them — a non-synonymous row whose result points
+  to enrichment in cases with p below 0.05 supports the gene, and survives its
+  study's correction when the corrected p its study published is below 0.05
+  too, which decides the card's list, the matrix's states and a forest
+  marker's fill for every row but a synonymous one (a synonymous row, never
+  support, is filled where its own corrected p is below 0.05, and drawn
+  muted); that no
   statistic is pooled across studies, what each count unit means and what an
   absent row does not mean, the synonymous negative control, what a
   damaging composite row is, that a study's `all cases` group is the union of
@@ -312,8 +334,8 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   these cohorts, and the caveats recorded for them*, and that fold ends with a
   link here.
 - `#expression` says how to read a gene page's developmental expression
-  section: that every developmental expression measurement here is from whole,
-  bulk tissue, so a low or absent figure is not evidence a gene is unimportant
+  section: that every developmental expression measurement here is from bulk
+  tissue, so a low or absent figure is not evidence a gene is unimportant
   to heart development; how a median is placed against its organ's percentile
   grid, and that none is placed below its dataset's detection floor, a
   threshold this atlas records per dataset and not necessarily one its source
@@ -1422,7 +1444,12 @@ Top to bottom:
    Costello syndrome and cardiofaciocutaneous syndrome by the RASopathy Gene
    Curation Expert Panel; see the validity table." The flag itself does not
    say which disease; on every gene that sets it today the dispute is for a
-   different disease from the one the headline grade is for.
+   different disease from the one the headline grade is for. Where
+   `has_no_association_report` is true, a line after it names each authority
+   that reports no known disease relationship, the diseases, and the year of
+   its record, from the records the validity table lists — GDF1's reads
+   "Illumina reports no known disease relationship for congenital heart
+   defects, multiple types, 6 (2021); see the validity table."
 5. Where every disease the headline grade is for is in scope through Orphanet's
    phenotype frequencies, the reason: "Graded for Noonan syndrome as a whole
    syndrome; in scope because Orphanet records a structural heart malformation
@@ -1441,8 +1468,10 @@ Top to bottom:
    the study's block does. Each line ends with a link to that study's block on
    the same page (`#study-<PMID digits>`, the `id` of the study's heading):
    `caveats` where any of the group's surviving rows carries a `method_note`,
-   `details` otherwise, with an accessible name naming the study. Never the
-   most significant row: the atlas ranks nothing. Beneath the lines, once
+   `details` otherwise, with an accessible name naming the study. Not the
+   most significant row: a line keeps its study table's reading order, while
+   a matrix cell names the most significant of the rows behind its state (see
+   the rare-variant section below). Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
    study's block.
@@ -1451,13 +1480,19 @@ Top to bottom:
    own**, whether or not another study's results survive: "<study> publishes
    no corrected p for this gene; judge its results against its scan of 138,609
    tests (see its block)", with the scan size from the publication's
-   `tests_reported`; where none is recorded the line ends "see its block". The
-   atlas applies no threshold of its own. Whether a study
-   published a correction is read per gene, from its rows.
+   `tests_reported`; where none is recorded the line ends "see its block".
+   Under the one rule `methods.html#rare-variants` states, such a study's rows
+   survive nothing, so none of them is listed on the card; the evidence matrix
+   still marks one as supporting where it points to enrichment in cases and
+   its p is below 0.05. Whether a study published a correction is read per
+   gene, from its rows.
 
    With no surviving row, how many independent datasets (cohort families, not
-   studies) tested the gene, and — where some study published a correction for
-   it — that none survives a correction its study published; with no row at
+   studies) tested the gene, declaring any study among them by an author of
+   this atlas — "(a study by an atlas author)" where one study tested it,
+   "(each study by an atlas author)", or "(1 of the 2 studies by an atlas
+   author)", counted in studies — and, where some study published a
+   correction for it, that none survives a correction its study published; with no row at
    all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
    evidence against a gene — follows whenever the gene has rows.
 7. One sentence saying what the atlas itself has curated (below).
@@ -1487,8 +1522,11 @@ classification the gene has — "may not", because many published genes have no
 ClinGen or GenCC record for any other disease — and links
 [`methods.html#validity`](#methodshtml). Neither the page nor the bundle carries
 a record for a disease outside scope. A curated gene's page
-follows it with the curated evidence — each assertion, its evidence items with
-their class, strength and summary, and the publications that evidence cites.
+follows it with the curated evidence — a line saying each assertion is this
+atlas's own curation and changes no classification above, linking
+[`methods.html#curated-evidence`](#methodshtml); each assertion, its evidence
+items with their class, strength and summary; and the publications that
+evidence cites.
 
 The rare-variant section opens with one line attributing every count and
 statistic in its study tables to the upstream study — "Every count and statistic
@@ -1512,12 +1550,17 @@ every fold:
   enrichment at these cohort sizes is not evidence against a gene — and that
   no statistic is pooled across studies: "The atlas computes no pooled
   statistic across studies: pooling two that share a sample collection would
-  count the same people twice.";
+  count the same people twice." — and, where the card lists a surviving row,
+  that a cell and the card can lead with different rows: "A cell names the
+  most significant of the rows behind its state; the card lists a study's
+  surviving rows with a damaging union before its parts, so the two can lead
+  with different rows.";
 - any sample collection the gene's studies share, as this atlas has recorded
   them;
 - on a block from a study by an author of this atlas, a one-line declaration:
-  "Declaration: this study is by an author of this atlas; republished as
-  published, no assessment added.";
+  "Declaration: this study is by an author of this atlas; its results are
+  republished as published and read by the same rule as every other
+  study's.";
 - the multiple-testing line. For a study with any row it published no
   corrected p for, the study's number of tests (`tests_reported` in
   `publications.json`, where one is recorded) and the Bonferroni threshold
@@ -1535,18 +1578,20 @@ every fold:
 
 Each forest plot — one per study and effect measure — shows one line of its
 caption: the axis, naming the effect measure, its range on a logarithmic scale
-and what the line at 1 means for that measure. The rest of its key is folded
-under *How to read this chart*: what each mark means — filled and hollow
-markers, hatched bars, arrows, muted and `union`-tagged rows — each only where
-the panel draws one, and why there is no summary diamond, ending with a link,
-*How to read rare-variant results*, to
-[`methods.html#rare-variants`](#methodshtml), which states the key in general.
-Where a `union`-tagged row contains a row the panel does not plot, the fold
-also says the panel is *not fully split*: what sits under that union on the
-panel is part of it, not all of it, and the table below carries every row.
+and what the line at 1 means for that measure. Where a `union`-tagged row
+contains a row the panel does not plot, the same line names that row and the
+one missing from it — "The **all cases · loss-of-function** row is a union,
+and this study published no non-syndromic · loss-of-function row for this
+gene." — or, for a row the study did publish and the panel does not draw,
+that it is not plotted here. The rest of its key is folded under *How to read this chart*:
+what each mark means — filled and hollow markers, hatched bars, arrows, muted
+and `union`-tagged rows — each only where the panel draws one, and why there
+is no summary diamond, ending with a link, *How to read rare-variant results*,
+to [`methods.html#rare-variants`](#methodshtml), which states the key in
+general.
 
 The developmental expression section, last on the page, opens with one visible
-line: "Every measurement below is from whole, bulk tissue: a low or absent
+line: "Every measurement below is from bulk tissue: a low or absent
 figure is not evidence a gene is unimportant to heart development." It links
 [`methods.html#expression`](#methodshtml) as *How to read these figures*; that
 section states the argument in full with the reading notes this section folded
@@ -1556,12 +1601,15 @@ are not comparable across organs or developmental stages — and defines τ and
 the developmental phases each stage names. Each chart — a phase-banded
 trajectory per cardiac organ where one can be drawn, and the organ small
 multiples — shows one line of its caption: its axes, in stage order rather than
-elapsed time, and the range of its abundance axis. The rest of its key is
-folded under *How to read this chart*, ending with a link, *How to read
-expression figures*, to `methods.html#expression`. Under a trajectory the fold
-always names the shaded phases and their source; what a tick on the axis means,
-and why the line breaks where this dataset has no row for the organ, it adds
-only where the figure shows one. Under the small multiples it always says why
+elapsed time, and the range of its abundance axis. Under a trajectory that ticks
+a stage below the dataset's detection floor, the same line says what the ticks
+mark, with the floor's value, and names any other reason a tick on it was
+drawn for. The rest of its key is folded under *How to read
+this chart*, ending with a link, *How to read expression figures*, to
+`methods.html#expression`. Under a trajectory the fold always names the shaded
+phases and their source; why the line breaks where this dataset has no row for
+the organ, and what a tick means on a figure with no tick for the floor, it
+adds only where the figure shows one. Under the small multiples it always says why
 the panels share one axis, which organ is drawn heavier as this atlas's
 declared cardiac tissue (or, where this dataset placed nothing there, that no
 panel is drawn heavier), that only medians placed against the percentile grid
@@ -1580,7 +1628,7 @@ classification to describe, and say so instead:
 
 > Not yet curated by the atlas, and no ClinGen expert panel has graded this
 > gene for any of the diseases in scope here: it is published because the Gene
-> Curation Coalition submitters named above independently assert it.
+> Curation Coalition submitters it is admitted by independently assert it.
 
 The scope in that second sentence is part of the claim. Unscoped it is false for
 five of the 21: ClinGen grades ACTC1 Definitive for hypertrophic cardiomyopathy

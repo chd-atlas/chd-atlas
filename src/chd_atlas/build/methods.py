@@ -28,6 +28,13 @@ here, and "this page" here names a page with no gene on it.
   abbreviate, for a page with no table on it -- so "a gene page lists", never
   "listed here" or "the panel record above". Its third paragraph states in
   full what the card's two warning chips abbreviate to two words each.
+* `#curated-evidence` was written new (2026-10-26, owner decision E3): what
+  a curated gene's two extra sections hold -- the atlas's own lesion
+  assertions and the publications their evidence cites -- which no page
+  explained while every card's "How to read this page" linked here. Each
+  clause was read off `models/assertion.py`, `pages._evidence_section`,
+  `derive.gene_facts` and `validity.published_genes`; it names no count, so
+  nothing in it expires when a second gene is curated.
 * `#rare-variants` is both: three paragraphs moved off every gene page (the
   folded reading notes and the composite note's second sentence), and two are
   the full forms of notices a gene page keeps in one line. Two more state in
@@ -70,6 +77,7 @@ import html
 from collections.abc import Mapping
 from typing import Final
 
+from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import COHORTS, DATASETS, METHODS_PAGE
 from chd_atlas.build.render import document, grade_key
@@ -223,6 +231,48 @@ _VALIDITY: Final = (
     "grades no evidence.</p>"
 )
 
+# What a curated gene's page adds (owner decision 2026-10-26, E3). A gene page
+# renders "Curated evidence" and "Publications" only for a gene with a lesion
+# assertion (`pages._evidence_section`, gated on `AtlasCuration.CURATED`), and
+# this page explained every other section but those two. Each clause read off
+# the code that day:
+#
+# * An assertion is `LesionAssertion`: a curator's record that the gene belongs
+#   to one or more lesion groups (`lesion_groups`, at least one), with
+#   `inheritance`, `mechanism` and `syndromic` (isolated, syndromic or both) --
+#   the four rows the page's definition list renders.
+# * Each `Evidence` item cites exactly one publication (`publication`, a
+#   required PMID) and carries `evidence_class`, `strength` (strong, moderate,
+#   supporting or contradictory) and the curator's own `summary` -- the
+#   table's four columns. The owner's draft said "quoted evidence": `summary`
+#   is the curator's summary, not a quotation, and the record locates the
+#   passage instead (`locator`), which the page does not render.
+# * It changes nothing mirrored, and that is D37: `validity.published_genes`
+#   reads the validity records alone, and `derive.gene_facts` headlines the
+#   strongest ClinGen record whatever the assertions say; an assertion feeds
+#   only `lesion_groups` and the curation fields.
+# * "Publications" lists the distinct publications the evidence cites, sorted,
+#   with their id, title and year (`_CITATION_HEADERS`), and renders exactly
+#   where "Curated evidence" does. Named as a curated gene's page's own: it
+#   read "The Publications section that follows" until review (2026-10-27),
+#   and on this page what follows is the rare-variant section.
+_CURATED_EVIDENCE: Final = (
+    '<h2 id="curated-evidence">Curated evidence</h2>'
+    "<p>Where this atlas has curated a gene itself, its page carries a <strong>Curated "
+    "evidence</strong> section. Each entry is a <strong>lesion assertion</strong>: a "
+    "curator's record that the gene belongs to one or more congenital heart disease lesion "
+    "groups, with its inheritance, its mechanism and whether it is isolated, syndromic or "
+    "both. Each item of evidence behind an assertion cites one publication, and gives the "
+    "class of the evidence, its strength as the curator grades it (strong, moderate, "
+    "supporting or contradictory) and the curator's summary of what the publication "
+    "shows.</p>"
+    "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
+    "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
+    "validity records alone, so no assertion admits a gene or moves its grade. A curated "
+    "gene's page also has a <strong>Publications</strong> section, which lists every "
+    "publication its evidence cites, with its title and year.</p>"
+)
+
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
 # keeps a one-line short form of the first two paragraphs (`pages._MIRRORED_NOTICE`
 # and `pages._POOLING_NOTICE`) and links here; the last three were the page's
@@ -256,11 +306,36 @@ _VALIDITY: Final = (
 # lost "the same uncorrected scale" (true of the one study that publishes a
 # synonymous row, stated in general) and "a scan of that size" (no antecedent
 # here).
+# `concordance.ALPHA` as the rule's sentence prints it: "0.05".
+_ALPHA: Final = f"{ALPHA:g}"
+
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
+    # The one rule the atlas applies (owner decision 2026-10-26, W2). It said
+    # "adds no assessment of them" while the card, the matrix and the forest
+    # fill each decide what survives by `concordance.survives_own_correction`.
+    # Read off the code that day: `_supports` (not synonymous, a raw p below
+    # `ALPHA` -- strictly -- and `is_upward`, which reads the effect, an
+    # unbounded bound, or the published counts), then a study-published
+    # `pvalue_adjusted` below `ALPHA`, strictly; a row with no corrected p does
+    # not survive; `family_state` reads the matrix tier off the same rows;
+    # `pages._survived_correction` fills a forest marker by it for every row but
+    # a synonymous one, which is drawn muted (the forest paragraph below says
+    # so). The threshold is rendered from `ALPHA`, so this page cannot state a
+    # number the rule does not use. It read "at the 0.05 the studies themselves
+    # use" until review (2026-10-27): no study here treats a raw p below 0.05 as
+    # significant -- PMID:42230622's block tells a reader to judge raw p against
+    # its whole scan -- so the number is stated as the atlas's, unattributed.
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
-    "republished as published. The atlas computes none of them and adds no assessment "
-    "of them; where a study is by an author of this atlas, its block says so.</p>"
+    "republished as published. The atlas computes none of them. It applies one rule of its "
+    f"own, at {_ALPHA}: a row that is not synonymous "
+    "<strong>supports</strong> the gene when its result points to enrichment in cases and "
+    f"its p is below {_ALPHA}, and <strong>survives</strong> its study's correction when the "
+    f"corrected p its study published is below {_ALPHA} as well; a row whose study published "
+    "no corrected p survives none. A gene page's card lists the rows that survive, the "
+    "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
+    "support, and a forest plot draws a surviving row filled. Where a study is by an "
+    "author of this atlas, its block says so.</p>"
     # was pages._POOLING_NOTICE in full
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
     "studies draw on the same sample collection they describe partly the same people, "
@@ -485,14 +560,18 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 _EXPRESSION: Final = (
     '<h2 id="expression">Developmental expression</h2>'
     # was pages._BULK_TISSUE_NOTICE in full, under its old name
-    # `_BULK_DILUTION_NOTICE`; "below" -> "in this atlas"
+    # `_BULK_DILUTION_NOTICE`; "below" -> "in this atlas". "whole" left it on
+    # the owner's decision of 2026-10-26 (E2): E-MTAB-6814's curation record
+    # sets the Expression Atlas's organ tokens (forebrain, hindbrain) against
+    # the paper's (brain, cerebellum), so a sample need not be a whole organ;
+    # the dilution argument rests on bulk, mixed cell types, alone.
     '<p class="notice-inline"><strong>Every developmental expression measurement in this '
-    "atlas is from whole, bulk tissue, never a single cell type.</strong> A whole embryonic "
-    "heart is cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, "
+    "atlas is from bulk tissue, never a single cell type.</strong> An embryonic heart "
+    "sample mixes cardiomyocytes with endocardium, epicardium, cardiac neural crest, "
     "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
     "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
     "the conduction system. A gene expressed intensely in one such lineage can still read "
-    "low, or fall below the detection floor, once diluted across the whole organ: "
+    "low, or fall below the detection floor, once diluted across the sample: "
     "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
     "development.</p>"
     # was pages._EXPRESSION_READING_NOTES
@@ -580,13 +659,15 @@ _EXPRESSION: Final = (
 # removed once for promising a section the page did not yet hold. "the
 # rare-variant studies draw on" became "the rare-variant results name" the same
 # day, for the reason `_COHORTS_INTRO` records: the list is what the rows name,
-# not all a study drew on.
+# not all a study drew on. The curated-evidence clause joined it with
+# `#curated-evidence` (E3), in gene-page order.
 _INTRO: Final = (
     "<h1>How to read this atlas</h1>"
     "<p>What every gene page assumes, written once: which genes are here and what each "
-    "classification means, how the validity records are listed, how to read the "
-    "rare-variant results, every sample collection the rare-variant results name, and "
-    "how to read the developmental expression figures.</p>"
+    "classification means, how the validity records are listed, what the atlas's own "
+    "curated evidence is, how to read the rare-variant results, every sample collection "
+    "the rare-variant results name, and how to read the developmental expression "
+    "figures.</p>"
 )
 
 
@@ -601,6 +682,7 @@ def build_methods(emitter: Emitter, *, cohorts: Mapping[str, Cohort]) -> None:
         + SCOPE_RULE
         + grade_key()
         + _VALIDITY
+        + _CURATED_EVIDENCE
         + _RARE_VARIANTS
         + _cohorts(cohorts)
         + _EXPRESSION

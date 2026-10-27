@@ -21,12 +21,13 @@ from chd_atlas.build.runner import build_site
 from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
 from chd_atlas.corpus import Corpus
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
+from chd_atlas.models.literature import Publication
 from chd_atlas.vocab import Classification, ValiditySource, ValidityState
 
 # What a corpus with no burden evidence at all publishes. Every test in this
 # file that is about something else -- escaping, pluralisation, the shell --
 # renders against it.
-_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0)
+_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=())
 
 # The developmental-expression counterpart to `_NO_BURDEN`, for the same tests.
 _NO_PROFILES = ProfileCensus(genes=0, datasets=0)
@@ -623,6 +624,101 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
 
 
+def _study(pmid: str, *, own_lab: bool) -> Publication:
+    """A curated rare-variant study; only its id and `own_lab` are read here."""
+    return Publication(
+        id=pmid,
+        title=f"Study {pmid}",
+        journal="J",
+        year=2026,
+        authors=["A"],
+        study_type="case_control",  # type: ignore[arg-type]
+        own_lab=own_lab,
+    )
+
+
+@pytest.mark.parametrize(
+    ("tested", "by_an_author", "sentence"),
+    [
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            {"PMID:1"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="one of several",
+        ),
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            {"PMID:1", "PMID:2"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by an "
+            "author of this atlas, and a gene page says so in each of their blocks.",
+            id="several",
+        ),
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            set(),
+            "Of the 3 rare-variant studies whose results this atlas publishes, none is by an "
+            "author of this atlas.",
+            id="none",
+        ),
+        pytest.param(
+            ("PMID:1",),
+            {"PMID:1"},
+            "Of the 1 rare-variant study whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="a single study",
+        ),
+        pytest.param((), set(), None, id="no study"),
+    ],
+)
+def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
+    tmp_path: Path, tested: tuple[str, ...], by_an_author: set[str], sentence: str | None
+) -> None:
+    """One sentence, both counts computed (owner decision 2026-10-26, R7).
+
+    The cards and the study blocks declare a study by an author of this atlas
+    and the front page said nothing. The population is the studies whose rows
+    reach a published bundle (`BurdenCensus.studies`), never every curated
+    publication: two decoys are by an atlas author and are not among them --
+    `PMID:9` tests only a gene outside the gate, and `PMID:8` tests nothing --
+    so counting `corpus.publications` instead reads 3 of 5, 4 of 5 and 2 of 5
+    in the first three cases, where the sentence must read 1, 2 and none of 3
+    (CLAUDE.md section 4.30: two figures equal on the real corpus would let
+    the wrong one pass). Pinned in each of its forms, as literals.
+
+    **And at both ends of the count** (review, 2026-10-27): a single study
+    takes the singular noun, and a build publishing no study's rows carries no
+    sentence at all -- there is nothing to declare, and "Of the 0 rare-variant
+    studies" would say there is. Both survived every test until then. "by an
+    author", in every form, as each block's declaration says it.
+    """
+    burden = {
+        "HGNC:1": [_burden_row(study=pmid) for pmid in tested[:2]],
+        "HGNC:2": [_burden_row(study=pmid) for pmid in tested[2:]],
+        # Outside the gate: mirrored, never published.
+        "HGNC:9": [_burden_row(study="PMID:9")],
+    }
+    published = {"HGNC:1", "HGNC:2", TBX5}
+    families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
+    census = burden_census(burden, published, families)
+    corpus = Corpus(
+        root=Path("."),
+        assertions=(_assertion(),),
+        publications=tuple(
+            _study(pmid, own_lab=pmid in by_an_author or pmid in {"PMID:8", "PMID:9"})
+            for pmid in ("PMID:1", "PMID:2", "PMID:3", "PMID:8", "PMID:9")
+        ),
+    )
+
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+    listed = _prose(_section(text, "<h2>What's published</h2>"))
+
+    if sentence is None:
+        assert "whose results this atlas publishes" not in listed
+    else:
+        assert f"<p>{sentence}</p>" in listed
+
+
 def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) -> None:
     """Adding a whole evidence layer without touching the front page is how
     `index.html` once advertised an empty atlas for three releases with the
@@ -892,6 +988,14 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
         "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
         "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
         'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        # Every other attribution-required source, in one hand-written sentence
+        # (owner decision 2026-10-26, R10); `test_built_site_is_consumable.py`
+        # holds the set it names to `sources.json`.
+        "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY "
+        "4.0; developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s "
+        "(experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results "
+        "are taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both "
+        "CC BY 4.0, and of Audain et al. 2021, CC0. "
         '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
         "a date or a checksum, and carries the licence and attribution terms each of these is "
         "mirrored under.</p>"

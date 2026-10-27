@@ -206,12 +206,12 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
       wider than the publication gate -- measured 2026-08-05, 1,475 rows over 150
       genes of which 127 publish no page. `HGNC:9` here stands for those 127: it
       carries four rows and is absent from `published`. Counting the mapping
-      (`sum(len(rows) for rows in burden.values())`) gives 7, which is true of
+      (`sum(len(rows) for rows in burden.values())`) gives 13, which is true of
       the mirror and false of the site.
 
-    - **Families are not studies.** The two published genes' rows name *two*
+    - **Families are not studies.** The two published genes' rows name *eight*
       studies, and the fixture puts them in **one** family, so `len({row.study})`
-      gives 2 where the answer is 1. They are equal over the committed corpus --
+      gives 8 where the answer is 1. They are equal over the committed corpus --
       three studies on disjoint collections -- which is exactly why a fixture has
       to separate them: the day a fourth study reuses DDD or PCGC, a study count
       would tell a reader that a reused cohort is independent evidence.
@@ -219,26 +219,53 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
     - **Genes are those with rows, not the published population.** `HGNC:3` is
       published and has none, so `len(published)` gives 3 where the answer is 2.
 
-    One test rather than three because they share a fixture and a single call,
-    which is what makes the three numbers checkable against each other; a
-    per-figure split would triple the setup and weaken nothing that matters.
+    - **Studies are those with a published row** (owner decision 2026-10-26,
+      R7: the front page's own-lab sentence counts them). `PMID:9` tests only
+      the unpublished `HGNC:9`, so it has no block on any page and is not one
+      of them; sorted, because it is derived from a set.
+
+      **Eight of them, so the sort is guarded on every hash seed** (review,
+      2026-10-27). With two studies the census's `set` iterated in sorted
+      order on 152 of 300 seeds (measured by the review; 157 of 300
+      re-measured), so dropping the sort survived about half of all runs, and
+      no published byte depends on the order to catch it elsewhere. These
+      eight, inserted in this order, iterate sorted on 0 of 1,000 explicit
+      `PYTHONHASHSEED` values (0-999), probed by building the set exactly as
+      `burden_census` does in a fresh interpreter per seed (CLAUDE.md section
+      4.42): measured safe, not proven.
+
+    One test rather than four because they share a fixture and a single call,
+    which is what makes the numbers checkable against each other; a
+    per-figure split would multiply the setup and weaken nothing that matters.
     """
+    first = ("PMID:1", "PMID:1", "PMID:28991257", "PMID:3155", "PMID:52")
+    second = ("PMID:2", "PMID:40127276", "PMID:687", "PMID:9314")
     burden = {
-        "HGNC:1": [_row(study="PMID:1"), _row(study="PMID:1")],
-        "HGNC:2": [_row(study="PMID:2")],
+        "HGNC:1": [_row(study=study) for study in first],
+        "HGNC:2": [_row(study=study) for study in second],
         # Mirrored, never published: the 127-gene asymmetry, in miniature.
-        "HGNC:9": [_row(study="PMID:1") for _ in range(4)],
+        "HGNC:9": [*(_row(study="PMID:1") for _ in range(3)), _row(study="PMID:9")],
     }
     # Published and untested, so `genes` cannot be read off `published`.
     published = {"HGNC:1", "HGNC:2", "HGNC:3"}
-    # The two studies share a sample collection, so they are one dataset.
-    families = (frozenset({"PMID:1", "PMID:2"}),)
+    # The eight studies share sample collections, so they are one dataset.
+    families = (frozenset({*first, *second}),)
 
     census = burden_census(burden, published, families)
 
-    assert census.rows == 3
+    assert census.rows == 9
     assert census.families == 1
     assert census.genes == 2
+    assert census.studies == (
+        "PMID:1",
+        "PMID:2",
+        "PMID:28991257",
+        "PMID:3155",
+        "PMID:40127276",
+        "PMID:52",
+        "PMID:687",
+        "PMID:9314",
+    )
 
 
 def test_every_published_row_carries_every_key_whatever_its_comparator() -> None:

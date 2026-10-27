@@ -187,6 +187,52 @@ def _number(value: int) -> str:
     return f"{value:,}"
 
 
+def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
+    """How many of the rare-variant studies published here are by an atlas author (R7).
+
+    Owner decision 2026-10-26: the cards and blocks declare a study by an
+    author of this atlas, and the front page said nothing. Both counts are
+    computed: `studies` is `BurdenCensus.studies` -- the studies whose rows
+    reach a published bundle, the ones with a block on some gene page -- and
+    `Publication.own_lab` is read for each. **Never every curated
+    publication.** The owner's draft read "Two of the five studies cited
+    here": five is every record in `publications.json`, and two of those
+    (an expression dataset's paper and the curated assertion's) have no block
+    to say anything in, so "each study's block says so" would be true of the
+    population only by accident; and counting all five would put a 1997
+    linkage paper and an expression atlas in the denominator of a declaration
+    about the rare-variant evidence. Measured on a real build the day it was
+    written: 3 studies publish rows on published genes, PMID:34324492 and
+    PMID:42230622 are by an atlas author, and all 190 of their blocks on the
+    gene pages carry the declaration, against 0 of the other study's 36
+    (`pages._disclosure` renders in every block of an own-lab study, so "says
+    so" holds by construction).
+
+    Digits, as every figure on this page is. Empty where no study publishes a
+    row, since there is then nothing to declare.
+    """
+    total = len(studies)
+    if not total:
+        return ""
+    by_author = {publication.id for publication in corpus.publications if publication.own_lab}
+    own = sum(1 for study in studies if study in by_author)
+    noun = "rare-variant study" if total == 1 else "rare-variant studies"
+    opening = f"Of the {total} {noun} whose results this atlas publishes, "
+    if not own:
+        return f"<p>{opening}none is by an author of this atlas.</p>"
+    if own == 1:
+        return (
+            f"<p>{opening}1 is by an author of this atlas, and a gene page says so in its "
+            "block.</p>"
+        )
+    # "by an author", the words every block's declaration and card mark use; it
+    # read "by authors of this atlas" until review (2026-10-27).
+    return (
+        f"<p>{opening}{own} are by an author of this atlas, and a gene page says so in each "
+        "of their blocks.</p>"
+    )
+
+
 def _stat(label: str, value: str) -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
@@ -294,6 +340,18 @@ def _render(
         )
     )
 
+    # The sentence after Orphanet's names every other source `sources.json`
+    # records as `permitted_with_attribution` (owner decision 2026-10-26, R10:
+    # one hand-written sentence, not a generated list): Mondo's mappings
+    # (`mondo_sssom`, CC-BY-4.0), the Expression Atlas (`expression_atlas_
+    # e_mtab_6814`, EMBL-EBI Terms of Use, not CC BY) and the two CC-BY-4.0
+    # rare-variant supplements (`audain2026_sd3`, `sierant2025_ds6`). The
+    # owner's draft said the rare-variant results come "from the supplements of
+    # the studies cited, under CC BY 4.0": Audain et al. 2021's S6 Table is
+    # CC0-1.0 (`audain2021_s6`), so it is named apart. A hand-written sentence
+    # can drift, so `test_the_front_page_names_every_source_that_requires_
+    # attribution` fails the day `sources.json` gains one it does not name.
+    #
     # "Where this data comes from" named Orphanet zero times until 2026-10-26,
     # while the syndromes its frequencies bring into scope are the only route in
     # for some published genes (26 of 119 drop when those terms are removed,
@@ -343,6 +401,7 @@ def _render(
     paper: two studies drawing on the same sample collection describe the same people and
     count once. How many datasets agree about a gene is shown on every row of the browse
     page, and it is a count of evidence — never a verdict on the gene.</p>
+  {_own_lab_sentence(census.studies, corpus)}
   {_GLYPH_KEY}
 
   <h2>Where this data comes from</h2>
@@ -356,6 +415,11 @@ def _render(
     to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
     Free access data from Orphanet. &copy; INSERM 1999. Available on
     <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY 4.0;
+    developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
+    (experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results are
+    taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both CC BY
+    4.0, and of Audain et al. 2021, CC0.
     <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
     date or a checksum, and carries the licence and attribution terms each of these is
     mirrored under.</p>

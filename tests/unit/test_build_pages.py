@@ -267,6 +267,7 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
     ]
     assert page.index('<p class="card-curation">') < page.index("</aside>")
     assert "The atlas has <strong>not yet curated</strong> a lesion assertion" not in page
+    assert "#curated-evidence" not in page
     assert "Holt-Oram syndrome" in _validity_table(page)
     assert "GATA4" in page
 
@@ -329,6 +330,17 @@ def test_a_curated_gene_page_carries_its_evidence_quote_and_pmid(
     assert "Not curated by the atlas" not in page
     assert "No lesion assertion curated by the atlas" not in page
     assert 'href="../genes/HGNC_11604.json"' in page
+    # The section links its reading notes, in the pattern of every other
+    # section's intro (owner decision 2026-10-26, E3); sliced to the section.
+    section = page[page.index("<h2>Curated evidence</h2>") : page.index("<h2>Publications</h2>")]
+    assert section.startswith(
+        "<h2>Curated evidence</h2><p>Each lesion assertion below is this atlas's own "
+        "curation, and changes no classification above. "
+        '<a href="../methods.html#curated-evidence">How to read curated evidence</a>.</p>'
+    )
+    assert page.index("<h2>Mirrored gene&ndash;disease validity</h2>") < page.index(
+        "<h2>Curated evidence</h2>"
+    )
 
 
 def test_a_symbol_carrying_markup_is_escaped(
@@ -1633,10 +1645,12 @@ def test_a_study_by_an_author_of_this_atlas_says_so(
     assert disclosure, "an own-lab study's block carries no disclosure"
     assert disclosure.group(0) == (
         '<p class="disclosure">Declaration: this study is by an author of this atlas; '
-        "republished as published, no assessment added.</p>"
+        "its results are republished as published and read by the same rule as every other "
+        "study's.</p>"
     )
     for text in (page, html.unescape(page)):
         assert "nothing added" not in text
+        assert "no assessment added" not in text
 
     outside = _PUBLICATION.model_copy(update={"own_lab": False})
     other = _burden_page(
@@ -1808,6 +1822,40 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     )
     assert "no pooled statistic across studies" in two
 
+    # **The caption also says the cell and the card lead differently** (owner
+    # decision 2026-10-26, R4): the cell names the most significant row behind
+    # its state, the card a study's surviving rows, a damaging union first.
+    # Pinned as a literal, sliced to the caption -- from the matrix's end to
+    # the first study block -- and rendered only where both can lead: with a
+    # matrix, and where the card lists a surviving row (review, 2026-10-27).
+    # On the 86 pages whose card lists none it was a sentence about a lead
+    # that does not exist. `one`'s row publishes no corrected p, so nothing
+    # survives; the same row with one does, and its card lists it.
+    lead = (
+        "<p>A cell names the most significant of the rows behind its state; the card lists a "
+        "study's surviving rows with a damaging union before its parts, so the two can lead "
+        "with different rows.</p>"
+    )
+    assert "A cell names the most significant" not in one
+    survivor = _burden_row(pvalue_adjusted=1e-4, pvalue_adjustment="benjamini_hochberg")
+    surviving = _burden_page(tmp_path / "surviving", facts_uncurated, [survivor])
+    assert "surviving their own study's correction" in surviving, "the card lists no row"
+    led = _burden_section_text(surviving)
+    assert lead in led[led.index("</table></div>") : led.index("<h3")]
+    # Two studies with no evidence axes draw no matrix, and keep the pooling
+    # sentence without it -- and no lead note, though a row survives.
+    bare = _burden_section_text(
+        _burden_page(
+            tmp_path / "bare",
+            facts_uncurated,
+            [survivor, _burden_row(study="PMID:8988165", case_cohorts=("ddd", "pcgc"))],
+            axes=(),
+        )
+    )
+    assert '<table class="matrix">' not in bare
+    assert "no pooled statistic across studies" in bare
+    assert "A cell names the most significant" not in bare
+
 
 def test_the_consequence_column_is_headed_for_the_column_it_renders(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
@@ -1919,7 +1967,7 @@ def test_the_rail_states_rare_variant_evidence_and_no_bare_publication_count(
 
     rail = _slice_between(page, '<aside class="rail">', ("</aside>",))
     card = _card_variants(rail)
-    assert "<p>Tested in 1 independent dataset.</p>" in card
+    assert "<p>Tested in 1 independent dataset (a study by an atlas author).</p>" in card
     assert '<p class="card-uncorrected"><a href="#study-42230622">' in card
     assert "<dt>rare-variant rows</dt>" not in rail
     assert "<dt>curated publications</dt>" not in rail
@@ -2237,6 +2285,18 @@ def test_every_particular_caveat_survives_outside_the_fold(
     same day: the card's no-correction line also carries "138,609" ("judge its
     results against its scan of 138,609 tests"), so the bare number would pass
     with the method line folded away.
+
+    **Two chart caveats joined the list on the owner's decision of 2026-10-26
+    (E1)**, each particular to its figure and each folded under "How to read
+    this chart" until then: a forest panel's warning that a `union`-tagged
+    row is not fully split (10 panels on 10 pages, measured on a build of
+    3b766ba), and the trajectory's note that its ticks are stages below the
+    detection floor (32 of 112 trajectories). Each is required outside every
+    fold, once, where it fires -- the `all cases` row below has its syndromic
+    half drawn and no non-syndromic one, and the heart series has a stage
+    below the floor -- and absent from the whole page where it does not, so a
+    clause moved back into the toggle fails the first half and one rendered
+    unconditionally fails the second.
     """
     rows = [
         _burden_row(consequence_class="lof"),
@@ -2247,13 +2307,40 @@ def test_every_particular_caveat_survives_outside_the_fold(
             method_note="Cases include 777 sporadic thoracic aortic aneurysm probands.",
         ),
     ]
+    publications = {_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS}
     page = _burden_page(
         tmp_path,
         facts_uncurated,
-        rows,
-        publications={_PUBLICATION.id: _PUBLICATION, **_OTHER_PUBLICATIONS},
+        [*rows, _burden_row(cohort_stratum="all", consequence_class="lof")],
+        publications=publications,
     )
     unfolded = re.sub(r"<details.*?</details>", "", page, flags=re.S)
+    split = (
+        "The <strong>all cases · loss-of-function</strong> row is a union, and this study "
+        "published no non-syndromic · loss-of-function row for this gene."
+    )
+    assert split in unfolded
+    assert page.count("row is a union") == 1, "the split warning is on the page twice"
+    # The same studies with every tagged row fully split -- here, no union at all.
+    whole = _burden_page(tmp_path / "split", facts_uncurated, rows, publications=publications)
+    assert "row is a union" not in whole
+
+    # The trajectory's floor note, against a heart series with and without a
+    # stage below the floor.
+    def trajectory(*stages: tuple[str, float | None], into: str) -> str:
+        return _expression_page(
+            tmp_path / into,
+            {GATA4: _heart_series(*stages)},
+            _HEART_DATASET,
+            phases=_cardiac_phases(),
+        )
+
+    ticks = "Ticks on the axis mark stages below this dataset's detection floor (1 tpm)"
+    below = trajectory(("4wpc", 5.0), ("5wpc", None), ("6wpc", 40.0), into="below")
+    assert ticks in re.sub(r"<details.*?</details>", "", below, flags=re.S)
+    assert below.count("Ticks on the axis") == 1, "the floor note is on the page twice"
+    above = trajectory(("4wpc", 5.0), ("5wpc", 12.0), ("6wpc", 40.0), into="above")
+    assert "Ticks on the axis" not in above
 
     # The atlas's claim about itself.
     assert "computes none of them" in unfolded
@@ -3037,6 +3124,18 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
     Three panels, because the corpus can only show one of the two axes: all
     10 measured cases split on the **stratum** axis, so a fixture built from
     the corpus alone would leave the consequence branch unmeasured.
+
+    **The visible line names the row and what is missing from it** (review,
+    2026-10-27). It said "at least one of the rows it contains is not
+    plotted; the table below carries every row this study published for this
+    gene", pointing a reader at the table for a row that is in no table: on
+    all 10 published panels the missing component is a cell the study never
+    published for the gene. A fourth panel separates the two things an
+    absence can be -- a component the study published and the panel cannot
+    draw (no effect to place) is "not plotted here", never "published no" --
+    which no published panel shows today, so the fixture is its only
+    measurement. Each sentence is pinned as a literal on its panel's visible
+    line.
     """
     enrichment: dict[str, object] = {
         "study": "PMID:40127276",
@@ -3067,7 +3166,7 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
                 # **The missing component is on the panel under a different
                 # stratum**, and no row here is `all cases`, so the stratum
                 # union is off and this measures the consequence branch alone.
-                # Without it, dropping `_fully_split`'s `other.cohort_stratum
+                # Without it, dropping `_missing_components`' `other.cohort_stratum
                 # == row.cohort_stratum` -- checking the union across strata
                 # rather than within one -- survived all 1,050 tests: this
                 # panel's rows all shared a stratum, so holding it fixed or
@@ -3099,23 +3198,55 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
                 _burden_row(
                     study="PMID:40127276", cohort_stratum="syndromic", effect=8.0, **placed
                 ),
+                # Panel zero, PMID:34324492 odds ratios: the non-syndromic side
+                # is published and has no effect to place, so it is in this
+                # study's table and on no panel.
+                _burden_row(study="PMID:34324492", cohort_stratum="all", effect=2.0, **placed),
+                _burden_row(
+                    study="PMID:34324492", cohort_stratum="syndromic", effect=3.0, **placed
+                ),
+                _burden_row(
+                    study="PMID:34324492",
+                    cohort_stratum="nonsyndromic",
+                    effect=None,
+                    effect_measure=None,
+                    effect_bound=None,
+                    ci_low=None,
+                ),
             ],
-            publications={_PUBLICATION.id: _PUBLICATION, **_SIERANT_PUBLICATION},
+            publications={
+                _PUBLICATION.id: _PUBLICATION,
+                **_SIERANT_PUBLICATION,
+                **_OTHER_PUBLICATIONS,
+            },
         )
     )
 
-    # PMID:40127276 sorts first and `enrichment_ratio` before `odds_ratio`.
-    consequence_short, stratum_short, complete = _forest_figures(section)
-    warning = "a tagged row is <strong>not fully split</strong>"
-    assert warning in consequence_short
-    assert warning in stratum_short
-    assert warning not in complete
+    # Studies in id order, and `enrichment_ratio` before `odds_ratio`.
+    unplotted, consequence_short, stratum_short, complete = _forest_figures(section)
+
+    def visible(figure: str) -> str:
+        return figure[figure.index("<figcaption><p>") : figure.index("</p>")]
+
+    assert visible(unplotted).endswith(
+        " The <strong>all cases · loss-of-function</strong> row is a union, and the "
+        "non-syndromic · loss-of-function row it contains is not plotted here."
+    )
+    assert visible(consequence_short).endswith(
+        " The <strong>syndromic · damaging (LOF + missense)</strong> row is a union, and this "
+        "study published no syndromic · missense (damaging) row for this gene."
+    )
+    assert visible(stratum_short).endswith(
+        " The <strong>all cases · loss-of-function</strong> row is a union, and this study "
+        "published no non-syndromic · loss-of-function row for this gene."
+    )
+    assert "row is a union" not in complete
     # The tag itself is untouched on every one of them: the row really does
     # contain the row below it, and saying otherwise would publish two
     # overlapping rows as independent findings.
     assert all(
         figure.count('class="chart-union"') >= 1
-        for figure in (consequence_short, stratum_short, complete)
+        for figure in (unplotted, consequence_short, stratum_short, complete)
     )
 
 
@@ -3558,11 +3689,11 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     The key was one `<figcaption>` of up to twelve sentences under every panel
     -- 185 panels on 114 pages, measured on a build of 9f24190. The axis clause
     (the measure, its range, and what 1 means for that measure) stays in sight
-    and every other clause folds. Most of them describe a mark in words that
-    are the same wherever that mark is drawn; the not-fully-split clause does
-    not -- it warns about this panel -- and folds too, as the D57 spec places
-    it (10 panels on 10 pages, measured 2026-10-26). This docstring said the
-    axis clause alone was particular to its panel until then. **Each clause
+    and every other clause folds but one. Most of them describe a mark in
+    words that are the same wherever that mark is drawn; the not-fully-split
+    clause does not -- it warns about this panel. It folded too, as the D57
+    spec placed it (10 panels on 10 pages, measured 2026-10-26), and the owner
+    moved it to the visible line the same day (E1). **Each clause
     keeps its condition**: the tests above that assert a clause renders only
     beside its mark slice the figure, which contains the toggle, so they hold
     unchanged; this one asserts where the clauses sit.
@@ -3647,9 +3778,20 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         '<details class="chart-notes"><summary>How to read this chart</summary>'
     )
     assert toggle, "the forest key is not folded behind a toggle"
+    # The not-fully-split warning is on the visible line since the owner's
+    # decision of 2026-10-26 (E1): it is particular to this panel. Since review
+    # (2026-10-27) it names each unsplit row and each missing component, once,
+    # in panel order -- here four of each, in its plural form.
     assert visible == (
         "<p>Axis: <strong>OR</strong> on a logarithmic scale, 0.562 to 50; the vertical "
-        "line is <strong>1</strong>, no association.</p>"
+        "line is <strong>1</strong>, no association. The <strong>all cases · damaging "
+        "(LOF + missense)</strong>, <strong>all cases · loss-of-function</strong>, "
+        "<strong>all cases · missense (damaging)</strong> and <strong>all cases · "
+        "synonymous</strong> rows are unions, and this study published no syndromic · "
+        "damaging (LOF + missense), non-syndromic · damaging (LOF + missense), "
+        "non-syndromic · loss-of-function, syndromic · missense (damaging), non-syndromic · "
+        "missense (damaging), syndromic · synonymous or non-syndromic · synonymous row for "
+        "this gene.</p>"
     )
     assert folded == (
         "<p>A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
@@ -3672,10 +3814,6 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
         "and is not an independent finding: <code>damaging</code> is the loss-of-function "
         "and damaging-missense rows together; <code>all cases</code> is the syndromic and "
         "non-syndromic rows together. "
-        "Here a tagged row is <strong>not fully split</strong>: at least one of the rows it "
-        "contains is not itself plotted, so what sits under a union on this panel is part of "
-        "it and not all of it. The table below carries every row this study published for "
-        "this gene. "
         "A <strong>muted</strong> row is one of this study's <strong>synonymous</strong> "
         "rows, its negative control, drawn apart from the results it calibrates.</p>"
         '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
@@ -4363,7 +4501,7 @@ def test_a_below_floor_tissue_names_the_organ_and_the_floor_value_and_never_says
     )
     section = _expression_section_text(page)
 
-    assert "below the detection floor in whole Liver at this stage" in section
+    assert "below the detection floor in Liver at this stage" in section
     assert "detection floor 1 rpkm" in section
     assert "not detected" not in page.lower()
 
@@ -4582,7 +4720,7 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
         )
     )
     caveat = (
-        '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
+        '<p class="notice-inline"><strong>Every measurement below is from bulk '
         "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
         'heart development. <a href="../methods.html#expression">How to read these '
         "figures</a>.</p>"
@@ -4676,7 +4814,7 @@ def test_the_expression_reading_notes_are_on_methods_html_and_not_on_the_gene_pa
             "travels with every percentile",
             "the rank of an unreliable measurement",
             # The bulk notice in full: the short form keeps its claim and
-            # drops the argument. Not "once diluted across the whole organ":
+            # drops the argument. Not "once diluted across the sample":
             # `_no_trajectory_sentence` says that of its own gene, rightly.
             "never a single cell type",
             "cardiac neural crest",
@@ -4739,7 +4877,7 @@ _HEART_DATASET = {"E-MTAB-6814": _profile_dataset(cardiac_tissues=("heart",))}
 
 
 def _heart_series(
-    *stages: tuple[str, float | None | EllipsisType],
+    *stages: tuple[str, float | None | EllipsisType | str],
     phase_ids: tuple[str, ...] = ("atrial_septum_morphogenesis",),
     unplaced_reason: str = "below_detection_floor",
 ) -> ExpressionProfile:
@@ -4754,7 +4892,9 @@ def _heart_series(
       which `_trajectory` ticks on the axis;
     * `...` -- a stage this dataset has **no heart row for at all**, which
       gets no tick and nothing else, and is why the stage is still in
-      `entry["stages"]` and still occupies an x position.
+      `entry["stages"]` and still occupies an x position;
+    * a `str` -- a stage not placed for *that* reason rather than
+      `unplaced_reason`, so one figure can tick stages for two reasons.
 
     The order given is the published order -- `gene_expression_profiles` emits
     stages by `Stage.order`, so a fixture's own sequence is the trajectory's.
@@ -4764,21 +4904,26 @@ def _heart_series(
     about the gene, and a missing percentile grid is a hole in the reference
     that says nothing about the gene at all.
     """
+
+    def heart(median: float | None | str) -> TissueProfileEntry:
+        if median is None or isinstance(median, str):
+            reason = unplaced_reason if median is None else median
+            return _tissue_entry(
+                tissue="heart", median=0.3, unit="tpm", placement=None, not_placed_reason=reason
+            )
+        return _tissue_entry(
+            tissue="heart",
+            median=median,
+            unit="tpm",
+            placement=_placement(),
+            not_placed_reason=None,
+        )
+
     entries = [
         _stage_entry(
             stage=token,
             phase=_phase_info(phase_ids=phase_ids),
-            tissues=()
-            if median is ...
-            else (
-                _tissue_entry(
-                    tissue="heart",
-                    median=median if median is not None else 0.3,
-                    unit="tpm",
-                    placement=_placement() if median is not None else None,
-                    not_placed_reason=None if median is not None else unplaced_reason,
-                ),
-            ),
+            tissues=() if median is ... else (heart(median),),
         )
         for token, median in stages
     ]
@@ -4960,8 +5105,8 @@ def test_the_trajectory_says_what_its_vertical_axis_spans(tmp_path: Path) -> Non
     # Stated as the **axis's** range and not as the medians'. `_axis_bounds`
     # widens a flat series by half a decade either side, because `LogScale`
     # refuses a zero-span axis, and 3 of the 85 charted genes are flat: for
-    # TFAP2B, placed at 1 tpm and nowhere else, "median abundance in whole
-    # heart, 0.316 to 3.16 tpm" attributes to its medians a spread neither
+    # TFAP2B, placed at 1 tpm and nowhere else, "median abundance in heart,
+    # 0.316 to 3.16 tpm" attributes to its medians a spread neither
     # end of which anyone measured. The third fixture is that gene's shape.
     assert "the axis runs 5 to 275 and is fitted to" in wide
     assert "the axis runs 1 to 2 and is fitted to" in narrow
@@ -4975,7 +5120,7 @@ def test_the_trajectory_says_what_its_vertical_axis_spans(tmp_path: Path) -> Non
         )
     )
     assert "the axis runs 0.316 to 3.16 and is fitted to" in flat
-    assert "median abundance in whole heart, tpm, on a log scale" in flat
+    assert "median abundance in heart, tpm, on a log scale" in flat
 
 
 def test_a_phase_the_source_never_ended_bands_nothing(tmp_path: Path) -> None:
@@ -5056,7 +5201,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     """
 
     def caption(
-        *stages: tuple[str, float | None | EllipsisType],
+        *stages: tuple[str, float | None | EllipsisType | str],
         reason: str = "below_detection_floor",
     ) -> str:
         return _expression_section_text(
@@ -5068,7 +5213,8 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
             )
         )
 
-    tick = "the stage is ticked on the axis instead"
+    # The floor clause's words since E1 (2026-10-26), on the visible line.
+    tick = "Ticks on the axis mark stages below this dataset's detection floor"
     no_row = "no row for this organ at that stage"
 
     # Ticked and unbroken: the floor clause, and nothing about a missing row.
@@ -5082,9 +5228,9 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     assert tick not in unsampled
     assert no_row in unsampled
     # And it does not point back at a clause this figure does not carry.
-    # "A break with no tick under it is different again" beside no tick at
-    # all is the same defect one sentence further on.
-    assert "different again" not in unsampled
+    # "A break with no tick under it is different" beside no tick at all is
+    # the same defect one sentence further on.
+    assert "is different:" not in unsampled
 
     # Both causes at once -- the caption owes a reader both sentences.
     both = caption(
@@ -5097,7 +5243,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     )
     assert tick in both
     assert no_row in both
-    assert "different again" in both
+    assert "is different:" in both
 
     # Neither: an unbroken, fully placed series says nothing about either.
     clean = caption(("4wpc", 5.0), ("5wpc", 40.0), ("6wpc", 275.0))
@@ -5115,18 +5261,38 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # stage table below, from the same map and deliberately so, and answers a
     # section-wide check on it whatever the caption said.
     caption_only = _band_caption_text(grid)
-    assert "Below this dataset's detection floor" not in caption_only
+    assert tick not in caption_only
     assert "no complete percentile grid is published for this organ at this stage" in caption_only
     # And the mark is still accounted for rather than left on the axis with
     # nothing said about it, which is the defect the floor clause was written
     # for in the first place.
     assert "ticked" in caption_only
 
+    # **Both reasons on one figure** (review, 2026-10-27). The visible line's
+    # floor sentence is universal -- "Ticks on the axis mark stages below this
+    # dataset's detection floor" -- and was false of the tick the missing grid
+    # drew, while the clause saying a tick can mean something else sat in the
+    # fold. With both present the visible sentence names both, and the fold
+    # does not repeat the second. Latent on the committed corpus, where every
+    # unplaced cell is below the floor.
+    mixed = caption(("4wpc", None), ("5wpc", 5.0), ("6wpc", "no_quantile_grid"), ("7wpc", 275.0))
+    assert mixed.count('class="chart-absent"') == 2, "one tick per unplaced stage"
+    mixed_caption = _band_caption_text(mixed)
+    shown, toggle, folded = mixed_caption.partition('<details class="chart-notes">')
+    assert toggle, "the trajectory's key is not folded behind a toggle"
+    assert shown.endswith(
+        " Ticks on the axis, beneath the foot of the scale rather than at a value on it, mark "
+        "stages below this dataset's detection floor (1 tpm) or where no complete percentile "
+        "grid is published for this organ at this stage.</p>"
+    )
+    assert tick not in mixed_caption
+    assert "percentile grid" not in folded
+
     # And the tick is placed off the bottom of the scale rather than at a
     # value on it. Measured: KIF20A's axis starts at 42 tpm against a 1 tpm
     # floor, so its 6 ticks sat where the axis reads 38.6 tpm; the words are
     # what stop a reader interpolating them.
-    assert "below the foot of the scale, not at a value on it" in ticked
+    assert "beneath the foot of the scale rather than at a value on it" in ticked
 
 
 def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> None:
@@ -5148,10 +5314,15 @@ def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> 
 
     The fixture is the one that earns every clause the floor allows at once: a
     below-floor stage between two placed ones (the floor clause) and a stage
-    with no heart row (the no-row clause). **The no-row clause is pinned after
-    the floor clause, in one paragraph**, because its first spelling --
-    "different again" -- contrasts itself with the floor clause, and split
-    from it, or set before it, the contrast points at nothing.
+    with no heart row (the no-row clause).
+
+    **The floor clause is on the visible line since the owner's decision of
+    2026-10-26 (E1)**, in a short form, because it is particular to this gene;
+    `test_every_particular_caveat_survives_outside_the_fold` requires it there
+    where it fires and nowhere where it does not. The no-row clause stays
+    folded, and its first spelling reads "different" rather than "different
+    again": the clause it contrasts with is now the line above the toggle, not
+    the sentence before it in the same paragraph.
 
     Pinned whole, both halves, as literals.
     """
@@ -5183,21 +5354,20 @@ def test_the_band_caption_folds_behind_one_visible_axis_line(tmp_path: Path) -> 
     assert visible == (
         '<p class="method">Left to right: 4wpc to 9wpc, all 6 of this dataset\'s stages in '
         "curated developmental order, evenly spaced &mdash; the axis is <strong>order, not "
-        "elapsed time</strong>. Vertical: median abundance in whole heart, tpm, on a log "
+        "elapsed time</strong>. Vertical: median abundance in heart, tpm, on a log "
         "scale; the axis runs 5 to 275 and is fitted to <strong>this gene</strong>, so a "
-        "curve's height compares nothing to another gene's.</p>"
+        "curve's height compares nothing to another gene's. Ticks on the axis mark stages "
+        "below this dataset's detection floor (1 tpm), beneath the foot of the scale rather "
+        "than at a value on it.</p>"
     )
     assert folded == (
-        '<p class="method">Below this dataset\'s detection floor (1 tpm) no percentile is '
-        "published and the stage is ticked on the axis instead &mdash; below the foot of the "
-        "scale, not at a value on it. A break in the line with no tick under it is different "
-        "again: this dataset has <strong>no row for this organ at that stage</strong>, so "
-        "there is no measurement to place, low or otherwise. Shaded: Atrial septum "
-        "morphogenesis (Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)).</p>"
+        '<p class="method">A break in the line with no tick under it is different: this '
+        "dataset has <strong>no row for this organ at that stage</strong>, so there is no "
+        "measurement to place, low or otherwise. Shaded: Atrial septum morphogenesis "
+        "(Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)).</p>"
         '<p class="method"><a href="../methods.html#expression">How to read expression '
         "figures</a></p></details>"
     )
-    assert folded.index("ticked on the axis") < folded.index("different again")
 
 
 def test_the_line_never_spans_a_stage_the_atlas_did_not_place(tmp_path: Path) -> None:
@@ -5966,14 +6136,14 @@ def _trajectory_organs(section: str) -> list[str]:
     Matched on the trajectory's own 560x150 `viewBox` rather than on `<svg`,
     for the reason `_trajectory_figure` is (CLAUDE.md section 4.19): the organ
     small multiples are 96x40 `<svg>`s in the same section, and a *cardiac*
-    organ's panel opens `Median abundance in whole <organ>,` exactly as its
+    organ's panel opens `Median abundance in <organ>,` exactly as its
     trajectory does -- identical through the comma this pattern stops at. An
     unscoped search would return every cardiac organ twice, interleaved in an
     order the trajectories do not decide.
     """
     return re.findall(
         r'<svg class="chart" viewBox="0 0 560 150"[^>]*><title>'
-        r"Median abundance in whole ([^,]+),",
+        r"Median abundance in ([^,]+),",
         section,
     )
 
@@ -6121,10 +6291,10 @@ def test_both_sentences_that_list_every_cardiac_organ_list_them_in_one_order(
     )
 
     assert (
-        "whole aorta (3 stages sampled), whole atrium (3 stages sampled), "
-        "whole endocardium (3 stages sampled), whole epicardium (3 stages sampled), "
-        "whole myocardium (3 stages sampled), whole septum (3 stages sampled), "
-        "whole ventricle (3 stages sampled)"
+        "aorta (3 stages sampled), atrium (3 stages sampled), "
+        "endocardium (3 stages sampled), epicardium (3 stages sampled), "
+        "myocardium (3 stages sampled), septum (3 stages sampled), "
+        "ventricle (3 stages sampled)"
     ) in section
     assert (
         "this atlas declares aorta, atrium, endocardium, epicardium, myocardium, "
@@ -7329,7 +7499,8 @@ _NO_TESTS_REPORTED: Final = {
                 _sierant(consequence_class="synonymous", pvalue=1e-6, pvalue_adjusted=0.001),
             ],
             _ALL_STUDIES,
-            "Tested in 2 independent datasets; none survives a correction its study published.",
+            "Tested in 2 independent datasets (2 of the 3 studies by an atlas author); none "
+            "survives a correction its study published.",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7356,7 +7527,8 @@ _NO_TESTS_REPORTED: Final = {
                 ),
             ],
             _ALL_STUDIES,
-            "Tested in 2 independent datasets; none survives a correction its study published.",
+            "Tested in 2 independent datasets (1 of the 2 studies by an atlas author); none "
+            "survives a correction its study published.",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7368,7 +7540,7 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)],
             _ALL_STUDIES,
-            "Tested in 1 independent dataset.",
+            "Tested in 1 independent dataset (a study by an atlas author).",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7380,12 +7552,42 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_audain2021(case_cohorts=("ddd",), pvalue_adjusted=None)],
             _NO_TESTS_REPORTED,
-            "Tested in 1 independent dataset.",
+            "Tested in 1 independent dataset (a study by an atlas author).",
             [
                 '<a href="#study-34324492">Audain E et al. 2021</a> publishes no corrected p '
                 "for this gene; see its block · study by an atlas author"
             ],
             id="no scan size recorded: no number invented",
+        ),
+        pytest.param(
+            [_audain2021(case_cohorts=("ddd",), pvalue_adjusted=0.4)],
+            _ALL_STUDIES,
+            "Tested in 1 independent dataset (a study by an atlas author); none survives a "
+            "correction its study published.",
+            [],
+            id="MYH11: one study by an atlas author, its correction failed",
+        ),
+        pytest.param(
+            [
+                _audain2021(case_cohorts=("ddd",), pvalue_adjusted=0.4),
+                _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None),
+            ],
+            _ALL_STUDIES,
+            "Tested in 1 independent dataset (each study by an atlas author); none survives a "
+            "correction its study published.",
+            [
+                '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
+                "for this gene; judge its results against its scan of 138,609 tests (see its "
+                "block) · study by an atlas author"
+            ],
+            id="two studies by an atlas author, one dataset: counted in studies",
+        ),
+        pytest.param(
+            [_sierant(pvalue_adjusted=0.2)],
+            _ALL_STUDIES,
+            "Tested in 1 independent dataset; none survives a correction its study published.",
+            [],
+            id="no study by an atlas author: no declaration",
         ),
     ],
 )
@@ -7421,6 +7623,13 @@ def test_a_card_with_no_surviving_result_counts_the_datasets_that_tested_the_gen
     one, the closing sentence says only how many tested it: "none survives a
     correction its study published" would be vacuously true there, and read as
     a correction applied and failed.
+
+    **The closing sentence declares a study by an atlas author** (owner
+    decision 2026-10-26, R7): it names no study, so MYH11's card, tested by
+    PMID:34324492 alone, carried no declaration at all. Three forms, each
+    pinned: one study, all of several, some of several -- counted in studies,
+    not datasets, which the two-studies-one-family case is here to tell apart.
+    A study by no atlas author adds nothing.
     """
     families = (
         frozenset({"PMID:34324492", "PMID:42230622"}),
@@ -7846,6 +8055,148 @@ def test_a_dispute_flag_with_no_contested_record_to_name_is_refused(tmp_path: Pa
         _card_page(tmp_path, replace(fact, has_conflicting_evidence=True), validity)
 
 
+def _no_association(submitter: str, disease: str, label: str, on: str | None) -> ValidityRecord:
+    """A GenCC submitter's `No Known Disease Relationship`, dated `on`."""
+    return replace(
+        _gencc(submitter, Classification.NO_KNOWN_ASSOCIATION, disease=disease, label=label),
+        classification_term="No Known Disease Relationship",
+        submitted_on=on,
+    )
+
+
+@pytest.mark.parametrize(
+    ("gene", "line"),
+    [
+        pytest.param(
+            _agreed(
+                _gencc("G2P", Classification.DEFINITIVE),
+                _gencc("Labcorp Genetics (formerly Invitae)", Classification.STRONG),
+                _no_association(
+                    "Illumina",
+                    "MONDO:0013463",
+                    "congenital heart defects, multiple types, 6",
+                    "2021-12-10 00:00:00",
+                ),
+            ),
+            "Illumina reports no known disease relationship for congenital heart defects, "
+            "multiple types, 6 (2021); see the validity table.",
+            id="GDF1: one submitter, one disease",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+                # The panel's own record, and ClinGen's GenCC copy of it, which
+                # folds in the table and so must not be named twice here.
+                replace(
+                    _clingen(
+                        Classification.NO_KNOWN_ASSOCIATION,
+                        "MONDO:0005453",
+                        "congenital heart disease",
+                        "UD",
+                    ),
+                    classification_term="No Known Disease Relationship",
+                    classification_date="2024-10-01T16:00:00.000Z",
+                ),
+                replace(
+                    _gencc(
+                        "ClinGen",
+                        Classification.NO_KNOWN_ASSOCIATION,
+                        "UD",
+                        disease="MONDO:0005453",
+                        label="congenital heart disease",
+                    ),
+                    classification_term="No Known Disease Relationship",
+                    submitted_on="2024-10-01 00:00:00",
+                ),
+                # Two submitters in reverse alphabetical order, the first with
+                # two diseases in reverse order and one record with no date.
+                _no_association("Illumina", "MONDO:0013463", "tetralogy of Fallot", None),
+                _no_association(
+                    "Illumina", "MONDO:0007173", "atrial septal defect 7", "2019-03-01 00:00:00"
+                ),
+                _no_association(
+                    "Ambry Genetics", "MONDO:0007173", "atrial septal defect 7", "2020-08-20"
+                ),
+            ),
+            "The Congenital Heart Disease Gene Curation Expert Panel reports no known disease "
+            "relationship for congenital heart disease (2024); Ambry Genetics reports no known "
+            "disease relationship for atrial septal defect 7 (2020); Illumina reports no known "
+            "disease relationship for atrial septal defect 7 (2019) and tetralogy of Fallot; see "
+            "the validity table.",
+            id="a panel and two submitters, sorted, the panel's GenCC copy folded",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+            ),
+            None,
+            id="no report",
+        ),
+    ],
+)
+def test_the_card_names_who_reports_no_known_disease_relationship_and_for_what(
+    tmp_path: Path, gene: tuple[GeneFacts, GeneValidity], line: str | None
+) -> None:
+    """`has_no_association_report` on the card, in words (owner decision 2026-10-26, R6).
+
+    The bundle has published the flag and `no_association_reported_by` since
+    schema 2.10, and the validity table lists the record, but the card said
+    nothing: GDF1's names G2P among the submitters that admit it, with no sign
+    that Illumina reports no known disease relationship for one of the same
+    diseases. The
+    line names each authority -- the panel for a ClinGen record, the submitter
+    for a GenCC one -- its diseases and the year of its record, panels first,
+    then submitters by name, diseases sorted, from the records rather than
+    from the bundle's name list. The second fixture lists its submitters and
+    one submitter's diseases in reverse order and carries no `set`, so a
+    dropped sort fails on every hash seed; its ClinGen copy of the panel's
+    record folds as it does in the table. Directly after the gloss.
+    """
+    fact, validity = gene
+    reporters = tuple(
+        sorted(
+            {
+                record.submitter or record.gcep or ""
+                for record in validity.records
+                if record.classification is Classification.NO_KNOWN_ASSOCIATION
+            }
+        )
+    )
+    rail = _card_page(
+        tmp_path,
+        replace(
+            fact,
+            has_no_association_report=bool(reporters),
+            no_association_reported_by=reporters,
+        ),
+        validity,
+    )
+    if line is None:
+        assert "card-no-association" not in rail
+        assert "no known disease relationship" not in rail
+        return
+    assert rail.count('<p class="card-no-association">') == 1
+    after = rail[rail.index("</dl>") + len("</dl>") :]
+    if 'class="card-gloss"' in after:
+        after = after[after.index("</p>") + len("</p>") :]
+    assert after.startswith(f'<p class="card-no-association">{line}</p>')
+
+
+def test_a_no_association_flag_with_no_record_to_name_is_refused(tmp_path: Path) -> None:
+    """The flag and the records come from one derivation; disagreeing, they are a bug."""
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _clingen(Classification.DEFINITIVE, "MONDO:0007732", "Holt-Oram syndrome"),
+    )
+    flagged = replace(
+        fact, has_no_association_report=True, no_association_reported_by=("Illumina",)
+    )
+    with pytest.raises(ValueError, match="no such record"):
+        _card_page(tmp_path, flagged, validity)
+
+
 _NOONAN: Final = "MONDO:0018997"
 _NSML: Final = "MONDO:0007893"
 _HOLT_ORAM: Final = "MONDO:0007732"
@@ -8051,7 +8402,7 @@ _NOT_CURATED_BY_PANEL: Final = (
             ),
             "Not yet curated by the atlas, and no ClinGen expert panel has graded this gene for "
             "any of the diseases in scope here: it is published because the Gene Curation "
-            "Coalition submitters named above independently assert it.",
+            "Coalition submitters it is admitted by independently assert it.",
             id="not curated, admitted on agreement",
         ),
         pytest.param(
@@ -8157,13 +8508,22 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
     until review measured that dropping it survived the suite: the Orphanet
     line's disease label, the dispute line's disease label, and the study
     label on a rare-variant line, its link's accessible name and the
-    no-correction line.
+    no-correction line. The no-association line's submitter and disease label
+    joined them after the next review (2026-10-27): its escape survived all
+    1,383 tests.
+
+    **And the fixture carries all three lines a disputed, Orphanet-scoped gene
+    can show, so their order is pinned here too**: the dispute line, then the
+    no-association line, then the Orphanet line (`_rail`'s order, and
+    `docs/data-api.md`'s). The R6 test pins the no-association line directly
+    after the gloss, which only holds where no dispute line sits between.
     """
     marked = "<i>Noonan</i>"
     fact, validity = _graded(
         Classification.DEFINITIVE,
         _rasopathy(Classification.DEFINITIVE, _NOONAN, marked),
         _rasopathy(Classification.DISPUTED, "MONDO:0009026", "<b>Costello</b>"),
+        _no_association("<q>Lab</q>", "MONDO:0007173", "<kbd>ASD7</kbd>", "2021-12-10 00:00:00"),
     )
     publications = {
         **_ALL_STUDIES,
@@ -8173,8 +8533,14 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
         "PMID:42230622": _PUBLICATION.model_copy(update={"authors": ["<u>Audain</u>"]}),
     }
     rows = [_sierant(), _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)]
+    flagged = replace(
+        fact,
+        has_conflicting_evidence=True,
+        has_no_association_report=True,
+        no_association_reported_by=("<q>Lab</q>",),
+    )
     build_gene_pages(
-        {GATA4: replace(fact, has_conflicting_evidence=True)},
+        {GATA4: flagged},
         Emitter(root=tmp_path),
         symbols={GATA4: "GATA4"},
         validity={GATA4: validity},
@@ -8196,8 +8562,17 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
     assert line.startswith("&lt;s&gt;Sierant&lt;/s&gt; et al. 2025 · ")
     assert 'aria-label="Details for &lt;s&gt;Sierant&lt;/s&gt; et al. 2025"' in line
     assert '">&lt;u&gt;Audain&lt;/u&gt; et al. 2026</a> publishes no corrected p' in rail
-    for raw in ("<i>", "<b>", "<s>", "<u>"):
+    silence = _slice_between(rail, '<p class="card-no-association">', ("</p>",))
+    assert silence == (
+        "&lt;q&gt;Lab&lt;/q&gt; reports no known disease relationship for "
+        "&lt;kbd&gt;ASD7&lt;/kbd&gt; (2021); see the validity table."
+    )
+    for raw in ("<i>", "<b>", "<s>", "<u>", "<q>", "<kbd>"):
         assert raw not in rail, raw
+    lines = [
+        rail.index(f'<p class="card-{kind}">') for kind in ("dispute", "no-association", "scope")
+    ]
+    assert lines == sorted(lines), "the dispute, no-association and Orphanet lines moved"
 
 
 def test_two_studies_that_would_share_one_anchor_are_refused(
