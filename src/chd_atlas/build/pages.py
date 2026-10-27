@@ -1023,11 +1023,12 @@ def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
     NR2F2); the one row where it is smaller, ANKRD11's 12 of 13, is on no
     published page, so that form is reachable from a fixture only.
 
-    `rows` are the rows the card's lines show, one per line. The table is the
-    one `CHD_CASE_SPLITS` records for the row's study: BUR024 refuses the
-    column on a row of any study it does not list, so a row that reaches here
-    without one means the gate was bypassed, and that raises rather than names
-    a table the study never had. A row with no case carrier says nothing,
+    `rows` are the rows the card's lines show, one per line. The table, and
+    the case the second clause rules out, are the ones `CHD_CASE_SPLITS`
+    records for the row's study: BUR024 refuses the column on a row of any
+    study it does not list, so a row that reaches here without one means the
+    gate was bypassed, and that raises rather than names a table the study
+    never had. A row with no case carrier says nothing,
     since "every carrier" of none is vacuous. Deduplicated in order, so two
     lines of one study cannot repeat a sentence.
     """
@@ -1046,7 +1047,7 @@ def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
             continue
         sentence = (
             f"For this gene, the study's {split.table} counts every carrier among its CHD "
-            f"cases, so none is an aneurysm proband."
+            f"cases, so none is {split.other_case}."
             if chd == row.n_case_carriers
             else f"For this gene, the study's {split.table} counts {chd:,} of the "
             f"{row.n_case_carriers:,} carriers among its CHD cases."

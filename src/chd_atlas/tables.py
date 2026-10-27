@@ -787,26 +787,33 @@ BURDEN = TableSchema(
 
 @dataclass(frozen=True)
 class CaseSplit:
-    """Where one study's `n_chd_case_carriers` comes from.
+    """Where one study's `n_chd_case_carriers` comes from, and what it excludes.
 
     `source` is the `mirrors/sources.yaml` id of the file the column is
     transcribed from -- not the row's own `source`, which names the file its
     statistic came from -- and `table` is that file's name as a gene page's
-    card prints it ("the study's S8 Table").
+    card prints it ("the study's S8 Table"). `other_case` is one case of the
+    condition outside this atlas's scope that the study's case set also holds,
+    with its article, as the card's sentence ends where every carrier is a CHD
+    case ("so none is an aneurysm proband").
     """
 
     source: str
     table: str
+    other_case: str
 
 
 # The studies whose burden rows may carry `n_chd_case_carriers`, keyed by study
 # (owner decision R2). One definition for its three readers: `validate_burden`
 # refuses the column on any other study's row (BUR024); the validation runner
 # holds `source` to the registry wherever a row carries the column, as it holds
-# every row's own `source` (SRC003, SRC004); and `pages._chd_only` names the
-# table from here, so a card never names one study's table for another's row.
+# every row's own `source` (SRC003, SRC004); and `pages._chd_only` takes the
+# table and the excluded condition from here, so a card never names one study's
+# table, or its other condition, for another study's row.
 CHD_CASE_SPLITS: Final[dict[str, CaseSplit]] = {
-    "PMID:34324492": CaseSplit(source="audain2021_s8", table="S8 Table"),
+    "PMID:34324492": CaseSplit(
+        source="audain2021_s8", table="S8 Table", other_case="an aneurysm proband"
+    ),
 }
 
 # One study's own combination of two of its burden arms. Added 2026-10-24 for
