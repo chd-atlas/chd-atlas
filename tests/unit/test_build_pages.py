@@ -863,8 +863,8 @@ def test_the_browse_page_says_whose_classification_the_confidence_column_carries
     """23 rows reading `definitive` under a column headed `confidence`, unattributed.
 
     Every gene page says "Every classification below is an upstream panel's or
-    submitter's" and the landing page says "The atlas authors no validity
-    classification of its own". This was the only page on the site where a
+    submitter's" and the landing page's hero note says every gene is admitted
+    on an upstream assessment, "never this atlas's own". This was the only page on the site where a
     panel's call could be read as the atlas's own, and the `atlas curation`
     column that answers the question was unexplained beside it.
 
@@ -2740,6 +2740,11 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
     and published a browse page whose key captions the untested glyph "tested,
     no enrichment detected" -- the `not_tested`-reads-as-`no_enrichment`
     collapse this project forbids, on a green build.
+
+    **And the power caveat beside them** (review, 2026-10-27). The front page
+    taught this key with the caveat until the doorway page moved both off it,
+    pointing here; the caveat on this page was unguarded, and deleting it from
+    `_STRIP_LEGEND` survived every test.
     """
     emitter = Emitter(root=tmp_path)
     build_gene_index_page(
@@ -2766,6 +2771,11 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
         assert pair.group(1).strip() == caption, (
             f"{css!r} is captioned {pair.group(1).strip()!r}, expected {caption!r}"
         )
+    assert (
+        "<strong>No enrichment at these cohort sizes is not evidence against a gene</strong> "
+        "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family "
+        "and functional evidence."
+    ) in legend
 
 
 def test_the_strip_hover_names_each_study_of_a_family_with_its_own_state(

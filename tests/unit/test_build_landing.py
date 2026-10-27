@@ -3,12 +3,12 @@
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import shutil
 from datetime import date
 from pathlib import Path
-from typing import Final
 
 import pytest
 
@@ -21,7 +21,7 @@ from chd_atlas.build.profiles import ProfileCensus
 from chd_atlas.build.render import RESEARCH_USE_NOTICE, STYLESHEET
 from chd_atlas.build.runner import build_site
 from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
-from chd_atlas.corpus import Corpus
+from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
 from chd_atlas.models.literature import Publication
 from chd_atlas.validate.sources import Source, SourceRegistry
@@ -74,37 +74,6 @@ TBX20 = "HGNC:11598"
 # tests/unit/test_build_landing.py -> tests/unit -> tests -> repo root, the same
 # climb `tests/unit/test_build_runner.py` uses to find the committed corpus.
 REPO = Path(__file__).parent.parent.parent
-
-# The parenthetical said "browsable once curated" until D21, which made it
-# false: 23 of these 154 genes were browsable then and 22 of those carried no
-# curation from this atlas at all. What decides is the upstream grade, and that
-# is what it now says. The row's placement and label are pinned below for the
-# reason they always were -- this number must never read as published coverage.
-#
-# It then said "(browsable once ClinGen grades it definitive)", which was false
-# in the other direction: measured 2026-08-04 against the committed mirrors, 20
-# of these 154 genes already carried a ClinGen `Definitive` grade and were still
-# not browsable, because the grade names a disease outside CHD scope -- ELN was
-# graded Definitive in 2024, for cutis laxa. The caption told a reader to wait
-# for something that had already happened.
-#
-# **And then the gate itself moved, on 2026-08-06, which made the corrected
-# caption false again.** `definitive` is no longer the bar -- a ClinGen record at
-# or above `Limited` admits, and so do two agreeing GenCC submitters -- so a
-# caption naming only `definitive` now understates what is browsable rather than
-# overstating it. Re-measured against the committed mirrors: 62 of the 154 are
-# not browsable, and 9 of those carry a ClinGen `Definitive` grade for a disease
-# outside CHD scope. This is the third wording; each one was true when written
-# and none of them was checked by anything until this literal existed.
-#
-# A literal here rather than an import of `landing._MIRRORED_ROW_LABEL`: a test
-# that reads the label out of the module and compares it to itself passes on any
-# wording at all, including the one this replaces.
-_MIRRORED_ROW_LABEL = (
-    "Genes with mirrored validity in CHD scope "
-    "(browsable once ClinGen grades it Limited or better for a disease in that "
-    "scope, or two GenCC submitters agree and no ClinGen panel disputes it)"
-)
 
 
 def _burden_row(**overrides: object) -> BurdenRow:
@@ -187,7 +156,6 @@ def _build(
     published: set[str] | None = None,
     census: BurdenCensus = _NO_BURDEN,
     profile_census: ProfileCensus = _NO_PROFILES,
-    combined_results: int = 0,
     sources: SourceRegistry = _SOURCES,
 ) -> str:
     """Render the page.
@@ -218,11 +186,24 @@ def _build(
         ),
         census=census,
         profile_census=profile_census,
-        combined_results=combined_results,
         emitter=emitter,
         sources=sources,
     )
     return (tmp_path / LANDING).read_text(encoding="utf-8")
+
+
+def _hero(text: str) -> str:
+    """The hero band, whitespace-collapsed: from its `<div>` to the first `<h2>`."""
+    return _prose(text[text.index('<div class="hero">') : text.index("<h2>")])
+
+
+def _figure(value: int | str, label: str) -> str:
+    """One hero figure as `_hero` renders it: the value immediately beside its label.
+
+    Asserted with its own label, never as a bare number: three values in one
+    band would otherwise let two of them swap unnoticed.
+    """
+    return f'"figure-value">{value}</span> <span class="figure-label">{label}<'
 
 
 def _prose(text: str) -> str:
@@ -384,7 +365,6 @@ def test_the_page_is_published_through_write_text_and_reaches_the_checksums(
         published={TBX5},
         census=_NO_BURDEN,
         profile_census=_NO_PROFILES,
-        combined_results=0,
         emitter=emitter,
         sources=_SOURCES,
     )
@@ -492,35 +472,37 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     )
     assert "reported per independent cohort family" not in text
     assert "burden statistic" not in text.lower()
-    # D49: the definition names all three analyses, as literal prose (not the
-    # source constant), and says "copy-number variants" so a future non-deletion
-    # CNV analysis does not make it false.
-    definition = re.search(r"<p>A <strong>rare-variant statistic</strong>.*?</p>", text, re.S)
-    assert definition, "the front page carries no definition of a rare-variant statistic"
-    assert " ".join(re.sub(r"<[^>]+>", "", definition.group(0)).split()).startswith(
-        "A rare-variant statistic is one study's rare-variant test of one gene under one "
-        "design: a case-control burden test of rare SNVs and indels or of copy-number "
-        "variants, or a de novo enrichment test, which are different analyses and are named "
-        "as such on each gene's page."
+    # D49's definition of a rare-variant statistic, and of an independent
+    # dataset, moved to `methods.html#rare-variants` with the doorway page
+    # (2026-10-27); the note is how a reader of the figures above it gets there.
+    # "these figures", not "them": the link must cover the dataset figure's
+    # qualifier as well as the statistics the sentence before it names.
+    assert sentence.endswith(
+        'none is pooled across studies. <a href="methods.html#rare-variants">How to read '
+        "these figures</a>.</p>"
     )
 
 
-def test_the_published_and_mirrored_counts_are_derived_not_hardcoded(tmp_path: Path) -> None:
-    """Three different inputs must publish three different numbers.
+def test_the_published_count_is_derived_and_the_mirrored_count_is_not_stated(
+    tmp_path: Path,
+) -> None:
+    """Different inputs must publish different numbers, and the mirror's count none.
 
     A landing page whose numbers were hardcoded strings would pass a test built
     against one fixture and only that one; varying the fixture and checking the
     rendered counts move with it is what tells a literal from a derivation. Two
     assertions on two genes, three published genes and five mirrored ones --
-    none of which match the committed corpus's one assertion, its 92 published
-    genes or its 154 mirrored ones -- so a hardcoded "1"/"92"/"154" fails here.
+    none of which match the committed corpus's one assertion or its 119
+    published genes -- so a hardcoded figure fails here.
 
-    The three fixture values are deliberately all different, and `published` is
-    deliberately not the asserted genes. Since D21 those are separate
-    populations -- 91 of the 92 genes the site publishes carry no assertion --
-    and the figure wired to the wrong one of the three is the mistake this
-    catches: the page used to count `{assertion.gene for ...}` under this very
-    label, which would render 2 here instead of 3.
+    `published` is deliberately not the asserted genes. Since D21 those are
+    separate populations, and the page used to count `{assertion.gene for ...}`
+    under this very label, which would render 2 here instead of 3.
+
+    **The mirrored-validity row is gone** (doorway page, 2026-10-27): every gene
+    with mirrored validity in CHD scope, under a 32-word label explaining which
+    of them are browsable. The rule it explained is `methods.html#scope`'s.
+    Five mirrored genes against three published is what makes "5" mean that row.
     """
     corpus = Corpus(
         root=Path("."),
@@ -536,36 +518,30 @@ def test_the_published_and_mirrored_counts_are_derived_not_hardcoded(tmp_path: P
         published={TBX5, GATA4, "HGNC:1"},
     )
 
-    assert re.search(r"<dt>Curated gene-disease assertions</dt>\s*<dd>2</dd>", text)
-    assert re.search(r"<dt>Genes published</dt>\s*<dd>3</dd>", text)
-    assert re.search(
-        rf"<dt>{re.escape(_MIRRORED_ROW_LABEL)}</dt>\s*<dd>5</dd>",
-        text,
-    )
-    assert "154" not in text
+    assert "2 curated gene-disease assertions so far" in _prose(text)
+    assert _figure(3, "genes published") in _hero(text)
+    assert "mirrored validity" not in text
+    assert ">5<" not in text
 
 
 def test_the_published_gene_count_agrees_with_a_real_build_of_genes_index_json(
     real_build: Path,
 ) -> None:
-    """The page's "Genes published" figure must equal `len(genes/index.json["genes"])`.
+    """The page's "genes published" figure must equal `len(genes/index.json["genes"])`.
 
     This is the regression the false "154 genes" claim was: `mirrored_gene_count
     = len(validity)` counted every gene either mirror curates, not the genes the
     build actually publishes. `genes/index.json` is keyed on `published`
-    (`derive.gene_facts`), which for the committed corpus is 92 genes — not 154,
-    and no longer the 1 gene that carries an assertion either. Checked here
-    against the real built file rather than against a literal, so it fails the
-    same way the original bug would if it recurred, and so that widening the
-    gate again moves both numbers together or fails.
+    (`derive.gene_facts`). Checked here against the real built file rather than
+    against a literal, so it fails the same way the original bug would if it
+    recurred, and so that widening the gate again moves both numbers together or
+    fails.
     """
     text = (real_build / "index.html").read_text(encoding="utf-8")
     genes_index = json.loads((real_build / "genes" / "index.json").read_text(encoding="utf-8"))
     published = len(genes_index["genes"])
 
-    match = re.search(r"<dt>Genes published</dt>\s*<dd>(\d+)</dd>", text)
-    assert match, "the page no longer publishes a 'Genes published' row"
-    assert int(match.group(1)) == published
+    assert _figure(f"{published:,}", "genes published") in _hero(text)
 
 
 def test_the_landing_page_distinguishes_published_from_curated(tmp_path: Path) -> None:
@@ -602,16 +578,17 @@ def test_the_landing_page_distinguishes_published_from_curated(tmp_path: Path) -
     )
     published_section = _section(text, "<h2>What's published</h2>")
 
-    assert re.search(r"<dt>Curated gene-disease assertions</dt>\s*<dd>2</dd>", published_section)
-    assert re.search(r"<dt>Genes published</dt>\s*<dd>3</dd>", published_section)
+    assert _figure(3, "genes published") in _hero(text)
     assert re.search(r"<dt>Genes the atlas has curated</dt>\s*<dd>1</dd>", published_section)
-    assert "2 curated gene-disease assertions so far: TBX5 (HGNC:11604)." in _prose(text)
+    assert "2 curated gene-disease assertions so far: TBX5 (HGNC:11604)." in _prose(
+        published_section
+    )
 
 
-def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itself(
+def test_the_burden_census_reaches_the_page_once_per_figure(
     tmp_path: Path,
 ) -> None:
-    """The hero band and the census list state one census, so they cannot differ.
+    """The hero band and the cards state one census, and no figure twice.
 
     This is the defect the whole change exists to fix, and it was an omission
     rather than a wrong number: measured 2026-08-05 against the live site, the
@@ -638,12 +615,15 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     genes all sit outside the publication gate, and 127 of the burden mirror's
     150 genes are in exactly that position today.
 
-    **The dataset count says what it can see, in both places** (owner decision
-    2026-10-26, R12): "(as far as the cohort registry records)", under the hero
-    figure and as the census card's second `<dd>`, and on no other figure. The
-    families are joined only through collections the registry names or declares
-    overlapping, so case sources no row names are invisible to them. Pinned as
-    literals, never as the constant that renders them.
+    **The dataset count says what it can see** (owner decision 2026-10-26, R12):
+    "(as far as the cohort registry records)", under the hero figure and on no
+    other figure. The families are joined only through collections the registry
+    names or declares overlapping, so case sources no row names are invisible to
+    them. Pinned as a literal, never as the constant that renders it.
+
+    **Each figure once** (doorway page, 2026-10-27): the three hero figures had
+    a card each below them as well, so a reader met them twice. The cards now
+    carry only what the hero does not.
 
     The census is built by `burden_census` from a real fixture rather than
     constructed here, so this test cannot pass against a derivation the module
@@ -663,31 +643,20 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
-    hero = _prose(text[text.index('<div class="hero">') : text.index("<h2>What this is</h2>")])
+    hero = _hero(text)
     listed = _section(text, "<h2>What's published</h2>")
 
-    # Each figure asserted *with its own label*, never as a bare number: three
-    # values in one band would otherwise let two of them swap unnoticed.
     for value, label in (
         (4, "genes published"),
         (3, "independent datasets"),
         (6, "rare-variant statistics"),
     ):
-        assert re.search(
-            rf'"figure-value">{value}</span> <span class="figure-label">{label}<', hero
-        ), f"the hero no longer states {value} beside {label!r}"
-    assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
-    assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
+        assert _figure(value, label) in hero, f"the hero no longer states {value} beside {label!r}"
     qualifier = "(as far as the cohort registry records)"
     assert (
-        '<div class="stat"><dt>Independent datasets</dt><dd>3</dd>'
-        f'<dd class="stat-note">{qualifier}</dd></div>'
-    ) in listed
-    assert (
-        '"figure-value">3</span> <span class="figure-label">independent datasets</span> '
-        f'<span class="figure-note">{qualifier}</span></div>'
+        f'{_figure(3, "independent datasets")}/span> <span class="figure-note">{qualifier}</span>'
     ) in hero
-    assert text.count(qualifier) == 2
+    assert text.count(qualifier) == 1
     assert re.search(r"<dt>Genes with a reported rare-variant result</dt>\s*<dd>2</dd>", listed)
     assert re.search(
         r"<dt>Genes with a rare-variant result surviving its study's correction</dt>"
@@ -696,7 +665,8 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     )
     assert "rare-variant evidence" not in listed
     assert "Genes tested" not in listed
-    assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
+    for repeated in ("Genes published", "Rare-variant statistics", "Independent datasets"):
+        assert f"<dt>{repeated}</dt>" not in listed, f"{repeated!r} is in the hero already"
 
 
 def _study(pmid: str, *, own_lab: bool) -> Publication:
@@ -718,29 +688,29 @@ def _study(pmid: str, *, own_lab: bool) -> Publication:
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1"},
-            "Of the 3 rare-variant studies whose results this atlas publishes, 1 is by an "
-            "author of this atlas, and a gene page says so in its block.",
+            "Of the 3 rare-variant studies whose results appear here, 1 is by an author of this "
+            "atlas, and a gene page says so wherever it shows its results.",
             id="one of several",
         ),
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1", "PMID:2"},
-            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by an "
-            "author of this atlas, and a gene page says so in each of their blocks.",
+            "Of the 3 rare-variant studies whose results appear here, 2 are by an author of this "
+            "atlas, and a gene page says so wherever it shows their results.",
             id="several",
         ),
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             set(),
-            "Of the 3 rare-variant studies whose results this atlas publishes, none is by an "
-            "author of this atlas.",
+            "Of the 3 rare-variant studies whose results appear here, none is by an author of "
+            "this atlas.",
             id="none",
         ),
         pytest.param(
             ("PMID:1",),
             {"PMID:1"},
-            "Of the 1 rare-variant study whose results this atlas publishes, 1 is by an "
-            "author of this atlas, and a gene page says so in its block.",
+            "Of the 1 rare-variant study whose results appear here, 1 is by an author of this "
+            "atlas, and a gene page says so wherever it shows its results.",
             id="a single study",
         ),
         pytest.param((), set(), None, id="no study"),
@@ -766,6 +736,12 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     sentence at all -- there is nothing to declare, and "Of the 0 rare-variant
     studies" would say there is. Both survived every test until then. "by an
     author", in every form, as each block's declaration says it.
+
+    **Shortened with the doorway page, then partly restored** (2026-10-27).
+    "published here" read as though this atlas had published the studies,
+    which is the one misreading a conflict-of-interest line cannot carry, and
+    "its block" named a thing the front page never defines. "whose results
+    appear here" and "wherever it shows its results" say what is true of each.
     """
     burden = {
         "HGNC:1": [_burden_row(study=pmid) for pmid in tested[:2]],
@@ -789,14 +765,9 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     listed = _prose(_section(text, "<h2>What's published</h2>"))
 
     if sentence is None:
-        assert "whose results this atlas publishes" not in listed
+        assert "rare-variant stud" not in listed
     else:
         assert f"<p>{sentence}</p>" in listed
-
-
-_PANEL_NOTE_LINK: Final = (
-    '<a href="methods.html#rare-variants">How to read rare-variant results</a>.'
-)
 
 
 @pytest.mark.parametrize(
@@ -805,14 +776,13 @@ _PANEL_NOTE_LINK: Final = (
         pytest.param(
             {"PMID:2": 248},
             "For PMID:2, the correction a result must survive ran over its 248-gene panel, not "
-            f"the genome. {_PANEL_NOTE_LINK}",
+            "the genome.",
             id="one published study corrected over a panel",
         ),
         pytest.param(
             {"PMID:1": 1200, "PMID:3": 248},
             "For PMID:1 and PMID:3, the correction a result must survive ran over each study's "
-            "gene panel (1,200 genes for PMID:1, 248 genes for PMID:3), not the genome. "
-            f"{_PANEL_NOTE_LINK}",
+            "gene panel (1,200 genes for PMID:1, 248 genes for PMID:3), not the genome.",
             id="two, each with its own panel",
         ),
         pytest.param({"PMID:9": 248}, None, id="the only such study is outside the gate"),
@@ -830,7 +800,9 @@ def test_the_front_page_says_whose_correction_ran_over_a_panel_not_the_genome(
     248 panel genes. So the page names each published study whose correction
     ran over a panel, from its curated `correction_genes`. Only the studies
     whose rows reach a published bundle: `PMID:9` tests only a gene outside the
-    gate, so a note naming it would qualify a count it is not in.
+    gate, so a note naming it would qualify a count it is not in. The note's
+    link to `methods.html#rare-variants` went with the doorway page
+    (2026-10-27): the hero note links there already.
     """
     burden = {
         "HGNC:1": [_burden_row(study="PMID:1"), _burden_row(study="PMID:2")],
@@ -863,7 +835,7 @@ def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) ->
     `index.html` once advertised an empty atlas for three releases with the
     word "burden" appearing on it zero times (CLAUDE.md section 4.29). Pinned
     against a literal, never against a constant a rewrite could carry along
-    with it -- the same discipline `_MIRRORED_ROW_LABEL` is asserted with.
+    with it.
 
     **Neither profile count is distinguishable on the committed corpus.** This
     said "every profile count is 0 -- there is no `profiles` mirror to derive
@@ -872,9 +844,12 @@ def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) ->
     `profile_datasets: 1`. Those are also `genes: 92` and `datasets: 1`, so a
     card wired to the wrong count still reads correctly there. `genes=3,
     datasets=2` here is what tells a real card from one reading a neighbour or
-    a literal. `test_the_page_and_the_manifest_publish_one_census_of_a_real_
-    build` is what proves this same wiring holds on the real build; this is
-    what proves it is not two coincidences wired to each other.
+    a literal. `test_every_figure_the_page_states_is_the_manifests_own` is what
+    proves this same wiring holds on the real build; this is what proves it is
+    not two coincidences wired to each other.
+
+    The datasets card went with the doorway page (2026-10-27): one dataset
+    today, and `manifest.json`'s `profile_datasets` states it.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
@@ -887,91 +862,67 @@ def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) ->
     )
     listed = _section(text, "<h2>What's published</h2>")
 
-    assert "Developmental expression" in text
-    assert re.search(r"<dt>Developmental expression datasets</dt>\s*<dd>2</dd>", listed)
     assert re.search(r"<dt>Genes with developmental expression data</dt>\s*<dd>3</dd>", listed)
 
 
-def test_the_front_page_teaches_the_glyphs_before_a_reader_meets_them(tmp_path: Path) -> None:
-    """The dot strip is this atlas's one invented notation, and it is unexplained.
+def test_the_front_page_is_a_doorway_and_its_reading_notes_live_elsewhere(
+    tmp_path: Path,
+) -> None:
+    """What the doorway page moved off the front page stays off it (2026-10-27).
 
-    A reader arrives here, clicks through to the browse page and meets four
-    glyphs cold; the live gene page was reported as "difficult to follow" for
-    exactly this reason. The key uses `EVIDENCE_STATE_LABELS`, which
-    `pages._STRIP_LEGEND` and `pages._MATRIX_LEGEND` also build from, so the
-    three legends on this site cannot come to describe the same four states in
-    different words -- the failure mode CLAUDE.md records as the most repeated
-    one in this project.
+    The page carried 768 words and 17 cards, and a first-time reader had to get
+    through them to reach the genes. Each block it dropped is stated in one
+    other place, which is where it is now pinned:
 
-    **The captions are literals here, deliberately, and reading them from
-    `EVIDENCE_STATE_LABELS` instead is what made this test blind.** The original
-    version looped `for label in EVIDENCE_STATE_LABELS: assert label in text`
-    and, separately, checked the four `.dot` classes were present. Both loops
-    pass under any permutation of the constant, because the needles come from
-    the thing being permuted. Measured 2026-08-06: swapping two entries survived
-    all 787 tests and published a page whose key captions the untested glyph
-    "tested, no enrichment detected".
+    * the glyph key and its power caveat, on the browse page and every gene page
+      beside the glyphs themselves (`test_build_pages.py`);
+    * the definitions of a rare-variant statistic and an independent dataset,
+      on `methods.html#rare-variants` (`test_build_methods.py`);
+    * "What this is", which restated the tagline and the hero note;
+    * thirteen of its 17 cards -- three repeating the hero -- in `manifest.json`'s
+      `counts`.
 
-    So each glyph is asserted *adjacent to its own sentence*, spelled out. A
-    caption that leaves its state now fails, and so does one that is reworded in
-    `render.py` without this test being reconsidered -- which is the point: these
-    four sentences are a published contract, not an implementation detail.
-
-    The power caveat is checked too. The front page teaches this notation to a
-    reader meeting it for the first time, and teaching `no enrichment detected`
-    without "not evidence against a gene" sets the prior the caveat exists to
-    prevent.
+    Asserted absent here because a pasted old block is how they would come back
+    (CLAUDE.md section 4.35: the negative assertion is the half nobody watches).
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
 
-    for css, caption in (
-        ("dot full", "enriched, and a result survives its own study&#x27;s correction"),
-        ("dot half", "enriched nominally, or no correction published"),
-        ("dot none", "tested, no enrichment detected"),
-        ("dot untested", "not tested by that dataset"),
-    ):
-        assert f'<span class="{css}">' in text, f"the key no longer draws {css!r}"
-        pair = re.search(rf'<span class="{re.escape(css)}">[^<]*</span>\s*([^<]+)<', text)
-        assert pair, f"{css!r} is not followed by a caption"
-        assert pair.group(1).strip() == caption, (
-            f"{css!r} is captioned {pair.group(1).strip()!r}, expected {caption!r}"
-        )
-    assert "not evidence against a gene" in text
-    # Each glyph and its caption wrapped as one unbreakable unit. Without this
-    # the line breaks straight after the glyph and the last caption renders with
-    # no mark beside it -- measured on the built page at desktop width, and not
-    # fixable with `&nbsp;` because `.dot` is an atomic inline box.
-    assert text.count('<span class="legend-item">') == 4
+    assert 'class="legend-item"' not in text
+    assert "not evidence against a gene" not in text
+    assert "<strong>rare-variant statistic</strong>" not in text
+    assert "<strong>independent dataset</strong>" not in text
+    assert "<h2>What this is</h2>" not in text
+    assert re.findall(r"<h2>([^<]+)</h2>", text) == ["What's published", "Sources", "Data"]
 
 
 def test_the_browse_page_is_the_pages_call_to_action(tmp_path: Path) -> None:
     """The browse page is the product; it used to be a bullet under two sections.
 
     Pinned inside the hero rather than anywhere on the page, because the `<nav>`
-    and the "Browse the data" list both link to the same file and either would
-    satisfy a bare substring check while the call to action disappeared.
+    links to the same file and would satisfy a bare substring check while the
+    call to action disappeared.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
-    hero = text[text.index('<div class="hero">') : text.index("<h2>What this is</h2>")]
 
-    assert '<a class="cta" href="genes/index.html">' in hero
+    assert '<a class="cta" href="genes/index.html">' in _hero(text)
 
 
-def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
+def test_every_figure_the_page_states_is_the_manifests_own(
     real_build: Path,
 ) -> None:
     """Three artifacts, one set of numbers, checked against a real build.
 
-    `docs/data-api.md` describes `index.html` as stating "every key of `counts`",
-    which makes the page and the manifest one census in two formats. They are
-    derived from a single `burden_census` call in `build_site` precisely so they
-    cannot disagree -- and a test that only read fixtures could not see them
-    start to, because the drift would be in the wiring rather than in either
-    derivation.
+    The page states six keys of `counts` and the manifest all of them
+    (`docs/data-api.md`; the page stated every key until the doorway page,
+    2026-10-27): five as figures, and `assertions` in the sentence naming the
+    curated genes. They are derived from a single `burden_census` call in
+    `build_site` precisely so they cannot disagree -- and a test that only read
+    fixtures could not see them start to, because the drift would be in the
+    wiring rather than in either derivation.
 
     `burden_rows` is checked against the gene bundles too, which is the claim
     that actually matters: the figure must count rows a consumer can *fetch*, not
@@ -983,14 +934,17 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
     times" until 2026-08-20: both were measured on the 23-gene corpus and both
     moved when the gate widened to 92 on 2026-08-06.)
 
-    **Every shared key, not a sample.** This checked three of the nine keys the
-    page and the manifest both state until review 2026-08-06 pointed out that
-    the invariant was claimed for the whole census and guarded for a third of it
-    -- so a cross-wire between, say, the `Publications cited` and `Phenotype
-    terms (HPO)` cards publishes a false front-page figure with the manifest
-    still correct and nothing failing. The mapping is asserted exhaustive
-    against `counts`, so a key added to the manifest without a card on the page
-    fails here rather than quietly leaving the claim narrower than it reads.
+    **Every figure the page states, not a sample.** This checked three keys
+    until review 2026-08-06 pointed out that the invariant was claimed for the
+    whole census and guarded for a third of it -- so a cross-wire between two
+    cards publishes a false front-page figure with the manifest still correct
+    and nothing failing. Every card and hero figure on the page must be one of
+    the labels below, each with a value derived without `landing.py`, so a
+    figure added without one fails here rather than going unguarded. The two
+    cards that are not manifest keys are held to what the build published or
+    read instead (review, 2026-10-27: they were listed here and never checked):
+    the genes `genes/index.json` gives a rare-variant row, and the distinct
+    genes the curation's assertions name, published or not, as the card counts.
     """
     text = (real_build / "index.html").read_text(encoding="utf-8")
     manifest = json.loads((real_build / "manifest.json").read_text(encoding="utf-8"))
@@ -1000,37 +954,39 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
 
     assert counts["burden_rows"] == fetchable
     assert counts["genes"] == len(bundles)
+    index = json.loads((real_build / "genes" / "index.json").read_text(encoding="utf-8"))
+    curation, issues = load_curation(real_build.parent / "repo")
+    assert issues == [], issues
 
-    # The card label the page prints for each manifest count. `re.escape` on the
-    # label because "Phenotype terms (HPO)" carries regex metacharacters.
-    cards = {
-        "assertions": "Curated gene-disease assertions",
-        "burden_combined": "Within-study combined rare-variant results",
-        "burden_rows": "Rare-variant statistics",
-        "burden_surviving_genes": (
-            "Genes with a rare-variant result surviving its study's correction"
-        ),
-        "cohort_families": "Independent datasets",
-        "cohorts": "Sample collections",
-        "datasets": "Omics datasets",
-        "featured": "Featured manuscripts",
-        "functional": "Functional evidence records",
-        "genes": "Genes published",
-        "phenotypes": "Phenotype terms (HPO)",
-        "profile_datasets": "Developmental expression datasets",
-        "profile_genes": "Genes with developmental expression data",
-        "publications": "Publications cited",
-        "scope_terms": "Disease terms in scope",
+    # The label the page prints for each figure, and the value it must state.
+    hero = {
+        "genes published": "genes",
+        "independent datasets": "cohort_families",
+        "rare-variant statistics": "burden_rows",
     }
-    assert set(cards) == set(counts), (
-        "the manifest census and the front page's cards have drifted apart; "
-        f"manifest-only={sorted(set(counts) - set(cards))} "
-        f"page-only={sorted(set(cards) - set(counts))}"
+    cards = {
+        "Genes with a rare-variant result surviving its study's correction": counts[
+            "burden_surviving_genes"
+        ],
+        "Genes with developmental expression data": counts["profile_genes"],
+        "Genes with a reported rare-variant result": sum(
+            1 for row in index["genes"] if row["burden_row_count"]
+        ),
+        "Genes the atlas has curated": len({assertion.gene for assertion in curation.assertions}),
+    }
+    figures = re.findall(
+        r'"figure-value">([\d,]+)</span>\s*<span class="figure-label">([^<]+)<', text
     )
-    for key, label in sorted(cards.items()):
-        match = re.search(rf"<dt>{re.escape(label)}</dt>\s*<dd>([\d,]+)</dd>", text)
-        assert match, f"the page no longer publishes a {label!r} row"
-        assert int(match.group(1).replace(",", "")) == counts[key], label
+    stated = re.findall(r"<dt>([^<]+)</dt>\s*<dd>([\d,]+)</dd>", text)
+    assert {label for _, label in figures} == set(hero)
+    assert {html.unescape(label) for label, _ in stated} == set(cards)
+    for value, label in figures:
+        assert int(value.replace(",", "")) == counts[hero[label]], label
+    for label, value in stated:
+        assert int(value.replace(",", "")) == cards[html.unescape(label)], label
+    assert re.search(
+        rf"<p>{counts['assertions']} curated gene-disease assertions? so far: ", text
+    ), "the assertion sentence does not state the manifest's `assertions`"
 
 
 def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
@@ -1062,48 +1018,22 @@ def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
     assert '<a href="methods.html">How to read this atlas</a></nav>' in text
 
 
-def test_the_front_page_links_to_the_browsable_gene_index(tmp_path: Path) -> None:
-    """ "Browse the data" must offer the page, not only the payload behind it.
+def test_the_data_line_links_each_payload_a_consumer_starts_from(tmp_path: Path) -> None:
+    """One line where "Browse the data" was a five-item list (doorway page, 2026-10-27).
 
-    A reader who opens `index.html` is not going to read `genes/index.json`.
-    Pinned inside the section rather than anywhere on the page, because the
-    `<nav>` links to the same file and would satisfy a bare substring check
-    while the browse list stayed JSON-only.
+    Its first item, `genes/index.html`, is the hero's call to action and the
+    `<nav>`'s second link; `sources.json` is linked from "Sources". What is left
+    is for a program, and each link is pinned inside the section, because the
+    footer and "Sources" link nearby files and would satisfy a page-wide check.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
-    browse = _prose(_section(text, "<h2>Browse the data</h2>"))
+    data = _section(text, "<h2>Data</h2>")
+    data = data[: data.index("<footer>")]
 
-    assert 'href="genes/index.html"' in browse
-    assert "every gene the atlas publishes, with filters." in browse
-
-
-def test_the_relabelled_mirrored_validity_row_sits_outside_whats_published(
-    tmp_path: Path,
-) -> None:
-    """The mirrored-validity count must not read as published coverage.
-
-    Pinned by section as well as by label: a future edit that moves the row
-    back under "What's published" without touching its label would otherwise
-    pass every other test in this file, and that is exactly the shape the
-    original defect had -- a true number, correctly derived, in a section that
-    implied something false about it.
-    """
-    corpus = Corpus(root=Path("."), assertions=(_assertion(),))
-    validity = {gene: uncurated() for gene in ("HGNC:1", "HGNC:2", "HGNC:3", "HGNC:4", "HGNC:5")}
-
-    text = _build(corpus, {TBX5: "TBX5"}, validity, tmp_path)
-
-    published_section = _section(text, "<h2>What's published</h2>")
-    sources_section = _section(text, "<h2>Where this data comes from</h2>")
-
-    assert _MIRRORED_ROW_LABEL not in published_section
-    assert "mirrored" not in published_section.lower()
-    assert re.search(
-        rf"<dt>{re.escape(_MIRRORED_ROW_LABEL)}</dt>\s*<dd>5</dd>",
-        sources_section,
-    )
+    for href in ("genes/index.json", "manifest.json", "https://github.com/chd-atlas"):
+        assert f'href="{href}"' in data, href
 
 
 def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires(
@@ -1115,39 +1045,41 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
     the other nominated syndromes into scope, and for some published genes
     those syndromes are the only route in; `sources.json` records both Orphadata
     products as CC-BY-4.0, attribution required, and Orphadata asks to be cited
-    in a stated form. Pinned against a literal in "Where this data comes from",
-    whitespace-collapsed (the template wraps it), so the citation cannot be
-    shortened, and a source named only in "What this is" does not pass: the
-    citation is what the licence asks for, not the name.
+    in a stated form. Pinned against a literal in "Sources", whitespace-collapsed
+    (the template wraps it), so the citation cannot be shortened: the citation
+    is what the licence asks for, not the name.
+
+    **Pinned whole, since the doorway page (2026-10-27)**, when the section went
+    from 193 words to 123 in one paragraph: "The atlas authors no validity
+    classification of its own" is the hero note's claim already, the mirrored-
+    validity row is gone, and the other sources each take one clause.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
 
-    sources_section = _prose(_section(text, "<h2>Where this data comes from</h2>"))
-    assert (
-        "<strong>Orphanet</strong>'s phenotype annotations decide whether a syndrome a curator "
-        "nominates is in scope on how often it carries a structural heart malformation; its "
-        "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
-        "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
-        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>. Data '
-        "version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23.</em> "
-        # Every other attribution-required source, in one hand-written sentence
-        # (owner decision 2026-10-26, R10); `test_built_site_is_consumable.py`
-        # holds the set it names to `sources.json`.
-        "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY "
-        "4.0; developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s "
-        "(experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results "
-        "are taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both "
-        "CC BY 4.0, and of Audain et al. 2021, CC0. "
-        '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
-        "a date or a checksum, and carries the licence and attribution terms each of these is "
-        "mirrored under.</p>"
-    ) in sources_section
+    sources_section = _prose(_section(text, "<h2>Sources</h2>"))
+    assert sources_section == (
+        "<h2>Sources</h2> <p>Gene-disease validity is mirrored from <strong>ClinGen</strong> "
+        "and <strong>GenCC</strong>, and phenotype terms from the <strong>Human Phenotype "
+        "Ontology</strong>. Mondo's disease mappings are mirrored under CC BY 4.0. "
+        "<strong>Orphanet</strong>'s cardiovascular phenotype annotations, which decide "
+        "whether a nominated syndrome is in scope, and its OMIM mappings are mirrored under "
+        "CC BY 4.0 — <em>Orphadata Science: Free access data from Orphanet. &copy; INSERM "
+        '1999. Available on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/'
+        "</a>. Data version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23.</em> "
+        # Every other attribution-required source (owner decision 2026-10-26,
+        # R10); `test_built_site_is_consumable.py` holds the set it names to
+        # `sources.json`.
+        "Developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s "
+        "(E-MTAB-6814), under EMBL-EBI's Terms of Use. Rare-variant results come from the "
+        "supplements of Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0, and of "
+        'Audain et al. 2021, CC0. <a href="sources.json">sources.json</a> identifies each '
+        "mirrored file and its licence terms.</p> "
+    )
     # ClinGen's, GenCC's and HGNC's entries are dates ("FILE CREATED: 2026-08-03",
     # "retrieved 2026-08-03", "2026-10-16"), so "by version or checksum" was
     # false of three sources (review, 2026-10-26).
     assert "by version or checksum" not in sources_section
-    assert "ClinGen, GenCC, HPO, Orphanet" in _prose(_section(text, "<h2>What this is</h2>"))
 
 
 @pytest.mark.parametrize(
@@ -1230,7 +1162,7 @@ def test_the_orphadata_citation_states_the_release_each_product_was_mirrored_fro
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, sources=sources)
 
-    cited = _prose(_section(text, "<h2>Where this data comes from</h2>"))
+    cited = _prose(_section(text, "<h2>Sources</h2>"))
     assert stated in cited
     if "Data version" not in stated:
         assert "Data version" not in cited
@@ -1254,7 +1186,7 @@ def test_no_assertions_yet_reads_as_none_rather_than_as_an_empty_list(tmp_path: 
 
     assert "0 curated gene-disease assertions so far" in text
     assert "none yet" in text
-    assert re.search(r"<dt>Genes published</dt>\s*<dd>0</dd>", text)
+    assert _figure(0, "genes published") in _hero(text)
 
 
 def test_the_research_use_statement_reaches_the_front_page_exactly_once(
@@ -1268,7 +1200,7 @@ def test_the_research_use_statement_reaches_the_front_page_exactly_once(
     upstream expert panel's or submitter's classification and nothing this
     atlas has independently curated"): the committed corpus describes one gene,
     and it is the curated one. That paragraph is gone, and this page has no
-    editorial prose left between the notice and "What this is".
+    editorial prose left between the notice and the hero.
 
     The notice itself now belongs to `render.document`, which puts it on all 25
     pages instead of this one (see `test_build_render.py`). What is still this

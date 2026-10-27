@@ -6,9 +6,9 @@ A curated set of genes associated with CHD.
 clinical decision-support tool** — it must not be used to make or guide a
 diagnostic, treatment or any other clinical decision. Gene-disease validity is
 mirrored from ClinGen and GenCC, never authored by this atlas itself, and the
-evidence curated here so far is a small fraction of the genes that mirrored
-validity data covers. The published site's front page (`index.html`) states
-the exact, build-derived numbers behind that gap.
+evidence curated here so far covers a small fraction of the genes the atlas
+publishes on that mirrored validity. The published site's front page
+(`index.html`) states the exact, build-derived numbers behind that gap.
 
 ## Published data API
 

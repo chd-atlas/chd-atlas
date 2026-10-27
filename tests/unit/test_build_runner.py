@@ -285,17 +285,17 @@ def test_the_censuses_reach_the_manifest_and_the_page_by_the_rules_handed_in(
     of `profile_stats` publishes exactly the same manifest and page as a
     correct build. Genes and datasets are given different values here for
     the same reason `BurdenCensus`'s three figures are all distinct in
-    `test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_
-    itself`: two figures equal to each other cannot catch a swap between their
-    own keys.
+    `test_the_burden_census_reaches_the_page_once_per_figure`: two figures
+    equal to each other cannot catch a swap between their own keys.
 
     `profile_census` itself is monkeypatched to a fixed answer rather than
     given real mirror data -- the same technique
     `test_the_gate_refuses_on_an_error_and_builds_through_a_warning` already
     uses on `validate_repository` in this file -- so this test is cheap and
     about exactly one thing: `build_site` reads the return and publishes
-    `genes` under `profile_genes` and `datasets` under `profile_datasets`, in
-    both `manifest.json` and `index.html`, never the other way round.
+    `genes` under `profile_genes` and `datasets` under `profile_datasets` in
+    `manifest.json`, never the other way round, and `index.html` states the
+    first.
     """
     monkeypatch.setattr(
         "chd_atlas.build.runner.profile_census",
@@ -339,7 +339,9 @@ def test_the_censuses_reach_the_manifest_and_the_page_by_the_rules_handed_in(
 
     page = (out / "index.html").read_text()
     assert re.search(r"<dt>Genes with developmental expression data</dt>\s*<dd>7</dd>", page)
-    assert re.search(r"<dt>Developmental expression datasets</dt>\s*<dd>4</dd>", page)
+    # The datasets card went with the doorway page (2026-10-27); the manifest
+    # above states that count.
+    assert "Developmental expression datasets" not in page
 
     published = [
         entry["gene"] for entry in json.loads((out / "genes/index.json").read_text())["genes"]

@@ -181,9 +181,10 @@ from chd_atlas.corpus import Corpus
 # `assertions: 1, datasets: 0, functional: 0` for a site publishing 23 genes and
 # 290 burden statistics, and named neither. A consumer summarising the atlas from
 # this object reported an empty one. `index.html` had the same omission and is
-# fixed in the same release, because `docs/data-api.md` describes the page as
-# stating "every key of `counts`" -- they are one census in two formats and must
-# not be able to disagree.
+# fixed in the same release, because `docs/data-api.md` then described the page
+# as stating "every key of `counts`" -- one census in two formats, which must not
+# be able to disagree. Since the doorway page (2026-10-27) the page states six of
+# them, and this object all of them.
 #
 # So `counts` is now a census of what the build *published*, not of what the
 # curation holds. The distinction matters for reading a diff against 2.6:

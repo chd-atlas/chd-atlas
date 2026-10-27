@@ -221,11 +221,10 @@ STYLESHEET: Final = """
     font-variant-numeric: tabular-nums; color: var(--evidence);
   }
   .figure-label { font-size: 0.85rem; color: var(--muted); }
-  /* A qualifier under a figure or a census card's value (`landing._REGISTRY_
-     QUALIFIER`): read with the number, so smaller and muted rather than in the
-     value's size and weight. `.stat dd.stat-note` is (0,2,1) against
-     `.stat dd`'s (0,1,1). */
-  .figure-note, .stat dd.stat-note {
+  /* A qualifier under a hero figure (`render.REGISTRY_QUALIFIER`): read with
+     the number, so smaller and muted rather than in the value's size and
+     weight. */
+  .figure-note {
     font-size: 0.78rem; font-weight: 400; line-height: 1.3; color: var(--muted);
   }
   .hero-note { margin: 0 0 1rem; font-size: 0.9rem; color: var(--muted); }
@@ -408,12 +407,13 @@ RESEARCH_USE_NOTICE: Final = (
 # What each of the four `FamilyState`s means, keyed by the state's own name and
 # ordered as `concordance` ranks them: strongest support first, absence last.
 #
-# **One definition, three legends.** The browse page's dot strip, the gene
-# page's evidence matrix and the front page's key all caption the same four
-# states. They draw different markup -- `.dot` glyphs, `.cell-key` swatches --
-# but must describe the states in the same words, and this project's single most
-# repeated defect is duplicated prose going stale in one copy while staying
-# internally consistent (CLAUDE.md section 4.24).
+# **One definition, two legends.** The browse page's dot strip and the gene
+# page's evidence matrix both caption the same four states (the front page
+# carried a third key until the doorway page, 2026-10-27). They draw different
+# markup -- `.dot` glyphs, `.cell-key` swatches -- but must describe the states
+# in the same words, and this project's single most repeated defect is
+# duplicated prose going stale in one copy while staying internally consistent
+# (CLAUDE.md section 4.24).
 #
 # **Keyed by state, never positional, and that is load-bearing.** The first
 # version of this constant was a 4-tuple zipped against a separate glyph tuple
@@ -432,8 +432,8 @@ RESEARCH_USE_NOTICE: Final = (
 # order states are listed in; a caption cannot leave its state.
 #
 # The apostrophe is `&#x27;` rather than a literal, because these strings are
-# interpolated into HTML by three call sites and one of them may one day put one
-# inside an attribute. `render` is where escaping decisions live.
+# interpolated into HTML by more than one call site and one of them may one day
+# put one inside an attribute. `render` is where escaping decisions live.
 #
 # `corrected` read "survives that study's own correction" until review
 # (2026-10-27): a glyph is a cohort family's, and since owner decision

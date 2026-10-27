@@ -447,14 +447,13 @@ def combined_census(
 
 @dataclass(frozen=True)
 class BurdenCensus:
-    """The three burden figures, derived once and published in three places.
+    """The burden figures, derived once and published in two places.
 
-    `index.html`'s hero band, its `What's published` list, and `manifest.json`'s
+    `index.html`, in its hero band and its cards, and `manifest.json`'s
     `counts`. They come from one object for the same reason `published` is
-    threaded down from `build_site` rather than recomputed: three derivations are
-    three things that drift, and a front page whose headline figure contradicts
-    its own table two screens below — or the payload a program reads instead of
-    the page — is worse than one carrying neither.
+    threaded down from `build_site` rather than recomputed: two derivations are
+    two things that drift, and a front page whose figure contradicts the payload
+    a program reads instead of the page is worse than one carrying neither.
 
     That is also why this lives in `burden.py` rather than in `landing.py`, where
     it was first written. A census with two consumers in different layers belongs
