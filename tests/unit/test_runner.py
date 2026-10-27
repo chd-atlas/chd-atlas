@@ -1321,3 +1321,26 @@ def test_the_table_a_chd_only_count_comes_from_is_held_to_the_source_registry(
     assert [(issue.code, "'audain2021_s8'" in issue.message) for issue in errors] == [
         ("SRC003", True)
     ]
+
+
+def test_a_cell_type_mirror_with_an_unregistered_source_fails_validation(
+    tmp_path: Path,
+) -> None:
+    """`cell_type_profiles` carries `source`, so `_used_sources` holds it to SRC003.
+
+    The row is otherwise valid, so the registry gap is the cause under test.
+    """
+    root = _real_repo(tmp_path)
+    shard = root / "mirrors" / "cell_type_profiles"
+    shard.mkdir()
+    (shard / "hoc.tsv").write_text(
+        "dataset\tgene\tcell_type\tregion\tmedian_abundance\tunit\tq25\tq75\t"
+        "n_donors\tn_cells\tfraction_expressing\tsource\n"
+        "hoc\tHGNC:1100\tcardiomyocyte\tLV\t2.5\tcpm\t1.0\t3.0\t4\t900\t0.4\tnot_in_sources\n",
+        encoding="utf-8",
+    )
+
+    report = validate_repository(root)
+
+    assert "SRC003" in [issue.code for issue in report.issues]
+    assert any("'not_in_sources'" in i.message for i in report.issues if i.code == "SRC003")

@@ -604,6 +604,32 @@ PROFILES = TableSchema(
     sort_key=("dataset", "gene", "tissue", "stage"),
 )
 
+# Four chambers and the interventricular septum, plus `all` for a row that
+# pools them; one column, so a reader filters one field rather than two.
+_CELL_TYPE_REGIONS: Final = frozenset({"LA", "RA", "LV", "RV", "IVS", "all"})
+
+CELL_TYPE_PROFILES = TableSchema(
+    name="cell_type_profiles",
+    columns=(
+        Column("dataset", pl.String),
+        Column("gene", pl.String, pattern=HGNC_PATTERN),
+        Column("cell_type", pl.String),
+        Column("region", pl.String, allowed=_CELL_TYPE_REGIONS),
+        Column("median_abundance", pl.Float64, minimum=0),
+        Column("unit", pl.String, allowed=_ABUNDANCE_UNITS),
+        Column("q25", pl.Float64, nullable=True, minimum=0),
+        Column("q75", pl.Float64, nullable=True, minimum=0),
+        Column("n_donors", pl.Int64, minimum=1),
+        Column("n_cells", pl.Int64, minimum=1),
+        Column("fraction_expressing", pl.Float64, minimum=0, maximum=1),
+        # Names the file the numbers were taken from; its licence and sha256 live
+        # in sources.yaml, and carrying the column is what holds each value to
+        # SRC003 (`_used_sources` collects it from any table that has one).
+        Column("source", pl.String),
+    ),
+    sort_key=("dataset", "gene", "cell_type", "region"),
+)
+
 PROFILE_QUANTILES = TableSchema(
     name="profile_quantiles",
     columns=(
@@ -919,6 +945,7 @@ TABLE_SCHEMAS: Final[dict[str, TableSchema]] = {
         VARIANTS,
         EXPRESSION,
         PROFILES,
+        CELL_TYPE_PROFILES,
         PROFILE_QUANTILES,
         PROTEOMICS,
         PHOSPHO,
@@ -937,6 +964,7 @@ SHARDED_TABLES: Final[dict[str, str]] = {
     "variants": "variants",
     "expression": "expression",
     "profiles": "profiles",
+    "cell_type_profiles": "cell_type_profiles",
     "profile_quantiles": "profile_quantiles",
     "proteomics": "proteomics",
     "phospho": "phospho",

@@ -154,6 +154,7 @@ def test_registry_covers_every_mirror_table() -> None:
         "variants",
         "expression",
         "profiles",
+        "cell_type_profiles",
         "profile_quantiles",
         "proteomics",
         "phospho",
@@ -1129,3 +1130,41 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         pl_mask = adversarial_series.str.contains(pattern).not_()
         pl_offenders = set(pl_mask.arg_true().to_list()) if pl_mask.any() else set()
         assert py_offenders == pl_offenders, pattern
+
+
+def test_cell_type_profiles_refuses_an_unknown_region_and_a_fraction_above_one(
+    tmp_path: Path,
+) -> None:
+    """One row, two defects: region `LX` is outside the vocabulary, 1.2 outside 0..1.
+
+    Registered and sharded per dataset, like `profiles`; `source` is what makes
+    the SRC003 gate apply to it, so it must stay a column.
+    """
+    schema = TABLE_SCHEMAS["cell_type_profiles"]
+    assert SHARDED_TABLES["cell_type_profiles"] == "cell_type_profiles"
+    assert schema.column_names == (
+        "dataset",
+        "gene",
+        "cell_type",
+        "region",
+        "median_abundance",
+        "unit",
+        "q25",
+        "q75",
+        "n_donors",
+        "n_cells",
+        "fraction_expressing",
+        "source",
+    )
+    assert schema.sort_key == ("dataset", "gene", "cell_type", "region")
+    header = "\t".join(schema.column_names)
+    good = "hoc\tHGNC:1100\tcardiomyocyte\tLV\t2.5\tcpm\t1.0\t3.0\t4\t900\t0.4\tsrc"
+    bad = "hoc\tHGNC:1100\tcardiomyocyte\tLX\t2.5\tcpm\t1.0\t3.0\t4\t900\t1.2\tsrc"
+    path = _write(tmp_path / "hoc.tsv", f"{header}\n{good}\n")
+    assert validate_table(path, schema) == []
+    path = _write(tmp_path / "hoc.tsv", f"{header}\n{bad}\n")
+    issues = validate_table(path, schema)
+    assert sorted(i.code for i in issues) == ["TBL004", "TBL006"]
+    assert {"region", "fraction_expressing"} == {
+        name for i in issues for name in ("region", "fraction_expressing") if name in i.message
+    }
