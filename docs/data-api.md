@@ -2136,8 +2136,8 @@ One record per omics dataset, serialised generically from the curated model
 `featured.json` and `phenotypes.json` use) — every field it declares reaches
 this file, with nothing filtered out: `id`, `archive`, `technology`, `tissue`,
 `developmental_stage`, `organism`, `n_samples`, `licence`, `contrasts`,
-`design`, `cardiac_tissues`, `stages`, `detection_floor`, `floor_source`,
-`quantile_estimator` and `publication`. This is what an omics row's `dataset`
+`design`, `cardiac_tissues`, `stages`, `cell_types`, `regions`,
+`detection_floor`, `floor_source`, `quantile_estimator` and `publication`. This is what an omics row's `dataset`
 column resolves against, the way `publications.json` resolves a PMID.
 
 **The last six (`design` onward) are what distinguishes a bulk developmental
@@ -2151,6 +2151,10 @@ above). `cardiac_tissues` and `stages` are `[]` and
 `"contrast"` record — never omitted — so every record has one shape whichever
 design it declares. `cardiac_tissues` names which of a profile dataset's own
 tissue tokens this atlas reads as "the heart" for that dataset.
+
+`cell_types` (each `token`, `label`, `compartment`) and `regions` are `[]` on every
+record except a `"cell_type_profile"`-design one, the single-cell design that is
+indexed by cell type and region instead of by stage; no such record is curated yet.
 
 `stages` is one entry per developmental stage the dataset declares. Each
 carries the stage's own `token` — the literal string the mirror's rows use,

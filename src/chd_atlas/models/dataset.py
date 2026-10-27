@@ -1,6 +1,7 @@
 # src/chd_atlas/models/dataset.py
 from __future__ import annotations
 
+import re
 from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -9,11 +10,13 @@ from chd_atlas.duplicates import duplicates
 from chd_atlas.identifiers import AccessionId, ContrastId, Pmid, TaxonId
 from chd_atlas.vocab import Archive, DatasetDesign, Technology
 
-_ACCESSION_PREFIX: Final[dict[Archive, tuple[str, ...]]] = {
-    Archive.PRIDE: ("PXD",),
-    Archive.GEO: ("GSE",),
-    Archive.ARRAYEXPRESS: ("E-",),
-    Archive.EGA: ("EGAS", "EGAD"),
+_ACCESSION_PATTERN: Final[dict[Archive, re.Pattern[str]]] = {
+    Archive.PRIDE: re.compile(r"^PXD"),
+    Archive.GEO: re.compile(r"^GSE"),
+    Archive.ARRAYEXPRESS: re.compile(r"^E-"),
+    Archive.EGA: re.compile(r"^EGA[SD]"),
+    # A slug, not an accession: the Cell Browser has no accession scheme.
+    Archive.UCSC_CELL_BROWSER: re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"),
 }
 
 _MASS_SPEC: Final[frozenset[Technology]] = frozenset(
@@ -31,6 +34,7 @@ _ARCHIVE_TECHNOLOGIES: Final[dict[Archive, frozenset[Technology]]] = {
     Archive.GEO: _SEQUENCING,
     Archive.ARRAYEXPRESS: _SEQUENCING,
     Archive.EGA: _SEQUENCING,
+    Archive.UCSC_CELL_BROWSER: frozenset({Technology.SCRNASEQ}),
 }
 
 
@@ -94,6 +98,21 @@ class Stage(BaseModel):
     order: int = Field(ge=1)
 
 
+class CellTypeDecl(BaseModel):
+    """One of a cell-type dataset's own cell-type tokens.
+
+    `token` is the string the source's matrix uses; `label` is what a page
+    shows; `compartment` groups tokens for display. All three are required
+    because a blank one renders as an unlabelled row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    compartment: str = Field(min_length=1)
+
+
 class Dataset(BaseModel):
     """Top level of ``curation/datasets/<ACCESSION>.yaml``."""
 
@@ -118,6 +137,10 @@ class Dataset(BaseModel):
     # most cardiac genes.
     cardiac_tissues: tuple[str, ...] = ()
     stages: tuple[Stage, ...] = ()
+    # Only a `cell_type_profile` dataset declares these; see
+    # `a_cell_type_profile_dataset_is_fully_declared`.
+    cell_types: tuple[CellTypeDecl, ...] = ()
+    regions: tuple[str, ...] = ()
     # D41. Per dataset, never a constant: a floor of 1.0 is a defensible RPKM
     # convention, is meaningless in `nx`, and is actively wrong in `lfq`, where
     # intensities are log-scale and 0 is a middling abundance.
@@ -157,8 +180,7 @@ class Dataset(BaseModel):
 
     @model_validator(mode="after")
     def accession_matches_archive(self) -> Dataset:
-        prefixes = _ACCESSION_PREFIX[self.archive]
-        if not self.id.startswith(prefixes):
+        if not _ACCESSION_PATTERN[self.archive].match(self.id):
             raise ValueError(f"accession {self.id} does not match archive '{self.archive.value}'")
         return self
 
@@ -184,6 +206,8 @@ class Dataset(BaseModel):
             raise ValueError("design 'contrast' requires at least one contrast")
         if self.design is DatasetDesign.PROFILE and self.contrasts:
             raise ValueError("design 'profile' declares no contrasts")
+        if self.design is DatasetDesign.CELL_TYPE_PROFILE and self.contrasts:
+            raise ValueError("design 'cell_type_profile' declares no contrasts")
         return self
 
     @model_validator(mode="after")
@@ -205,6 +229,35 @@ class Dataset(BaseModel):
             raise ValueError("a profile dataset declares detection_floor and floor_source")
         if not self.quantile_estimator:
             raise ValueError("a profile dataset declares quantile_estimator")
+        return self
+
+    @model_validator(mode="after")
+    def a_cell_type_profile_dataset_is_fully_declared(self) -> Dataset:
+        """The cell-type counterpart of `a_profile_dataset_is_fully_declared`.
+
+        Needs no `stages` or `cardiac_tissues`: it is indexed by cell type and
+        region, so those two are what it declares instead. The floor and the
+        estimator are required for the reason stated there.
+        """
+        if self.design is not DatasetDesign.CELL_TYPE_PROFILE:
+            return self
+        if not self.cell_types:
+            raise ValueError("cell_types must not be empty for a cell_type_profile dataset")
+        if not self.regions:
+            raise ValueError("regions must not be empty for a cell_type_profile dataset")
+        if self.detection_floor is None or not self.floor_source:
+            raise ValueError(
+                "a cell_type_profile dataset declares detection_floor and floor_source"
+            )
+        if not self.quantile_estimator:
+            raise ValueError("a cell_type_profile dataset declares quantile_estimator")
+        return self
+
+    @model_validator(mode="after")
+    def cell_type_tokens_are_unique(self) -> Dataset:
+        found = duplicates(cell_type.token for cell_type in self.cell_types)
+        if found:
+            raise ValueError(f"duplicate cell_type tokens: {found}")
         return self
 
     @model_validator(mode="after")
