@@ -413,8 +413,8 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # build that skipped this would publish a dead link on all of them.
     build_methods(emitter, cohorts=cohort_registry(corpus.cohorts))
     build_search(corpus, emitter, genes=genes, published=published)
-    # One integer, handed to the front page here and to the manifest below, for
-    # the reason `census` is threaded rather than recomputed.
+    # One integer, for the manifest below; the front page stopped stating it
+    # with the doorway page (2026-10-27).
     combined_results = combined_census(combined, published)
     build_landing(
         corpus,
@@ -423,7 +423,6 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         published=published,
         census=census,
         profile_census=profile_stats,
-        combined_results=combined_results,
         emitter=emitter,
         # For the Orphadata citation's data version (R11), read off the files'
         # own headers into `mirrors/sources.yaml` by the converter.

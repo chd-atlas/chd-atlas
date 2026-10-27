@@ -332,6 +332,19 @@ _ALPHA: Final = f"{ALPHA:g}"
 
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
+    # The front page's two definitions, moved here with the doorway page
+    # (2026-10-27): its hero note links this section rather than stating them.
+    # D49: a statistic names all three analyses, and "copy-number variants"
+    # rather than deletions, so a future non-deletion CNV analysis does not
+    # make it false.
+    "<p>A <strong>rare-variant statistic</strong> is one study's rare-variant test of one "
+    "gene under one design: a case-control burden test of rare SNVs and indels or of "
+    "copy-number variants, or a de novo enrichment test, which are different analyses and "
+    "are named as such on each gene's page. An <strong>independent dataset</strong> is a "
+    "cohort family rather than a paper: two studies drawing on the same sample collection, "
+    "or on collections this atlas records as overlapping, can describe the same people and "
+    "count once. How many datasets agree about a gene is shown on every row of the browse "
+    "page, and it is a count of evidence &mdash; never a verdict on the gene.</p>"
     # The one rule the atlas applies (owner decision 2026-10-26, W2). It said
     # "adds no assessment of them" while the card, the matrix and the forest
     # fill each decide what survives by `concordance.survives_own_correction`.

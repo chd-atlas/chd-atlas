@@ -130,9 +130,10 @@ wrong by the next one.
   Each of the seven counts only what the published genes' bundles carry, except
   `cohort_families`, which groups the whole burden mirror's cohorts: restricting
   it to the published genes could split one family into what then reads as two
-  independent ones. `index.html` states these figures in prose too. They are
-  derived once in the build and handed to both, so the page and this object
-  cannot disagree.
+  independent ones. `index.html` states these five keys too: `genes`,
+  `burden_rows`, `cohort_families`, `burden_surviving_genes` and
+  `profile_genes`. They are derived once in the build and handed to both, so
+  the page and this object cannot disagree.
 - `schema_version` is `major.minor`. **Minor** rises when a field is added and
   nothing is removed or repurposed, so a consumer written against an earlier
   version keeps working; **major** rises when a field changes shape or leaves.
@@ -286,34 +287,38 @@ wrong by the next one.
 ## The site root: `index.html`
 
 The page a person opens directly rather than fetches as JSON, and the entry
-point to the other 121. It states what the atlas is, the same development-status
-and research-use statement `status` above is the machine-readable half of, and
-the real counts behind it — every key of `counts`, plus three figures that are
-not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
-with a reported rare-variant result (any row at all; the label read "Genes with
-rare-variant evidence" until `2.19`), and the genes this atlas has itself curated. All are
-read from the same build that produced this document's other examples rather
-than written by hand. The independent-datasets figure, in the hero and on its
-census card, carries "(as far as the cohort registry records)": it counts
-cohort families, which join two studies only through a collection both name or
-collections [`cohorts.json`](#cohortsjson) records as overlapping, so two
-studies that share people the registry does not record count as two. A gene
-page's card qualifies its own dataset count the same way. The page's *Where
-this data comes from* names every source
-[`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
-the licence where it is CC BY. It links to
-`genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
-[`methods.html`](#methodshtml) (from the navigation bar every page shares) and
-the repository. Self-contained: no external request, no build timestamp,
-byte-identical between two builds of one commit like everything else here.
+point to the other 121. It carries the same development-status and
+research-use statement `status` above is the machine-readable half of, as every
+page does, and is a doorway rather than the census (since 2026-10-27): it says
+what the atlas is, states the figures a first-time reader needs, and sends
+them to `genes/index.html`. Those figures are five keys of
+[`counts`](#manifestjson) — `genes`, `burden_rows` and `cohort_families` in
+the hero, `burden_surviving_genes` and `profile_genes` as cards — plus two that
+are not manifest keys: the genes with a reported rare-variant result (any row
+at all; the label read "Genes with rare-variant evidence" until `2.19`) and the
+genes this atlas has itself curated. Every figure the page states equals its
+key in `manifest.json`, which states the rest. The independent-datasets figure
+carries "(as far as the cohort registry records)": it counts cohort families,
+which join two studies only through a collection both name or collections
+[`cohorts.json`](#cohortsjson) records as overlapping, so two studies that
+share people the registry does not record count as two. A gene page's card
+qualifies its own dataset count the same way. What one rare-variant statistic
+and one independent dataset are is [`methods.html`](#methodshtml)'s
+`#rare-variants`, which the hero links.
 
-It also carries a key to the four evidence glyphs, built from the same constant
-as the browse page's strip legend and the gene page's matrix legend. The three
-cannot come to describe the same four states in different words. And it says
-how many of the rare-variant studies whose results the site publishes are by
-an author of this atlas — both counts computed, from the studies with a row on
-a published gene and their `own_lab` in [`publications.json`](#publicationsjson)
-— and that a gene page says so in each such study's block.
+Below the cards it says, for any published study whose correction ran over a
+gene panel, that the correction was not genome-wide, and how many of the
+rare-variant studies whose results the site publishes are by an author of this
+atlas — both counts computed, from the studies with a row on a published gene
+and their `own_lab` in [`publications.json`](#publicationsjson) — and that
+each such study's block says so. Its *Sources* names every source
+[`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
+the licence where it is CC BY, and gives Orphadata's requested citation. It
+links to `genes/index.html`, `genes/index.json`, `manifest.json`,
+`sources.json`, [`methods.html`](#methodshtml) (from the navigation bar every
+page shares, and from the hero) and the repository. Self-contained: no external
+request, no build timestamp, byte-identical between two builds of one commit
+like everything else here.
 
 **Every page is checksummed in `manifest.json` exactly like a payload.** The
 build behind this document publishes 122 of them — this one, `genes/index.html`,
@@ -350,7 +355,9 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   the upstream validity records alone; and the *Publications* section lists
   every publication that evidence cites. A curated gene's evidence section
   opens with a line linking here, *How to read curated evidence*.
-- `#rare-variants` says how to read a gene page's rare-variant results: that
+- `#rare-variants` says how to read a gene page's rare-variant results: what
+  one rare-variant statistic and one independent dataset are (the front page's
+  figures, whose hero links here), that
   the counts and statistics in its study tables are the studies' own, and the
   one rule the atlas applies to them — a non-synonymous row whose result points
   to enrichment in cases with p below 0.05 supports the gene, and survives its

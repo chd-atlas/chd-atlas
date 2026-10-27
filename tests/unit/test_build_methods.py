@@ -592,9 +592,24 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     which, beside the q. PMID:40127276's per-arm q is Benjamini-Hochberg over
     its 248 panel genes, reproduced from Dataset S6 on every arm; the card
     pins on TBX5 are in `test_built_site_is_consumable.py`.
+
+    **The section opens with the front page's two definitions** (doorway page,
+    2026-10-27), which `index.html`'s hero note now links here instead of
+    stating: what one rare-variant statistic is (D49: all three analyses, and
+    "copy-number variants" so a future non-deletion CNV analysis does not make
+    it false) and what one independent dataset is.
     """
     assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
     expected = [
+        "A <strong>rare-variant statistic</strong> is one study's rare-variant test of one "
+        "gene under one design: a case-control burden test of rare SNVs and indels or of "
+        "copy-number variants, or a de novo enrichment test, which are different analyses and "
+        "are named as such on each gene's page. An <strong>independent dataset</strong> is a "
+        "cohort family rather than a paper: two studies drawing on the same sample "
+        "collection, or on collections this atlas records as overlapping, can describe the "
+        "same people and count once. How many datasets agree about a gene is shown on every "
+        "row of the browse page, and it is a count of evidence &mdash; never a verdict on the "
+        "gene.",
         "Every count and statistic in a gene page's study tables is an upstream study's, "
         "republished as published. The atlas computes none of them. It applies one rule of "
         "its own, at 0.05: a row that is not synonymous "
