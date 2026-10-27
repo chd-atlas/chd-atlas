@@ -368,7 +368,13 @@ def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_co
     families = _read(site, "manifest.json")["counts"]["cohort_families"]
     assert families == 2
     landing = (site / "index.html").read_text(encoding="utf-8")
-    assert re.search(rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>", landing)
+    # With the qualifier owner decision R12 put beside it, since the figure
+    # counts only what the registry records.
+    assert re.search(
+        rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>"
+        r'<dd class="stat-note">\(as far as the cohort registry records\)</dd>',
+        landing,
+    )
 
     noticed = 0
     for entry in _read(site, "genes/index.json")["genes"]:
