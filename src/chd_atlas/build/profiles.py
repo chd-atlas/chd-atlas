@@ -1171,8 +1171,9 @@ def percentile_annotations(
 
 class ProfileCensus(TypedDict):
     """The two developmental-expression figures this atlas derives, once, for
-    two consumers: `index.html`'s "Developmental expression" cards and
-    `manifest.json`'s `counts.profile_datasets`/`counts.profile_genes`.
+    two consumers: `index.html`, whose card states the genes (its datasets card
+    went with the doorway page, 2026-10-27), and `manifest.json`'s
+    `counts.profile_datasets`/`counts.profile_genes`.
 
     A `TypedDict`, not a scalar pair, for the same reason every other derived
     shape in this module is one: a caller unpacking `profile_census(...)["genes"]`

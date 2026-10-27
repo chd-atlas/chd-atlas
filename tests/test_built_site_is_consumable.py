@@ -368,11 +368,11 @@ def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_co
     families = _read(site, "manifest.json")["counts"]["cohort_families"]
     assert families == 2
     landing = (site / "index.html").read_text(encoding="utf-8")
-    # With the qualifier owner decision R12 put beside it, since the figure
-    # counts only what the registry records.
+    # The hero figure, with the qualifier owner decision R12 put beside it,
+    # since the figure counts only what the registry records.
     assert re.search(
-        rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>"
-        r'<dd class="stat-note">\(as far as the cohort registry records\)</dd>',
+        rf'"figure-value">{families}</span>\s*<span class="figure-label">independent datasets'
+        r'</span>\s*<span class="figure-note">\(as far as the cohort registry records\)</span>',
         landing,
     )
 
@@ -1739,9 +1739,9 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
 ) -> None:
     """The landing's own-lab sentence, against the blocks it vouches for (R7).
 
-    "Of the 3 rare-variant studies whose results this atlas publishes, 2 are
-    by an author of this atlas, and a gene page says so in each of their
-    blocks." Both numbers are read here off the gene pages -- the distinct
+    "Of the 3 rare-variant studies whose results appear here, 2 are by an
+    author of this atlas, and a gene page says so wherever it shows their
+    results." Both numbers are read here off the gene pages -- the distinct
     study blocks they render, and which of those `publications.json` marks
     `own_lab` -- and every block of such a study must carry the declaration,
     while no other study's block may. Measured on a real build the day it was
@@ -1782,7 +1782,7 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
         html.unescape(re.sub(r"<[^>]+>", "", (site / "index.html").read_text())).split()
     )
     assert (
-        f"Of the {len(rendered)} rare-variant studies whose results this atlas publishes, "
+        f"Of the {len(rendered)} rare-variant studies whose results appear here, "
         f"{mine} {'is' if mine == 1 else 'are'} by an author of this atlas"
     ) in landing
     built = [*sorted((site / "genes").glob("*.html")), site / "index.html", site / "methods.html"]
@@ -1796,9 +1796,8 @@ _ATTRIBUTED_ON_THE_FRONT_PAGE: dict[str, str] = {
     "hpo": "Human Phenotype Ontology",
     "orphanet_product1": "mirrored under CC BY 4.0 — Orphadata Science",
     "orphanet_product4": "mirrored under CC BY 4.0 — Orphadata Science",
-    "mondo_sssom": "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored "
-    "under CC BY 4.0",
-    "expression_atlas_e_mtab_6814": "EMBL-EBI Expression Atlas's (experiment E-MTAB-6814), "
+    "mondo_sssom": "Mondo's disease mappings are mirrored under CC BY 4.0",
+    "expression_atlas_e_mtab_6814": "EMBL-EBI Expression Atlas's (E-MTAB-6814), "
     "under EMBL-EBI's Terms of Use",
     "audain2026_sd3": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
     "sierant2025_ds6": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
@@ -1823,12 +1822,13 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     Owner decision 2026-10-26: "Where this data comes from" named ClinGen,
     GenCC, HPO and Orphanet, and not Mondo, the Expression Atlas or the CC BY
     rare-variant supplements, all of which `sources.json` records as
-    `permitted_with_attribution`. One hand-written sentence now names them.
+    `permitted_with_attribution`. One hand-written sentence then named them.
     The set of attribution-required sources must equal the keys pinned above,
     so a source added to `mirrors/sources.yaml` with that term fails here until
     the page names it and a phrase is pinned; each phrase must be on the page,
     with the licence where it is CC BY. Measured on a real build the day it was
-    written: 7 such sources.
+    written: 7 such sources. Since the doorway page (2026-10-27) the section is
+    "Sources", one paragraph of 123 words, and the sentence is three.
 
     **Every licence the sentence states is held to `sources.json`** (review,
     2026-10-27), not only CC BY: "Audain et al. 2021, CC0" and "EMBL-EBI's
@@ -1849,7 +1849,7 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     )
     licences = {source["id"]: source["licence"] for source in sources}
     page = (site / "index.html").read_text(encoding="utf-8")
-    where = page[page.index("<h2>Where this data comes from</h2>") :]
+    where = page[page.index("<h2>Sources</h2>") :]
     where = " ".join(html.unescape(re.sub(r"<[^>]+>", "", where[: where.index("<h2", 4)])).split())
     named = {**_ATTRIBUTED_ON_THE_FRONT_PAGE, **_ALSO_ON_THE_FRONT_PAGE}
     for source, phrase in sorted(named.items()):
@@ -1870,7 +1870,9 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     }
     assert releases == {("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23")}
     (version, day) = releases.pop()
-    assert f"http://sciences.orphadata.com/. Data version {version}, {day}. Mondo" in where
+    assert (
+        f"http://sciences.orphadata.com/. Data version {version}, {day}. Developmental expression"
+    ) in where
 
 
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:

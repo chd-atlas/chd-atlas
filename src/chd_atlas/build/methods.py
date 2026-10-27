@@ -8,8 +8,8 @@ every page and the part particular to the gene was buried under them. This page
 holds that explanation once; each gene page keeps a short form and a link to the
 section here that states it in full.
 
-**Every sentence below the introduction either was moved off a gene page or the
-gene index, or was written here to state in full what a gene page now says in
+**Every sentence below the introduction either was moved off a gene page, the
+gene index or the front page, or was written here to state in full what a gene page now says in
 one line or prints without defining -- and each was read in this position.** A
 sentence's truth conditions travel with its position (CLAUDE.md section 4.27):
 "the table below" was true on a gene page, false on the gene index and false
@@ -35,9 +35,11 @@ here, and "this page" here names a page with no gene on it.
   clause was read off `models/assertion.py`, `pages._evidence_section`,
   `derive.gene_facts` and `validity.published_genes`; it names no count, so
   nothing in it expires when a second gene is curated.
-* `#rare-variants` is both: three paragraphs moved off every gene page (the
-  folded reading notes and the composite note's second sentence), and two are
-  the full forms of notices a gene page keeps in one line. Two more state in
+* `#rare-variants` opens with the front page's two definitions, moved here with
+  the doorway page (2026-10-27). After them it is both: three paragraphs moved
+  off every gene page (the folded reading notes and the composite note's
+  second sentence), and two are the full forms of notices a gene page keeps in
+  one line. Two more state in
   general what each forest plot's folded key says of its own marks (D57), and
   what a block with no effect measure shows instead of a plot; one more, what
   the `all cases` case group is, which a forest key says in one clause
@@ -295,9 +297,10 @@ _CURATED_EVIDENCE: Final = (
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
-# keeps a one-line short form of the first two paragraphs (`pages._MIRRORED_NOTICE`
-# and `pages._POOLING_NOTICE`) and links here; the last three were the page's
-# folded reading notes and its composite note's second sentence, and left it.
+# keeps a one-line short form of the two paragraphs after the front page's
+# definitions (`pages._MIRRORED_NOTICE` and `pages._POOLING_NOTICE`) and links
+# here; the three after those were the page's folded reading notes and its
+# composite note's second sentence, and left it.
 #
 # Narrower than the text this was drafted from, each measured 2026-10-26 on a
 # real build of 4233eca:
@@ -332,6 +335,19 @@ _ALPHA: Final = f"{ALPHA:g}"
 
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
+    # The front page's two definitions, moved here with the doorway page
+    # (2026-10-27): its hero note links this section rather than stating them.
+    # D49: a statistic names all three analyses, and "copy-number variants"
+    # rather than deletions, so a future non-deletion CNV analysis does not
+    # make it false.
+    "<p>A <strong>rare-variant statistic</strong> is one study's rare-variant test of one "
+    "gene under one design: a case-control burden test of rare SNVs and indels or of "
+    "copy-number variants, or a de novo enrichment test, which are different analyses and "
+    "are named as such on each gene's page. An <strong>independent dataset</strong> is a "
+    "cohort family rather than a paper: two studies drawing on the same sample collection, "
+    "or on collections this atlas records as overlapping, can describe the same people and "
+    "count once. How many datasets agree about a gene is shown on every row of the browse "
+    "page, and it is a count of evidence &mdash; never a verdict on the gene.</p>"
     # The one rule the atlas applies (owner decision 2026-10-26, W2). It said
     # "adds no assessment of them" while the card, the matrix and the forest
     # fill each decide what survives by `concordance.survives_own_correction`.

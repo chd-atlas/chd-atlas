@@ -4,77 +4,44 @@
 Everything else under `build/` is JSON for a program to fetch, or a gene page
 `pages.py` renders. Before this module existed the live site measured `200` on
 `manifest.json` and `genes/index.json` and `404` on `/` — the data API worked
-and nothing told a visitor what they were looking at, so this is not a cosmetic
-gap: a reader who follows the repository link lands nowhere.
+and nothing told a visitor what they were looking at.
+
+**A doorway, not the census** (2026-10-27). The page says what the atlas is,
+states the figures a first-time reader needs, and sends them to the browse
+page. It carried 768 words and 17 cards until then, and a reader had to get
+through them to reach the genes. What it dropped is stated once elsewhere: the
+definitions behind its figures on `methods.html#rare-variants`, the glyph key
+beside the glyphs on the browse and gene pages, and the full census in
+`manifest.json`'s `counts`.
 
 The document scaffolding is not this module's. `render.document` supplies the
-`<!doctype>`, the `<head>`, the navigation and the one `<style>` block, whose
-contents are `render.STYLESHEET` — so this page, `genes/index.html` and every
-gene page share a single stylesheet rather than carrying three that drift. What
-stays here is the page's content. Self-contained by construction, like every
-other artifact this build writes: `document` inlines that style and emits no
-`<link>`, `<script src>` or `@import`, so the page renders with no network
-request beyond the one that fetched it.
+`<!doctype>`, the `<head>`, the navigation, the research-use notice and the one
+`<style>` block, so this page shares a single stylesheet with every other page
+and makes no request beyond the one that fetched it. What stays here is the
+page's content.
 
 Deterministic for the reason every other builder here is. No build timestamp;
 every number on the page is read from what `build_site` already assembled —
-the corpus, and the same `published` and `validity` objects `build_genes` was
-handed — never hardcoded.
+the corpus, and the same `published`, `validity` and census objects
+`build_genes` and `write_manifest` were handed — never hardcoded, so the page
+and `manifest.json` cannot state two censuses of one build.
 
-Three gene populations reach this page, and they are three different claims.
-A fourth figure — the burden census — has the same shape of trap and is
-computed by `burden.burden_census`, which is where the reasoning lives. It is
-computed there rather than here because `manifest.json` states the same census;
-one derivation is what stops the page and the payload disagreeing.
+Two of its gene counts read alike and are different claims:
 
-A fifth — the developmental-expression census — is computed the same way, by
-`profiles.profile_census`, for the same reason: added across Tasks 1-14
-without a word of it reaching this page, which is exactly how a burden layer
-once shipped for three releases with the word "burden" appearing here zero
-times (CLAUDE.md section 4.29).
-
-- **Genes published** is `len(published)`, D21's population: one gene per member
-  of the set `build_genes` keys `genes/index.json` on, each of them a gene a
-  external authority already treats as a congenital heart disease gene. 92 in
-  the committed corpus. Counted from the *same object* `build_genes` was handed,
-  not re-derived here, so the front page and the browse payload cannot state
-  different numbers.
+- **Genes published** is `len(published)`, D21's population: the set
+  `build_genes` keys `genes/index.json` on, each a gene an external authority
+  already treats as a congenital heart disease gene. Counted from the *same
+  object*, so the front page and the browse payload cannot differ.
 - **Genes the atlas has curated** is the distinct genes named by
-  `corpus.assertions` — the genes carrying evidence authored here, 1 in the
-  committed corpus. It is derived once and shared with the sentence that names
-  them, so the figure and the list cannot disagree. Both rows are shown because
-  118 of the 119 published genes carry no assertion at all: a single "genes"
-  figure would read as coverage this site does not have.
-- `len(validity)` is neither of those — every gene either mirror curates, 185 in
-  the committed corpus. It is kept, but under "Where this data comes from" and
-  labelled so it cannot be read as what this site browses.
-
-`tests/unit/test_build_landing.py` guards those three against each other by
-fixture rather than by recomputation, and the description here said otherwise
-until it was checked. **This sentence used to say "exactly one of its tests
-recomputes a number", and the burden census made that false in the same commit
-that added it** — a docstring counting the tests in another file goes stale the
-moment someone writes one, which is why the count is gone rather than corrected.
-Measured 2026-08-05, three of its tests read a real build:
-`test_the_published_gene_count_agrees_with_a_real_build_of_genes_index_json`,
-`test_the_page_and_the_manifest_publish_one_census_of_a_real_build` and
-`test_the_manifest_gene_count_is_the_population_not_the_genes_carrying_burden`.
-Every other count assertion in the file is a literal.
-
-They are literals on purpose, and the fixture is what makes them strong: it is
-hand-sized so that all three populations differ — two assertions, on one gene,
-against three published genes and five mirrored ones — so a figure wired to the
-wrong population renders a number that is true of *something* and still fails.
-None of the three matches the committed corpus's 1 / 23 / 154 either, and
-`assert "154" not in text` is what catches the count being hardcoded back.
+  `corpus.assertions` — the genes carrying evidence authored here. Derived once
+  and shared with the sentence that names them. Both are shown because nearly
+  every published gene carries no assertion at all: a single "genes" figure
+  would read as coverage this site does not have.
 
 Every value that reaches the page from curated or mirrored text — a gene
-symbol, an HGNC id — goes through `html.escape`. Nothing curated here is
-reviewed the way handwritten page copy is, and `bundles.py` and `search.py`
-already treat curator- and mirror-supplied strings as data rather than markup
-for the same reason; a `<` in a gene symbol is unlikely, not impossible, and
-this is the one artifact in the build where that distinction is the difference
-between a string and a script tag.
+symbol, an HGNC id, an Orphadata header — goes through `html.escape`. None of
+it is reviewed the way handwritten page copy is, and a `<` in it is unlikely,
+not impossible.
 """
 
 from __future__ import annotations
@@ -87,12 +54,7 @@ from chd_atlas.build.burden import BurdenCensus
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import LANDING
 from chd_atlas.build.profiles import ProfileCensus
-from chd_atlas.build.render import (
-    EVIDENCE_POWER_CAVEAT,
-    REGISTRY_QUALIFIER,
-    document,
-    evidence_legend,
-)
+from chd_atlas.build.render import REGISTRY_QUALIFIER, document
 from chd_atlas.build.validity import GeneValidity, admitting_grade
 from chd_atlas.corpus import Corpus
 from chd_atlas.validate.sources import SourceRegistry
@@ -109,52 +71,6 @@ from chd_atlas.validate.sources import SourceRegistry
 # same path under `chd-atlas/chd-atlas` answers 200.
 _ORGANIZATION_URL = "https://github.com/chd-atlas"
 _REPOSITORY_URL = "https://github.com/chd-atlas/chd-atlas"
-
-# A caption that told a reader to wait for something that had already happened.
-#
-# It read "(browsable once ClinGen grades it definitive)", and the gate has
-# never been a bare grade -- it is a grade *for one of the diseases this atlas
-# calls CHD*, and `gene_validity` has already dropped every record naming an
-# out-of-scope disease before the test runs. Measured 2026-08-06 against the
-# committed mirrors: of the 154 genes counted by this row, 62 are not browsable,
-# and **9** of those carry a ClinGen `Definitive` grade for some disease and
-# still are not, because the grade is for a disease outside CHD scope --
-# ANKRD11, BMPR1A, COL1A2, FOXP1, KDR, NOTCH1, POPDC1, RECQL4, SCN5A.
-#
-# The 2026-08-06 widening moved the rest of that list rather than this sentence:
-# ACTC1, ACVR1, BMPR2, ELN, FLNA, MED13L, MYBPC3, MYH11, MYH7, PDGFRA and SMAD6
-# were on it on 2026-08-04 and are browsable now, admitted on an in-scope
-# ClinGen record at or above `Limited` or on two GenCC submitters agreeing.
-# The caption has to name the gate it actually has, which is why it is a
-# constant read by one template rather than a sentence repeated in two.
-#
-# A constant rather than a literal in the template because the label must render
-# on one line for the row to read as one label, and the sentence no longer fits
-# in 100 characters of source.
-_MIRRORED_ROW_LABEL = (
-    "Genes with mirrored validity in CHD scope "
-    "(browsable once ClinGen grades it Limited or better for a disease in that "
-    "scope, or two GenCC submitters agree and no ClinGen panel disputes it)"
-)
-
-# The same four glyphs the browse page's strip uses, from the same keyed
-# definition, so the three legends on this site cannot come to describe the same
-# states differently or attach a caption to the wrong glyph.
-#
-# On the front page rather than only on the pages that use them, because this is
-# where a first-time reader is: the dot strip is this atlas's one invented
-# notation, and meeting it cold on a browse row is what made the live site "hard
-# to follow".
-#
-# `EVIDENCE_POWER_CAVEAT` comes with it, and that is not decoration. Review
-# 2026-08-06 found the front page teaching `no enrichment detected` with no
-# statement that no enrichment is not evidence against a gene -- the one sentence
-# both other legends carry. Teaching a notation without the caveat that makes it
-# readable sets exactly the prior the caveat exists to prevent, and this page is
-# where the notation is taught.
-_GLYPH_KEY: Final = evidence_legend(swatches=False) + (
-    f'<p class="strip-legend">{EVIDENCE_POWER_CAVEAT}</p>'
-)
 
 
 def _plural(count: int, noun: str) -> str:
@@ -186,15 +102,15 @@ def _asserted_genes(genes: Sequence[str], symbols: Mapping[str, str]) -> str:
 def _number(value: int) -> str:
     """A figure as a reader reads it: grouped in thousands.
 
-    One helper rather than a format spec at each call site, so the hero band and
-    the census list cannot render the same number two ways -- 1,475 above 1475 is
-    the kind of drift nobody notices and everybody sees.
+    One helper rather than a format spec at each call site, so no two figures on
+    this page group their thousands differently -- 1,475 beside 1475 is the kind
+    of drift nobody notices and everybody sees.
     """
     return f"{value:,}"
 
 
 def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
-    """How many of the rare-variant studies published here are by an atlas author (R7).
+    """How many rare-variant studies whose results appear here are by an atlas author (R7).
 
     Owner decision 2026-10-26: the cards and blocks declare a study by an
     author of this atlas, and the front page said nothing. Both counts are
@@ -215,7 +131,10 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     so" holds by construction).
 
     Digits, as every figure on this page is. Empty where no study publishes a
-    row, since there is then nothing to declare.
+    row, since there is then nothing to declare. Shortened with the doorway page
+    (2026-10-27), then partly restored on review the same day: "published here"
+    read as though this atlas had published the studies, and "its block" named
+    a thing this page never defines.
     """
     total = len(studies)
     if not total:
@@ -223,19 +142,19 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     by_author = {publication.id for publication in corpus.publications if publication.own_lab}
     own = sum(1 for study in studies if study in by_author)
     noun = "rare-variant study" if total == 1 else "rare-variant studies"
-    opening = f"Of the {total} {noun} whose results this atlas publishes, "
+    opening = f"Of the {total} {noun} whose results appear here, "
     if not own:
         return f"<p>{opening}none is by an author of this atlas.</p>"
-    if own == 1:
-        return (
-            f"<p>{opening}1 is by an author of this atlas, and a gene page says so in its "
-            "block.</p>"
-        )
     # "by an author", the words every block's declaration and card mark use; it
     # read "by authors of this atlas" until review (2026-10-27).
+    if own == 1:
+        return (
+            f"<p>{opening}1 is by an author of this atlas, and a gene page says so wherever "
+            "it shows its results.</p>"
+        )
     return (
-        f"<p>{opening}{own} are by an author of this atlas, and a gene page says so in each "
-        "of their blocks.</p>"
+        f"<p>{opening}{own} are by an author of this atlas, and a gene page says so wherever "
+        "it shows their results.</p>"
     )
 
 
@@ -252,6 +171,8 @@ def _panel_correction_note(studies: Sequence[str], corpus: Corpus) -> str:
     were over a panel, read from the studies whose rows reach a published
     bundle (`BurdenCensus.studies`) and their curated `correction_genes`.
     Empty where no such study is published, since nothing then needs saying.
+    It linked `methods.html#rare-variants` until the doorway page (2026-10-27);
+    the hero note links there already.
     """
     curated = {str(publication.id): publication for publication in corpus.publications}
     panels = [
@@ -275,10 +196,7 @@ def _panel_correction_note(studies: Sequence[str], corpus: Corpus) -> str:
             + ", ".join(f"{_number(size)} genes for {study}" for study, size in panels)
             + ")"
         )
-    return (
-        f"<p>{scope}, not the genome. "
-        '<a href="methods.html#rare-variants">How to read rare-variant results</a>.</p>'
-    )
+    return f"<p>{scope}, not the genome.</p>"
 
 
 def _and(items: Sequence[str]) -> str:
@@ -289,10 +207,9 @@ def _and(items: Sequence[str]) -> str:
 # The two Orphadata products, in the order the citation names them.
 _ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
 
-# `render.REGISTRY_QUALIFIER` says what the independent-datasets figure can see,
-# wherever this page prints it (owner decision 2026-10-26, R12): on the hero
-# figure as well as the census card, since the hero is the same claim, printed
-# larger and first. A gene card's dataset count carries the same constant.
+# `render.REGISTRY_QUALIFIER` says what the independent-datasets figure can see
+# (owner decision 2026-10-26, R12), under the hero figure, the one place this
+# page prints it. A gene card's dataset count carries the same constant.
 
 
 def _orphadata_version(sources: SourceRegistry) -> str:
@@ -335,7 +252,7 @@ def _orphadata_version(sources: SourceRegistry) -> str:
     )
 
 
-def _stat(label: str, value: str, note: str = "") -> str:
+def _stat(label: str, value: str) -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
     The `<div>` is what HTML5 permits inside a `<dl>` to bind one label to one
@@ -343,17 +260,11 @@ def _stat(label: str, value: str, note: str = "") -> str:
     immediately precedes `<dd>`, so the tests that pin a row by
     `<dt>label</dt>\\s*<dd>N</dd>` keep working against the same substring.
 
-    `note` qualifies the value in a second `<dd>` after it (`stat-note`, set
-    small), which a `<dt>` may have, so the value's own `<dd>` still holds the
-    number alone. One card carries one: `REGISTRY_QUALIFIER`.
-
-    `label` and `note` are literals from this module and `value` comes from
-    `_number` or `len`, so none is curated or mirrored text; nothing here needs
-    escaping, and anything that ever does must go through a `render` primitive
-    instead.
+    `label` is a literal from this module and `value` comes from `_number`, so
+    neither is curated or mirrored text; nothing here needs escaping, and
+    anything that ever does must go through a `render` primitive instead.
     """
-    qualifier = f'<dd class="stat-note">{note}</dd>' if note else ""
-    return f'<div class="stat"><dt>{label}</dt><dd>{value}</dd>{qualifier}</div>'
+    return f'<div class="stat"><dt>{label}</dt><dd>{value}</dd></div>'
 
 
 def _render(
@@ -363,131 +274,58 @@ def _render(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
-    combined_results: int,
     sources: SourceRegistry,
 ) -> str:
-    assertion_count = len(corpus.assertions)
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
     # of it. Deliberately not `len(validity)`, which counts every gene either
-    # mirror curates whether or not an authority admits it — that count
-    # belongs to "Where this data comes from", not to what this build publishes.
+    # mirror curates whether or not an authority admits it.
     published_gene_count = len(published)
     # Split the published population by which of D21's two warrants admitted it,
     # so the hero note can state the gate it actually has. It said "every gene
     # here is published on an upstream expert panel's classification" until
-    # 2026-08-06, which the widening made false for the 16 genes no panel has
+    # 2026-08-06, which the widening made false for the 16 genes no panel had
     # graded -- read from `admitting_grade`, which is what
     # `admitted_by.classification` publishes, so the front page cannot claim a
-    # split the bundles contradict. (This said the headline came from the same
-    # function too; it does not -- `derive.gene_facts` takes `strongest()` over
-    # the in-scope ClinGen records -- though the two agree on every published
-    # gene, measured 2026-10-26.)
+    # split the bundles contradict.
     panel_graded_count = sum(
         1 for gene in published if gene in validity and admitting_grade(validity[gene]) is not None
     )
-    mirrored_gene_count = len(validity)
-    # A third population, and the narrowest: the genes this atlas has curated
-    # itself. Derived once and handed to `_asserted_genes`, so the count and the
+    # The narrowest population: the genes this atlas has curated itself.
+    # Derived once and handed to `_asserted_genes`, so the count and the
     # sentence naming those genes cannot drift apart.
     curated_genes = sorted({assertion.gene for assertion in corpus.assertions})
     asserted = _asserted_genes(curated_genes, symbols)
 
-    # Ordered by what the site actually holds, not by when a row was added.
-    #
-    # Measured against `origin/main` rather than remembered, after review found
-    # this comment inventing a history: it claimed the old order reached 23
-    # third behind two 1s and two 0s. It did not. The real order was
-    # `assertions 1`, `genes published 23`, `genes curated 1`, `functional 0`,
-    # then publications, phenotypes, featured, omics -- so a reader met one `1`
-    # before the first substantial figure, not four small ones.
-    #
-    # The ordering was therefore never the defect, and saying it was made the
-    # weaker argument. The defect was that **no burden figure appeared at all**:
-    # 290 statistics over 23 genes from 3 independent datasets (the corpus as
-    # it stood that day; 915 over 91 genes since the gate widened), and the
-    # census named none of them. This order exists so the three new figures sit with
-    # the population they describe rather than below four curation counts.
+    # Only what the hero does not already state, so no figure appears twice.
+    # Every other count is `manifest.json`'s (doorway page, 2026-10-27).
     stats = "".join(
         (
-            _stat("Genes published", _number(published_gene_count)),
-            _stat("Rare-variant statistics", _number(census.rows)),
-            # Directly under the statistics it combines. "Within-study" is in
-            # the label because "combined burden results" alone, on the front
-            # page of an atlas that refuses to pool studies (D33), reads as
-            # exactly the pooling it refuses.
-            _stat("Within-study combined rare-variant results", _number(combined_results)),
-            _stat("Independent datasets", _number(census.families), REGISTRY_QUALIFIER),
-            # Beside "Independent datasets" rather than at the end, because the
-            # two answer the same reader's question one level apart: how many
-            # separate collections the evidence rests on, and how many named
-            # sample collections those group. Both are published, and
-            # `cohorts.json` is where the caveats on each live.
-            _stat("Sample collections", _number(len(corpus.cohorts))),
+            _stat("Genes the atlas has curated", _number(len(curated_genes))),
             # Renamed, and joined by the surviving count, by owner decision
             # 2026-10-26 (R9): "evidence" read as support, for every gene with
-            # any row. Not the owner's "Genes tested in rare-variant studies":
-            # the census counts genes a study *reports* a result for, and a
-            # supplement that omits a gene does not say the study never tested
-            # it -- CRIPTO, the one published gene with no row, is such a gene,
-            # and its card says only that no study here reports a result
-            # (`pages._card_rare_variants`). "Tested" would say of it what the
-            # card refuses to.
+            # any row. Not "Genes tested in rare-variant studies": a supplement
+            # that omits a gene does not say the study never tested it.
             _stat("Genes with a reported rare-variant result", _number(census.genes)),
-            # The genes whose card lists a result (`census.surviving_genes`,
-            # by the card's own predicate), and therefore never more than the
-            # line above.
+            # The genes whose card lists a result (`census.surviving_genes`, by
+            # the card's own predicate), so never more than the line above.
             _stat(
                 "Genes with a rare-variant result surviving its study's correction",
                 _number(census.surviving_genes),
             ),
-            # Immediately after the burden figures, for the reason this pair
-            # exists at all: a whole developmental-expression layer landed
-            # across Tasks 1-14 with nothing on this page naming it, which is
-            # the same shape of omission that once left "burden" unmentioned
-            # here for three releases (CLAUDE.md section 4.29). Both restricted
-            # to `published` by `profiles.profile_census` -- never
-            # `len(corpus.datasets)`, which already counts every registered
-            # omics dataset of every design with no restriction at all, and
-            # never a bare `len(profiles)`, which counts a gene whether or not
-            # any authority has admitted it.
-            _stat("Developmental expression datasets", _number(profile_census["datasets"])),
+            # Restricted to `published` by `profiles.profile_census`: a whole
+            # expression layer once landed with nothing here naming it (CLAUDE.md
+            # section 4.29).
             _stat("Genes with developmental expression data", _number(profile_census["genes"])),
-            _stat("Curated gene-disease assertions", _number(assertion_count)),
-            _stat("Genes the atlas has curated", _number(len(curated_genes))),
-            _stat("Functional evidence records", _number(len(corpus.functional))),
-            _stat("Publications cited", _number(len(corpus.publications))),
-            # Every term `scope.json` publishes, whichever authority's warrant
-            # admits it: a manifest key, so the one-census test requires a card.
-            _stat("Disease terms in scope", _number(len(corpus.chd_scope))),
-            _stat("Phenotype terms (HPO)", _number(len(corpus.phenotypes))),
-            _stat("Featured manuscripts", _number(len(corpus.featured))),
-            _stat("Omics datasets", _number(len(corpus.datasets))),
         )
     )
 
-    # The sentence after Orphanet's names every other source `sources.json`
-    # records as `permitted_with_attribution` (owner decision 2026-10-26, R10:
-    # one hand-written sentence, not a generated list): Mondo's mappings
-    # (`mondo_sssom`, CC-BY-4.0), the Expression Atlas (`expression_atlas_
-    # e_mtab_6814`, EMBL-EBI Terms of Use, not CC BY) and the two CC-BY-4.0
-    # rare-variant supplements (`audain2026_sd3`, `sierant2025_ds6`). The
-    # owner's draft said the rare-variant results come "from the supplements of
-    # the studies cited, under CC BY 4.0": Audain et al. 2021's S6 Table is
-    # CC0-1.0 (`audain2021_s6`), so it is named apart. A hand-written sentence
-    # can drift, so `test_the_front_page_names_every_source_that_requires_
-    # attribution` fails the day `sources.json` gains one it does not name.
-    #
-    # "Where this data comes from" named Orphanet zero times until 2026-10-26,
-    # while the syndromes its frequencies bring into scope are the only route in
-    # for some published genes (26 of 119 drop when those terms are removed,
-    # measured that day) and `sources.json` records both Orphadata products as
-    # CC-BY-4.0, attribution required. The
-    # citation is Orphadata's own requested form (`mirrors/sources.yaml`). Its
-    # "Data version" pointed to `sources.json`'s sha256 until owner decision
-    # 2026-10-26 (R11), on the ground that a stated date would go stale; it is
-    # now each file's own header version and date, read from the registry the
-    # converter writes them into, so it moves with the mirror (`_orphadata_
-    # version`).
+    # "Sources" names every source `sources.json` records as
+    # `permitted_with_attribution` (owner decision 2026-10-26, R10), with the
+    # licence where it is CC BY; `test_the_front_page_names_every_source_that_
+    # requires_attribution` fails the day `sources.json` gains one it does not
+    # name. Audain et al. 2021's S6 Table is CC0-1.0, so it is named apart. The
+    # Orphadata citation is Orphadata's own requested form, its "Data version"
+    # each file's own header (R11, `_orphadata_version`).
     orphadata = _orphadata_version(sources)
     body = f"""  <h1>CHD Atlas</h1>
   <p class="tagline">Curated evidence linking genes, variants and proteins to congenital
@@ -503,79 +341,45 @@ def _render(
       <div class="figure"><span class="figure-value">{_number(census.rows)}</span>
         <span class="figure-label">rare-variant statistics</span></div>
     </div>
-    <p class="hero-note">Every gene here is published on an upstream authority's
-      assessment, never one this atlas authored: {_number(panel_graded_count)} on a ClinGen
-      expert panel's classification, {_number(published_gene_count - panel_graded_count)} on
-      two or more Gene Curation Coalition submitters agreeing where no panel disputes it.
-      Rare-variant statistics are reported per study, and none is pooled across
-      studies.</p>
+    <p class="hero-note">Every gene is admitted on an upstream assessment, never this
+      atlas's own: {_number(panel_graded_count)} on a ClinGen expert panel's classification,
+      {_number(published_gene_count - panel_graded_count)} on two or more Gene Curation
+      Coalition submitters agreeing where no panel disputes it. Rare-variant statistics are
+      reported per study, and none is pooled across studies.
+      <a href="methods.html#rare-variants">How to read these figures</a>.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
 
-  <h2>What this is</h2>
-  <p>A curator reads the primary literature and mirrors upstream reference sources —
-    ClinGen, GenCC, HPO, Orphanet — to build a static, queryable record of the evidence
-    behind a gene's association with congenital heart disease. There is no server: every
-    page below is built ahead of time, and every payload behind one is a JSON file a client
-    fetches and filters itself.</p>
-
   <h2>What's published</h2>
   <dl class="stats">{stats}</dl>
-  <p>{_plural(assertion_count, "curated gene-disease assertion")} so far: {asserted}.</p>
-  <p>A <strong>rare-variant statistic</strong> is one study's rare-variant test of one gene
-    under one design: a case-control burden test of rare SNVs and indels or of copy-number
-    variants, or a de novo enrichment test, which are different analyses and are named as
-    such on each gene's page. An
-    <strong>independent dataset</strong> is a cohort family rather than a
-    paper: two studies drawing on the same sample collection, or on collections this atlas
-    records as overlapping, can describe the same people and count once. How many
-    datasets agree about a gene is shown on every row of the browse page, and it is a
-    count of evidence — never a verdict on the gene.</p>
+  <p>{_plural(len(corpus.assertions), "curated gene-disease assertion")} so far: {asserted}.</p>
   {_panel_correction_note(census.studies, corpus)}
   {_own_lab_sentence(census.studies, corpus)}
-  {_GLYPH_KEY}
 
-  <h2>Where this data comes from</h2>
-  <p>Gene-disease validity classifications are mirrored from <strong>ClinGen</strong> and
-    <strong>GenCC</strong>; phenotype terms and their synonyms are mirrored from the
-    <strong>Human Phenotype Ontology</strong>. The atlas authors no validity classification
-    of its own — every classification on this site is an upstream panel's or submitter's,
-    republished with its provenance intact. <strong>Orphanet</strong>'s phenotype
-    annotations decide whether a syndrome a curator nominates is in scope on how often it
-    carries a structural heart malformation; its cardiovascular annotations and its mappings
-    to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
-    Free access data from Orphanet. &copy; INSERM 1999. Available on
+  <h2>Sources</h2>
+  <p>Gene-disease validity is mirrored from <strong>ClinGen</strong> and
+    <strong>GenCC</strong>, and phenotype terms from the <strong>Human Phenotype
+    Ontology</strong>. Mondo's disease mappings are mirrored under CC BY 4.0.
+    <strong>Orphanet</strong>'s cardiovascular phenotype annotations, which decide whether a
+    nominated syndrome is in scope, and its OMIM mappings are mirrored under CC BY 4.0 —
+    <em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available on
     <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>.{orphadata}</em>
-    Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY 4.0;
-    developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
-    (experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results are
-    taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both CC BY
-    4.0, and of Audain et al. 2021, CC0.
-    <a href="sources.json">sources.json</a> identifies each mirrored file by a version, a
-    date or a checksum, and carries the licence and attribution terms each of these is
-    mirrored under.</p>
-  <dl>
-    <dt>{_MIRRORED_ROW_LABEL}</dt>
-    <dd>{mirrored_gene_count}</dd>
-  </dl>
+    Developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
+    (E-MTAB-6814), under EMBL-EBI's Terms of Use. Rare-variant results come from the
+    supplements of Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0, and of
+    Audain et al. 2021, CC0. <a href="sources.json">sources.json</a> identifies each
+    mirrored file and its licence terms.</p>
 
-  <h2>Browse the data</h2>
-  <ul class="links">
-    <li><a href="genes/index.html"><code>genes/index.html</code></a> — every gene the atlas
-      publishes, with filters.</li>
-    <li><a href="genes/index.json"><code>genes/index.json</code></a> — every gene the atlas
-      publishes, browse-row summaries and mirrored validity included.</li>
-    <li><a href="manifest.json"><code>manifest.json</code></a> — what this build produced,
-      and a checksum for every file in it.</li>
-    <li><a href="sources.json"><code>sources.json</code></a> — what the atlas mirrors, and
-      on whose terms.</li>
-    <li><a href="{_ORGANIZATION_URL}">{html.escape(_ORGANIZATION_URL)}</a> — source, curation
-      workflow and the full published API documentation.</li>
-  </ul>
+  <h2>Data</h2>
+  <p>Every page is static, and the JSON behind it is for a client to fetch and filter
+    itself: <a href="genes/index.json"><code>genes/index.json</code></a> for every published
+    gene, and <a href="manifest.json"><code>manifest.json</code></a> for the build's counts
+    and a checksum for every file it lists. The source and curation workflow are
+    <a href="{_ORGANIZATION_URL}">on GitHub</a>.</p>
 
   <footer>
-    <p>Read <a href="{_REPOSITORY_URL}/blob/main/docs/data-api.md">the published data API
-      documentation</a> before writing against these files — in particular the note on
+    <p>Read <a href="{_REPOSITORY_URL}/blob/main/docs/data-api.md">the data API
+      documentation</a> before writing against these files, in particular the note on
       contested genes, which must never be displayed as settled.</p>
   </footer>"""
 
@@ -589,7 +393,6 @@ def build_landing(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
-    combined_results: int,
     emitter: Emitter,
     sources: SourceRegistry,
 ) -> None:
@@ -599,8 +402,9 @@ def build_landing(
     projection `build_genes` takes, not a second read of the mirror. `validity`
     is `build.validity.gene_validity()`'s return, the same mapping `build_genes`
     reduces through `derive.gene_facts` — read directly here rather than through
-    that reduction, because this page wants only `len()`, not the per-gene
-    fields `gene_facts` computes for a browse row.
+    that reduction, because this page wants only each published gene's
+    `admitting_grade`, not the per-gene fields `gene_facts` computes for a
+    browse row.
 
     `published` is the same object `build_genes` keys `genes/index.json` on, for
     the reason that file exists to be counted rather than re-derived: the "Genes
@@ -619,17 +423,12 @@ def build_landing(
     this project's characteristic failure exactly.
 
     `profile_census` is `profiles.profile_census`'s return, the same object
-    `write_manifest` publishes as `counts.profile_datasets`/`counts.profile_genes`
-    — for the identical reason `census` is threaded rather than recomputed, and
-    with no default for the identical reason: a whole evidence layer has landed
+    `write_manifest` publishes as `counts.profile_datasets`/`counts.profile_genes`,
+    of which this page states the second — for the identical reason `census` is
+    threaded rather than recomputed, and with no default for the identical
+    reason: a whole evidence layer has landed
     with this page never touched before (CLAUDE.md section 4.29's burden
     precedent), and a silently-defaulted zero is exactly how that happens again.
-
-    `combined_results` is `burden.combined_census`'s return, the same integer
-    `write_manifest` publishes as `counts.burden_combined`, and it has no default
-    for the same reason. The 2.14 spec first left this page unchanged; the
-    one-census test refused that, because this page is documented as stating
-    every key of `counts`.
     """
     emitter.write_text(
         LANDING,
@@ -640,7 +439,6 @@ def build_landing(
             published,
             census,
             profile_census,
-            combined_results,
             sources,
         ),
     )
