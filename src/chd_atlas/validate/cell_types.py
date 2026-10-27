@@ -13,9 +13,10 @@ sampled, and how many donors it had. Seven ways a row can disagree with them:
 - **CTP005** `q25 <= median_abundance <= q75` does not hold, or exactly one of
   q25 and q75 is null (an interval with one end is not an interval).
 - **CTP006** `n_donors` exceeds the dataset's `n_samples`.
-- **CTP007** the gene is not in the gene registry. Skipped when `known_genes`
-  is None, which means the registry did not load and the runner has already
-  said why; an empty-but-loaded registry is not None and flags every gene.
+- **CTP007** the gene is not in the gene registry. This function skips it only
+  when `known_genes` is None, and flags every gene against an empty set. The
+  runner passes `known_genes or None`, so there a missing, unreadable or
+  header-only registry skips CTP007 and TBL008 or REF001 reports why.
 
 CTP002 and CTP003 need the dataset's declarations, so they are skipped for a
 row whose dataset is unrecorded (CTP001 already names that). A shard that

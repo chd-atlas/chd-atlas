@@ -1345,3 +1345,23 @@ def test_a_cell_type_mirror_with_an_unregistered_source_fails_validation(
 
     assert "SRC003" in [issue.code for issue in report.issues]
     assert any("'not_in_sources'" in i.message for i in report.issues if i.code == "SRC003")
+
+
+def test_a_header_only_gene_registry_skips_the_cell_type_gene_check(tmp_path: Path) -> None:
+    """CTP007 is skipped for an empty registry; REF001 names the cause instead."""
+    root = _real_repo(tmp_path)
+    genes = root / "mirrors" / "genes.tsv"
+    genes.write_text(genes.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+    shard = root / "mirrors" / "cell_type_profiles"
+    shard.mkdir()
+    (shard / "hoc.tsv").write_text(
+        "dataset\tgene\tcell_type\tregion\tmedian_abundance\tunit\tq25\tq75\t"
+        "n_donors\tn_cells\tfraction_expressing\tsource\n"
+        "hoc\tHGNC:1100\tcardiomyocyte\tall\t2.5\tcpm\t1.0\t3.0\t4\t900\t0.4\tnot_in_sources\n",
+        encoding="utf-8",
+    )
+
+    codes = [issue.code for issue in validate_repository(root).issues]
+
+    assert "REF001" in codes
+    assert "CTP007" not in codes

@@ -711,8 +711,9 @@ def validate_repository(root: Path) -> ValidationReport:
             )
         )
         # CTP001-007: cell-type rows against their dataset record. The same
-        # `or None` as above, for the same reason: an unreadable registry skips
-        # CTP007 rather than flagging every gene.
+        # `or None` as above, for the same reason: an unreadable or header-only
+        # registry skips CTP007 rather than flagging every gene; TBL008 or
+        # REF001 reports why.
         issues.extend(
             validate_cell_type_profiles(
                 root, datasets=corpus.datasets, known_genes=known_genes or None
