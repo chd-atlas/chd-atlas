@@ -53,7 +53,9 @@ import html
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, assert_never
+
+from chd_atlas.models.review import ReviewStatus
 
 # What `data_table` accepts as a `data-*` attribute name. Deliberately narrower
 # than HTML permits: every name this build passes is a literal, so the only way
@@ -473,6 +475,56 @@ EVIDENCE_POWER_CAVEAT: Final = (
     "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
     "functional evidence."
 )
+
+
+# What an independent-datasets count can see, said wherever a page prints one:
+# the front page's figure (owner decision 2026-10-26, R12) and each gene card's
+# "Tested in N independent dataset(s)" line (owner answer 2026-10-27). One
+# definition, so the two cannot come to say it differently.
+# `concordance.cohort_families` groups studies through the collections their
+# rows name and the overlaps `curation/cohorts.yaml` declares, and through
+# nothing else: two studies whose case sets share people the registry does not
+# record -- PMID:34324492's S2 Table lists case sources no row names
+# (`methods.html#cohorts` counts them) -- count as two. Measured 2026-10-27: 2,
+# of three studies, two of them joined by the one overlap the registry declares
+# (DDD and DECIPHER) and by no shared collection.
+REGISTRY_QUALIFIER: Final = "(as far as the cohort registry records)"
+
+
+def review_status_label(status: ReviewStatus) -> str:
+    """The words a page prints for a review status, before its note.
+
+    One place, so the label after a description and the methods page's
+    sentence saying what each label marks (`methods._review_key`) cannot come
+    to name a status differently. Exhaustive: a status added to the vocabulary
+    and not here fails `mypy --strict` rather than rendering as nothing.
+    """
+    match status:
+        case ReviewStatus.PENDING_REVIEW:
+            return "Pending review"
+        case ReviewStatus.NOT_ACCESSIBLE:
+            return "Source not accessible"
+        case _:
+            assert_never(status)
+
+
+def review_status_note(record: str, status: ReviewStatus | None, note: str | None) -> str:
+    """A curated record's open question, for after its description; `""` where none.
+
+    The owner's standing rule (2026-10-27, `models/review.py`): a record
+    carrying a question this atlas leaves open says so where it is read. One
+    function, so the methods page's cohort list and a gene page's cohort notes
+    cannot come to word it differently. The label says which kind of question
+    (`review_status_label`), the note what is unresolved; the note is
+    curator's free text and is escaped. A status arriving without its note
+    means the model's refusal was bypassed, and that raises rather than
+    printing a label with nothing after it.
+    """
+    if status is None:
+        return ""
+    if note is None:
+        raise ValueError(f"{record}: review_status {status.value!r} has no review_note to render")
+    return f" <strong>{review_status_label(status)}:</strong> {html.escape(note)}"
 
 
 def evidence_legend(*, swatches: bool) -> str:

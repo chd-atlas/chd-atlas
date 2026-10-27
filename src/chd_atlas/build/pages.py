@@ -99,6 +99,7 @@ from chd_atlas.build.render import (
     FILTER_SCRIPT,
     GRADE_CHIP_KIND,
     GRADE_GLOSS,
+    REGISTRY_QUALIFIER,
     Cell,
     Link,
     Markup,
@@ -108,6 +109,7 @@ from chd_atlas.build.render import (
     definition_list,
     document,
     evidence_legend,
+    review_status_note,
 )
 from chd_atlas.build.validity import (
     GeneValidity,
@@ -1171,6 +1173,20 @@ def _card_rare_variants(
     study never ran it. The power caveat follows whenever the gene has rows,
     so "none survives" never stands alone beside a definitive chip.
 
+    **The count carries the front page's qualifier** (owner answer
+    2026-10-27), `render.REGISTRY_QUALIFIER`, "(as far as the cohort registry
+    records)": the families are joined only through collections the registry
+    names or declares overlapping, so this count, like the front page's, sees
+    no overlap the registry does not record. It follows the count directly
+    and precedes the declaration: placed after it, it would read as
+    qualifying who wrote the studies, which the registry does not record at
+    all. Measured on a real build the day it was added: all 86 lines carry
+    it, in these five forms: "Tested in 1 independent dataset (as far
+    as the cohort registry records) (a study by an atlas author)." on 24, the
+    same ending "; none survives a correction its study published." on 4,
+    "(each study by an atlas author)" on 48, and two datasets with "(1 of the
+    2 studies ...)" on 7 and "(2 of the 3 studies ...)" on 3.
+
     `families` is the corpus-wide grouping `build_site` derives once; a study
     of this gene's rows that no family holds means it was derived over another
     corpus, and the count would be wrong, so that raises rather than renders.
@@ -1309,7 +1325,14 @@ def _card_rare_variants(
             declared = " (each study by an atlas author)"
         elif own:
             declared = f" ({own} of the {len(studies)} studies by an atlas author)"
-        body = f"{heading}<p>Tested in {tested} independent {noun}{declared}{verdict}</p>"
+        # What the count can see (owner answer 2026-10-27): the front page's
+        # qualifier, from one constant, straight after the count it qualifies
+        # and before the declaration, which is about studies and which the
+        # registry does not record.
+        body = (
+            f"{heading}<p>Tested in {tested} independent {noun} {REGISTRY_QUALIFIER}"
+            f"{declared}{verdict}</p>"
+        )
     return (
         f'<div class="card-variants">{body}{"".join(uncorrected)}'
         f"<p>{EVIDENCE_POWER_CAVEAT}</p></div>"
@@ -3927,15 +3950,22 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     2026-10-26), which lists every cohort in the registry. Only this gene's
     cohorts are here; the full list is a second place a caveat reaches, never
     a replacement for this one (CLAUDE.md section 9).
+
+    **A record's open question follows its description here too** (owner's
+    standing rule, 2026-10-27): its status's label and the curator's note,
+    escaped, by `render.review_status_note`, the function the methods page's
+    list uses. It reaches the same pages the description does, and a
+    collection with no question recorded gets nothing.
     """
     cited = sorted(
         {identifier for row in rows for identifier in (*row.case_cohorts, *row.control_cohorts)}
     )
     items = [
-        f"<li><strong>{html.escape(cohorts[identifier].name)}</strong> &mdash; "
-        f"{html.escape(cohorts[identifier].description)}</li>"
+        f"<li><strong>{html.escape(cohort.name)}</strong> &mdash; "
+        f"{html.escape(cohort.description)}"
+        f"{review_status_note(cohort.id, cohort.review_status, cohort.review_note)}</li>"
         for identifier in cited
-        if identifier in cohorts
+        if (cohort := cohorts.get(identifier)) is not None
     ]
     if not items:
         return ""

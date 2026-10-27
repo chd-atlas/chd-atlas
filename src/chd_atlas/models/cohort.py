@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from chd_atlas.duplicates import duplicates
 from chd_atlas.identifiers import CohortId
+from chd_atlas.models.review import ReviewStatus, check_review
 
 # Same rule and rationale as `models/scope.py`: whitespace passes a bare
 # `min_length` and renders as nothing, which looks answered rather than missing.
@@ -53,6 +54,17 @@ class Cohort(BaseModel):
     # as independent datasets. Declared on both entries (`CohortFile`
     # checks it), so neither record reads as independent on its own.
     overlaps_with: list[CohortId] = Field(default_factory=list)
+    # A question about this record that the atlas leaves open (owner's
+    # standing rule, 2026-10-27; `models/review.py`): both or neither, the
+    # note stating only what is unresolved. Published in `cohorts.json` and
+    # rendered after the description wherever it renders.
+    review_status: ReviewStatus | None = None
+    review_note: _NonBlankStr | None = None
+
+    @model_validator(mode="after")
+    def a_review_status_carries_its_note(self) -> Cohort:
+        check_review(self.id, self.review_status, self.review_note)
+        return self
 
 
 class CohortFile(BaseModel):

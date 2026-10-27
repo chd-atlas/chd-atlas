@@ -31,6 +31,7 @@ from typing import Final, NamedTuple
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.paths import COHORTS
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import check_review
 from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 
 # The order strata are presented in, everywhere. Not alphabetical, which would
@@ -620,8 +621,20 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     collection has no public page (11 of the 20 on 2026-10-27), because an
     object whose shape varies is a trap for a consumer reading a field off one
     record and expecting it on the next -- the rule `admission_provenance` and
-    `burden_payload` already follow.
+    `burden_payload` already follow. `review_status` and `review_note` follow
+    it too: both `null` on a record no open question is recorded for.
+
+    **Both or neither, checked again here** (review, 2026-10-27, N2): the
+    model refuses one without the other where the file loads, but a record
+    built without validation (`model_construct`, `model_copy`) reached this
+    emitter and published `"pending_review"` beside a `null` note -- a
+    question with no statement of what it is. `models.review.check_review`
+    raises before anything is written, a guard on a bypassed gate like the
+    pages' `render.review_status_note`.
     """
+    ordered = sorted(cohorts, key=lambda item: str(item.id))
+    for cohort in ordered:
+        check_review(str(cohort.id), cohort.review_status, cohort.review_note)
     emitter.write_json(
         COHORTS,
         {
@@ -635,8 +648,16 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
                     # 2026-10-27, I3), sorted, `[]` where none: the edges
                     # `cohort_families` merges on besides a shared id.
                     "overlaps_with": sorted(str(other) for other in cohort.overlaps_with),
+                    # A question about the record this atlas leaves open
+                    # (owner's standing rule, 2026-10-27; `models/review.py`),
+                    # `null` and `null` where none is recorded -- never
+                    # omitted, like `url`.
+                    "review_status": (
+                        None if cohort.review_status is None else cohort.review_status.value
+                    ),
+                    "review_note": cohort.review_note,
                 }
-                for cohort in sorted(cohorts, key=lambda item: str(item.id))
+                for cohort in ordered
             ]
         },
     )

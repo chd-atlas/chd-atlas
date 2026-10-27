@@ -21,6 +21,20 @@
 # rows name the three collections the cohort description names and no more,
 # because inventing a fourth from an ethics approval would be the atlas asserting
 # something the study did not.
+#
+# REVIEW STATUS (owner's standing rule, 2026-10-27; `models/review.py`). Where
+# this atlas leaves a question about a record open rather than settling it, the
+# record carries `review_status` -- `pending_review` (a question about the
+# record left open for an expert: a conflict between the sources it rests on,
+# or a clinical judgement) or `not_accessible` (a source the record rests on
+# could not be read) -- and a `review_note` stating exactly what is
+# unresolved, and nothing more. Never assert either side, never speculate,
+# never drop the record. Both fields or neither: loading refuses one without
+# the other. `cohorts.json` publishes both (`null` where absent), and the note
+# renders after the description on methods.html and in each gene page's cohort
+# notes. The two records marked today are `pending_review` for a source
+# conflict: PMID:34324492's S2 Table against the cited paper's abstract (the
+# comment heading the seven S2 case series below says which and why).
 cohorts:
   - id: cnchd
     name: German Competence Network for Congenital Heart Defects
@@ -125,30 +139,75 @@ cohorts:
   # and none is declared. No url: a series has no home page of its own, and
   # the cohort list's link reads "website". The ids are the cited PMIDs; the
   # one S2 cites under two PMIDs carries both.
+  #
+  # Two of the seven carry `review_status: pending_review` (owner's answer,
+  # 2026-10-27): for `pmid22939634_cases` and `pmid22969434_cases`, S2 and the
+  # cited paper's PubMed abstract (read 2026-10-27) conflict, and each note
+  # says how and nothing more. For the first, the abstract names a platform S2
+  # does not (Illumina 660W-Quad against S2's Affymetrix and Agilent arrays);
+  # for the second, S2 lists more individuals with CHD than the abstract
+  # reports affected (178 against 174).
+  #
+  # The other five were compared on the same two points, against their
+  # papers' abstracts only, never the full texts, and none conflicts on
+  # either. Each lists no more individuals with CHD than its abstract
+  # reports: 742 against PMID:22318994's 945 subjects with CHD; 340 against
+  # PMID:22912587's 433 adults with tetralogy of Fallot and/or pulmonary
+  # atresia, 340 being that abstract's own count of its Caucasian probands;
+  # 123 against the 203 subjects with cardiovascular malformations of
+  # PMID:22929023's survey; 91 against PMID:26655555's 101 adults with
+  # transposition of the great arteries; and 63, which equals the 20 + 43
+  # children with CHD the two abstracts of PMID:18535492 and PMID:22349727
+  # report recruiting (the first also screened a matched population with
+  # isolated heart defects, uncounted there). And none of their six
+  # abstracts names an array S2 contradicts: the two behind the 63 name array
+  # CGH, as S2 does, and the other four name no array model. A count within
+  # the abstract's, on an array it does not contradict, is no conflict, so
+  # the five carry no status.
   - id: pmid22318994_cases
     name: CHD case series of PMID:22318994
     description: >-
       742 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+  # Pending review: S2's platform and 432 cases against PMID:22939634's
+  # abstract, Illumina arrays in 2,256 individuals with CHD (the comment
+  # heading these seven says why this record and not the other five).
   - id: pmid22939634_cases
     name: CHD case series of PMID:22939634
     description: >-
       432 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix 6.0 array, Agilent CGH 44k/105K.
+    review_status: pending_review
+    review_note: >-
+      S2 gives the platform as Affymetrix 6.0 array, Agilent CGH 44k/105K and
+      lists 432 cases; PMID:22939634's abstract reports Illumina 660W-Quad SNP
+      arrays in 2,256 individuals with CHD. How S2's 432 relate to the
+      individuals that abstract reports, and which platform applies to them,
+      is not stated.
   - id: pmid22912587_cases
     name: CHD case series of PMID:22912587
     description: >-
       340 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+  # Pending review: S2's 178 individuals with CHD against PMID:22969434's
+  # abstract, "464 individuals with 174 affecteds (37.5%) in 59 multiplex
+  # families and 8 trios" (the comment heading these seven says why this
+  # record and not the other five).
   - id: pmid22969434_cases
     name: CHD case series of PMID:22969434
     description: >-
       178 individuals with congenital heart disease, listed in PMID:34324492's
       S2 Table as a source of its CNV case set; S2 gives the platform as
       Affymetrix Array 6.0.
+    review_status: pending_review
+    review_note: >-
+      S2 lists 178 individuals with CHD from this source; PMID:22969434's
+      abstract reports "464 individuals with 174 affecteds (37.5%) in 59
+      multiplex families and 8 trios". How S2's 178 relate to the individuals
+      that abstract reports is not stated.
   - id: pmid22929023_cases
     name: CHD case series of PMID:22929023
     description: >-

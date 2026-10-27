@@ -269,7 +269,12 @@ wrong by the next one.
   move, since no other study names any of them. And it added
   [`n_chd_case_carriers`](#the-bundles-burden-array-per-study-never-pooled) to
   every object of a bundle's `burden` array, `null` but where a study counted
-  the CHD cases among its case carriers apart. Additive.
+  the CHD cases among its case carriers apart. It added `review_status` and
+  `review_note` to every [`cohorts.json`](#cohortsjson) record and every
+  [`scope.json`](#scopejson) term: `"pending_review"`, a question about the
+  record that this atlas leaves open for an expert, or `"not_accessible"`, a
+  source the record rests on could not be read, with a note stating what is
+  unresolved; `null` and `null` where none is recorded. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -288,7 +293,13 @@ not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 with a reported rare-variant result (any row at all; the label read "Genes with
 rare-variant evidence" until `2.19`), and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
-than written by hand. Its *Where this data comes from* names every source
+than written by hand. The independent-datasets figure, in the hero and on its
+census card, carries "(as far as the cohort registry records)": it counts
+cohort families, which join two studies only through a collection both name or
+collections [`cohorts.json`](#cohortsjson) records as overlapping, so two
+studies that share people the registry does not record count as two. A gene
+page's card qualifies its own dataset count the same way. The page's *Where
+this data comes from* names every source
 [`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
 the licence where it is CC BY. It links to
 `genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
@@ -358,12 +369,17 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   links here, and each forest plot's folded key ends with a link here.
 - `#cohorts` lists every sample collection a rare-variant row names, sorted by
   id: its name, id, description and public page where it has one — the same
-  records as [`cohorts.json`](#cohortsjson). It says too that a row may not name
+  records as [`cohorts.json`](#cohortsjson), each followed, where it carries a
+  `review_status`, by that open question ("Pending review:" or "Source not
+  accessible:", then its `review_note`). Before the list, only where some
+  record carries a status, one sentence per status present says what its
+  label marks and that the atlas does not settle the question. It says too
+  that a row may not name
   every collection its study drew on, so two studies naming no collection in
   common may still share people. A gene page keeps the notes of the cohorts its
-  own rows cite, folded at the end of its rare-variant section under *About
-  these cohorts, and the caveats recorded for them*, and that fold ends with a
-  link here.
+  own rows cite, open questions included, folded at the end of its rare-variant
+  section under *About these cohorts, and the caveats recorded for them*, and
+  that fold ends with a link here.
 - `#expression` says how to read a gene page's developmental expression
   section: that every developmental expression measurement here is from bulk
   tissue, so a low or absent figure is not evidence a gene is unimportant
@@ -1589,11 +1605,16 @@ Top to bottom:
    gene, from its rows.
 
    With no surviving row, how many independent datasets (cohort families, not
-   studies) tested the gene, declaring any study among them by an author of
+   studies) tested the gene, qualified as the front page qualifies its count —
+   "(as far as the cohort registry records)", straight after the count — then
+   declaring any study among them by an author of
    this atlas — "(a study by an atlas author)" where one study tested it,
    "(each study by an atlas author)", or "(1 of the 2 studies by an atlas
    author)", counted in studies — and, where some study published a
-   correction for it, that none survives a correction its study published; with no row at
+   correction for it, that none survives a correction its study published: "Tested in 2
+   independent datasets (as far as the cohort registry records) (1 of the 2
+   studies by an atlas author); none survives a correction its study
+   published." With no row at
    all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
    evidence against a gene — follows whenever the gene has rows.
 7. One sentence saying what the atlas itself has curated (below).
@@ -2185,7 +2206,9 @@ them. Added in schema `2.9`.
       "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
       "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases; the study's abstract describes its probands as \"probands with CHD including cases with sporadic thoracic aortic aneurysm\". Thoracic aortic aneurysm is outside this atlas's scope …",
       "url": null,
-      "overlaps_with": []
+      "overlaps_with": [],
+      "review_status": null,
+      "review_note": null
     }
   ]
 }
@@ -2216,6 +2239,21 @@ working with numbers stripped of the sentences that say what they count.
   `decipher` list each other — and is `[]` elsewhere. Declared on both entries,
   checked when the registry loads. `cohort_families` merges studies across these
   as across a shared id, so it is part of what makes two studies one dataset.
+- `review_status` and `review_note` (since `2.19`) record a question about
+  the record that this atlas leaves open rather than settles. The rule, the
+  atlas owner's: such a record says so rather than choosing a side,
+  speculating, or being dropped. `review_status` is `"pending_review"`, a
+  question about the record left open for an expert, or `"not_accessible"`, a
+  source the record rests on could not be read; `review_note` states exactly
+  what is unresolved and nothing more. The vocabulary is
+  [`scope.json`](#scopejson)'s too, where the question can be a clinical
+  judgement rather than a conflict between sources. Both are set or both are
+  `null`, never omitted, and `null` means no question has been recorded, not
+  that the record was checked and found clean. Two records carry one today,
+  both `"pending_review"`: `pmid22939634_cases` and `pmid22969434_cases`, on
+  each of which PMID:34324492's S2 Table and the cited paper's abstract
+  conflict. The note renders after the description on
+  [`methods.html#cohorts`](#methodshtml) and in a gene page's cohort notes.
 
 The array is sorted by `id`. There is no `role` field: a collection is cases in
 one study and could be controls in another, so which it was is a property of the
@@ -2273,7 +2311,9 @@ structural CHD is frequent but not part of the diagnosis.
       }
     ]
   },
-  "syndrome": false
+  "syndrome": false,
+  "review_status": null,
+  "review_note": null
 }
 ```
 
@@ -2288,6 +2328,14 @@ structural CHD is frequent but not part of the diagnosis.
   a syndrome: the Orphanet-path terms are syndromes by their warrant and are
   not marked, and "congenital heart disease with heterotaxy syndrome" is CHD
   itself whatever its name says.
+- `review_status` and `review_note` (since `2.19`) record an open question
+  about the term, in the vocabulary [`cohorts.json`](#cohortsjson) uses: both
+  set or both `null`, never omitted. Two terms carry `"pending_review"` today,
+  MONDO:1010098 and MONDO:1060150, marking a question left open for an expert
+  rather than a conflict between sources: whether each names a syndrome,
+  which decides whether a gene page calls a grade for it a grade for a
+  syndrome as a whole, is left open for clinical review, and `syndrome` stays
+  `false` meanwhile. Published here only: no page renders a term's question.
 - `admitted_by` is a string token naming the kind of authority that puts the
   term in scope, one of four:
 

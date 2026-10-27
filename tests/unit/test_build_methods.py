@@ -26,6 +26,7 @@ from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.vocab import Technology
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,13 +46,18 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> str:
 # dropped sort fails here under every PYTHONHASHSEED (CLAUDE.md section 4.42),
 # and the names sort differently from the ids (D, G, U against c, d, u), so a
 # sort on the name fails too. Every curated field a reader sees carries a
-# character that must be escaped.
+# character that must be escaped. One cohort carries an open question (owner's
+# standing rule, 2026-10-27) and two do not, so a status rendered on every
+# cohort fails as surely as one rendered on none; it is the one with a url, so
+# the note's place between the description and the link is pinned too.
 _REGISTRY: Final = {
     "ukbb": Cohort(
         id="ukbb",
         name="UK Biobank & partners",
         description="Adults recruited at 40-69.",
         url="https://example.org/ukbb?a=1&b=2",
+        review_status=ReviewStatus.PENDING_REVIEW,
+        review_note="S2 lists <432> & the abstract 2,256.",
     ),
     "ddd": Cohort(
         id="ddd",
@@ -719,6 +725,12 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
     "website" (2026-10-26): it leads to the collection's home page, and
     "source" beside a description read as the citation for it.
 
+    **A record's open question follows its description** (owner's standing
+    rule, 2026-10-27), before the link, escaped like every curated field, and
+    only on the record carrying one; the sentence saying what its label marks
+    precedes the list (review, 2026-10-27, M8; the next test holds when it
+    renders).
+
     The intro's numbers are pinned against the mirror and the registry by
     `test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`; here
     they are only the literal the fixture renders, since the intro is a
@@ -734,15 +746,86 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "overlapping may; and two that name neither may still share people this registry "
         "does not record. The same records are published as "
         '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
+        "<p>A record marked <strong>Pending review</strong> carries a question about it that "
+        "this atlas leaves open for an expert: its note states what is unresolved, and the "
+        "atlas takes no side.</p>"
         '<dl class="cohort-list">'
         "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"
         "<dt>Deciphering Developmental Disorders (DDD) (<code>ddd</code>)</dt>"
         "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
         "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
-        '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
+        "<dd>Adults recruited at 40-69. <strong>Pending review:</strong> S2 lists "
+        '&lt;432&gt; &amp; the abstract 2,256. <a href="https://example.org/ukbb?a=1&amp;b=2">'
         "website</a></dd>"
         "</dl>"
     )
+
+
+# What `#cohorts` says each review label marks, as literals (CLAUDE.md section
+# 4.38); the pending one is also inside the literal above.
+_PENDING_KEY: Final = (
+    "A record marked <strong>Pending review</strong> carries a question about it that this "
+    "atlas leaves open for an expert: its note states what is unresolved, and the atlas "
+    "takes no side."
+)
+_NOT_ACCESSIBLE_KEY: Final = (
+    "A record marked <strong>Source not accessible</strong> rests on a source that could not "
+    "be read: its note states what that leaves unchecked, and the atlas does not guess at it."
+)
+
+
+@pytest.mark.parametrize(
+    ("marked", "key"),
+    [
+        pytest.param({}, "", id="none-marked"),
+        pytest.param(
+            {"ddd": ReviewStatus.NOT_ACCESSIBLE},
+            f"<p>{_NOT_ACCESSIBLE_KEY}</p>",
+            id="not-accessible-only",
+        ),
+        pytest.param(
+            {
+                "ukbb": ReviewStatus.NOT_ACCESSIBLE,
+                "ddd": ReviewStatus.PENDING_REVIEW,
+                "cnchd": ReviewStatus.NOT_ACCESSIBLE,
+            },
+            f"<p>{_PENDING_KEY} {_NOT_ACCESSIBLE_KEY}</p>",
+            id="both",
+        ),
+    ],
+)
+def test_the_cohort_list_says_what_a_review_label_marks_only_for_labels_it_prints(
+    tmp_path: Path, marked: dict[str, ReviewStatus], key: str
+) -> None:
+    """What "Pending review:" means, said where the label is printed (review, 2026-10-27, M8).
+
+    The list printed the label after two descriptions, and every gene page's
+    cohort fold links here, but no page said what it marks. A sentence
+    between the intro and the list now does, one per status some record
+    carries, in the vocabulary's order -- and none where no record carries
+    one, since a key to a label the page does not print defines nothing a
+    reader meets. `cohort_page` above pins the pending sentence alone, from a
+    registry marking only `ukbb`. Here the same registry with nothing marked,
+    with only the status the real registry has never carried, and with both,
+    the pending record (`ddd`) between two not-accessible ones: `ukbb` comes
+    first in the registry's insertion order and `cnchd` first by id, so a
+    sentence order taken from either, rather than from the vocabulary, puts
+    "Source not accessible" first and fails, and one sentence per record
+    rather than per status prints it twice.
+    """
+    registry = {
+        identifier: cohort.model_copy(
+            update={
+                "review_status": marked.get(identifier),
+                "review_note": "What is unresolved." if identifier in marked else None,
+            }
+        )
+        for identifier, cohort in _REGISTRY.items()
+    }
+    build_methods(Emitter(root=tmp_path), cohorts=registry)
+    section = _section((tmp_path / METHODS_PAGE).read_text(encoding="utf-8"), "cohorts")
+    intro_end = section.index("</p>") + len("</p>")
+    assert section[intro_end : section.index('<dl class="cohort-list">')] == key
 
 
 def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(

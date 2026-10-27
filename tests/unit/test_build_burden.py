@@ -23,6 +23,7 @@ from chd_atlas.build.burden import (
 from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.emit import Emitter
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.tables import BURDEN, BURDEN_COMBINED
 
 _BASE: dict[str, str] = {
@@ -405,6 +406,10 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
       2026-10-27, I3): the declared overlaps that make two studies one cohort
       family, so a consumer can see why `independent_datasets` merged them.
       Listed out of order in the fixture so the sort is observed.
+    - **`review_status` and `review_note` are published, `null` where none**
+      (owner's standing rule, 2026-10-27): a record's open question about its
+      sources reaches a program as well as a page, on one record of three
+      here so a field dropped or published unconditionally fails.
     """
     emitter = Emitter(root=tmp_path)
     build_cohorts(
@@ -417,7 +422,14 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
                 url="https://u",
                 overlaps_with=["zebra", "unused"],
             ),
-            Cohort(id="unused", name="Unused", description="No row names this.", url=None),
+            Cohort(
+                id="unused",
+                name="Unused",
+                description="No row names this.",
+                url=None,
+                review_status=ReviewStatus.NOT_ACCESSIBLE,
+                review_note="The supplement could not be read.",
+            ),
         ),
         emitter,
     )
@@ -431,7 +443,12 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
         "description": "Adults 40-69.",
         "url": "https://u",
         "overlaps_with": ["unused", "zebra"],
+        "review_status": None,
+        "review_note": None,
     }
+    assert published[0]["review_status"] is None and published[0]["review_note"] is None
+    assert published[1]["review_status"] == "not_accessible"
+    assert published[1]["review_note"] == "The supplement could not be read."
     assert published[2]["overlaps_with"] == []
     # `url` present and null rather than omitted -- `"url" in ...` fails on an
     # omitted key where `.get("url") is None` would pass on both.

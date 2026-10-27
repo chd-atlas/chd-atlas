@@ -455,6 +455,13 @@ from chd_atlas.corpus import Corpus
 #   cases, where a study whose case set also holds another condition counted
 #   them apart; `null` elsewhere. Only PMID:34324492's S8 Table gives one, on
 #   the 12 mirrored rows (10 published) for the genes it lists.
+# * Every `cohorts.json` record and every `scope.json` term gains
+#   `review_status` and `review_note` (owner's answer, 2026-10-27), both `null`
+#   where none is recorded: `pending_review`, a question about the record that
+#   this atlas leaves open for an expert (on the two cohorts marked, the
+#   sources they rest on conflict; on the two scope terms, a clinical
+#   judgement), or `not_accessible`, a source the record rests on could not be
+#   read, with a note stating what is unresolved (`models/review.py`).
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

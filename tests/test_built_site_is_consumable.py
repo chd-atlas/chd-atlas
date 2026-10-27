@@ -402,6 +402,51 @@ def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_co
     assert noticed == 72
 
 
+# One card per form of the tested line that occurs on the real build, measured
+# the day the qualifier reached the cards (owner answer 2026-10-27): 24, 4, 48,
+# 7 and 3 cards, 86 in all.
+_TESTED_LINES: dict[str, str] = {
+    "HGNC_10252": "Tested in 1 independent dataset (as far as the cohort registry records) (a "
+    "study by an atlas author).",
+    "HGNC_13672": "Tested in 1 independent dataset (as far as the cohort registry records) (a "
+    "study by an atlas author); none survives a correction its study published.",
+    "HGNC_11291": "Tested in 1 independent dataset (as far as the cohort registry records) "
+    "(each study by an atlas author); none survives a correction its study published.",
+    "HGNC_6770": "Tested in 2 independent datasets (as far as the cohort registry records) (1 "
+    "of the 2 studies by an atlas author); none survives a correction its study published.",
+    "HGNC_7882": "Tested in 2 independent datasets (as far as the cohort registry records) (2 "
+    "of the 3 studies by an atlas author); none survives a correction its study published.",
+}
+
+
+def test_every_dataset_count_on_a_card_says_what_the_registry_can_see(site: Path) -> None:
+    """The front page's qualifier on the gene cards too (owner answer 2026-10-27).
+
+    "Independent datasets 2 (as far as the cohort registry records)" on the
+    front page, and on a card "Tested in N independent dataset(s)" with no
+    qualifier, though both count the same cohort families: joined only through
+    collections the registry names or declares overlapping. The qualifier
+    follows the count and precedes the author declaration, which it must not
+    read as qualifying. One card per form that occurs is pinned as a literal
+    -- ROCK2, KLF13, SRF, SMAD4, NOTCH2 -- and every tested line on every card
+    is held to the shape, so a form that appears later carries it too.
+    """
+    seen = {}
+    for path in sorted((site / "genes").glob("HGNC_*.html")):
+        page = path.read_text(encoding="utf-8")
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        for line in re.findall(r"<p>(Tested in [^<]*)</p>", rail):
+            assert re.fullmatch(
+                r"Tested in (1 independent dataset|\d+ independent datasets) "
+                r"\(as far as the cohort registry records\)( \([^)]*\))?"
+                r"(; none survives a correction its study published)?\.",
+                line,
+            ), (path.stem, line)
+            seen[path.stem] = line
+    assert seen, "no card prints a dataset count; this checks nothing"
+    assert {stem: seen.get(stem) for stem in _TESTED_LINES} == _TESTED_LINES
+
+
 def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
     """D52 on the committed corpus. A runner that stops passing `identities` to
     `build_genes` publishes six nulls on every bundle -- which the API doc defines
@@ -578,7 +623,9 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
     and that every record reaches the page whole. Equality on the id list, so
     a cohort missing, listed twice or out of `cohorts.json`'s order (sorted by
     id) fails; then each name, description and url, escaped as the page
-    escapes them, so a description cut short or a url dropped fails too.
+    escapes them, so a description cut short or a url dropped fails too. A
+    record's open question (owner's standing rule, 2026-10-27) follows its
+    description, before the link, where `cohorts.json` carries one.
     """
     cohorts = json.loads((site / "cohorts.json").read_text(encoding="utf-8"))["cohorts"]
     assert cohorts, "the build published no cohort registry; this measures nothing"
@@ -592,9 +639,124 @@ def test_methods_html_lists_every_cohort_cohorts_json_publishes(site: Path) -> N
     for (name, _, entry), cohort in zip(listed, cohorts, strict=True):
         assert name == html.escape(cohort["name"])
         expected = html.escape(cohort["description"])
+        if cohort["review_status"] is not None:
+            label = _REVIEW_LABELS[cohort["review_status"]]
+            expected += f" <strong>{label}:</strong> {html.escape(cohort['review_note'])}"
         if cohort["url"] is not None:
             expected += f' <a href="{html.escape(cohort["url"])}">website</a>'
         assert entry == expected, f"{cohort['id']} is not listed whole"
+
+
+# How a page labels each review status, as a literal (CLAUDE.md section 4.38).
+_REVIEW_LABELS: dict[str, str] = {
+    "pending_review": "Pending review",
+    "not_accessible": "Source not accessible",
+}
+
+_SYNDROME_QUESTION = (
+    "Whether this term names a syndrome -- which decides whether a gene page calls a grade "
+    "for it a grade for a syndrome as a whole -- is left open for clinical review."
+)
+
+
+def test_exactly_the_four_records_the_owner_marked_carry_an_open_question(site: Path) -> None:
+    """The owner's answer of 2026-10-27, on the real corpus, read from what is published.
+
+    Four records carry `pending_review`, each note stating what is
+    unresolved and taking no side. Two are S2 case series where PMID:34324492's
+    S2 Table and the cited paper's PubMed abstract conflict (both read
+    2026-10-27): S2's Affymetrix and Agilent arrays and 432 cases against
+    PMID:22939634's Illumina 660W-Quad arrays in 2,256 individuals with CHD;
+    S2's 178 individuals with CHD against PMID:22969434's "464 individuals
+    with 174 affecteds (37.5%) in 59 multiplex families and 8 trios". Each
+    note names the PMID whose abstract it quotes: "the paper's abstract", after
+    a description naming PMID:34324492, read as that study's (review,
+    2026-10-27). The other five series S2 identifies by PMID list no more
+    individuals with CHD than their papers' abstracts report, on no array an
+    abstract contradicts -- compared with the abstracts only, never the full
+    texts -- which is no conflict, and carry none. Two are scope terms whose
+    syndromic status the owner left open for clinical review, a clinical
+    judgement rather than a conflict between sources; their `syndrome` mark
+    stays unset.
+
+    Pinned whole, as literals: every other record publishes both fields as
+    `null`, never omits them. A cohort's question renders where its
+    description does -- `methods.html`'s list, checked with every record by
+    `test_methods_html_lists_every_cohort_cohorts_json_publishes`, and the
+    cohort notes of every gene page whose rows cite it, here: the 77 pages
+    carrying PMID:34324492 on the build this was written against (every one
+    of its rows names all seven series), each note once, inside the fold and
+    nowhere else on the page. A scope term's question is published in
+    `scope.json` only, so its note is asserted absent from every page.
+    """
+    cohorts = {cohort["id"]: cohort for cohort in _read(site, "cohorts.json")["cohorts"]}
+    terms = {term["id"]: term for term in _read(site, "scope.json")["terms"]}
+    records = {**cohorts, **terms}
+    for identifier, record in records.items():
+        assert "review_status" in record and "review_note" in record, identifier
+    marked = {
+        identifier: (record["review_status"], record["review_note"])
+        for identifier, record in records.items()
+        if record["review_status"] is not None or record["review_note"] is not None
+    }
+    assert marked == {
+        "pmid22939634_cases": (
+            "pending_review",
+            "S2 gives the platform as Affymetrix 6.0 array, Agilent CGH 44k/105K and lists 432 "
+            "cases; PMID:22939634's abstract reports Illumina 660W-Quad SNP arrays in 2,256 "
+            "individuals with CHD. How S2's 432 relate to the individuals that abstract "
+            "reports, and which platform applies to them, is not stated.",
+        ),
+        "pmid22969434_cases": (
+            "pending_review",
+            "S2 lists 178 individuals with CHD from this source; PMID:22969434's abstract "
+            'reports "464 individuals with 174 affecteds (37.5%) in 59 multiplex families and '
+            "8 trios\". How S2's 178 relate to the individuals that abstract reports is not "
+            "stated.",
+        ),
+        "MONDO:1010098": ("pending_review", _SYNDROME_QUESTION),
+        "MONDO:1060150": ("pending_review", _SYNDROME_QUESTION),
+    }
+    assert terms["MONDO:1010098"]["syndrome"] is False
+    assert terms["MONDO:1060150"]["syndrome"] is False
+
+    # GATA4's page, sliced to the cohort-notes fold and then to the item.
+    page = (site / "genes" / "HGNC_4173.html").read_text(encoding="utf-8")
+    fold = page[page.index('<details class="cohort-notes">') :]
+    fold = fold[: fold.index("</details>")]
+    start = fold.index("<li><strong>CHD case series of PMID:22969434</strong>")
+    assert fold[start : fold.index("</li>", start) + 5] == (
+        "<li><strong>CHD case series of PMID:22969434</strong> &mdash; 178 individuals with "
+        "congenital heart disease, listed in PMID:34324492&#x27;s S2 Table as a source of its "
+        "CNV case set; S2 gives the platform as Affymetrix Array 6.0. <strong>Pending "
+        "review:</strong> S2 lists 178 individuals with CHD from this source; "
+        "PMID:22969434&#x27;s abstract reports &quot;464 individuals with 174 affecteds "
+        "(37.5%) in 59 multiplex families and 8 trios&quot;. How S2&#x27;s 178 relate to the "
+        "individuals that abstract reports is not stated.</li>"
+    )
+
+    carrying = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        cited = {
+            c for row in bundle["burden"] for c in (*row["case_cohorts"], *row["control_cohorts"])
+        }
+        expected = sum(
+            1 for cohort in ("pmid22939634_cases", "pmid22969434_cases") if cohort in cited
+        )
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        notes = ""
+        if '<details class="cohort-notes">' in page:
+            notes = page[page.index('<details class="cohort-notes">') :]
+            notes = notes[: notes.index("</details>")]
+        assert notes.count("<strong>Pending review:</strong>") == expected, entry["gene"]
+        assert page.count("Pending review") == expected, entry["gene"]
+        carrying += bool(expected)
+    assert carrying == 77
+    for path in sorted(site.rglob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        for question in (_SYNDROME_QUESTION, html.escape(_SYNDROME_QUESTION)):
+            assert question not in text, path.name
 
 
 def test_the_taa_description_states_the_denominator_its_rows_publish(site: Path) -> None:
@@ -1781,11 +1943,11 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured after the review fixes to the second batch of owner decisions
-# (2026-10-27), with the headroom owner decision E4 keeps: (a) 957 x 1.03
+# Measured after the owner's answers of 2026-10-27 (the registry qualifier on
+# the gene cards), with the headroom owner decision E4 keeps: (a) 964 x 1.03
 # rounded up, (b) 21 + 1. See the test for the series and the rule. Lower each
 # when a page sheds prose; raising one is a decision, and its commit says why.
-_MEDIAN_VISIBLE_WORDS = 986
+_MEDIAN_VISIBLE_WORDS = 993
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -1905,6 +2067,8 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
     owner decisions batch 3 (R12, R2)            957  1,066  21 sentences, 430 words
     review fixes to batch 3, 2026-10-27          957  1,066  21 sentences, 430 words
+    owner answers 2026-10-27 (A1, A2)            964  1,073  21 sentences, 430 words
+    review fixes to owner answers, 2026-10-27    964  1,073  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1966,12 +2130,34 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     owner-decided (E4), is 14 words on 10 cards (+14 each, measured) and 0 on
     the other 109, below the median's reach. Both constants stay.
 
-    The last row is the review of that batch (2026-10-27), measured with this
+    The "review fixes to batch 3" row is the review of that batch
+    (2026-10-27), measured with this
     parser on a fresh build of the fixed tree against one of 64ac83a (957,
     1,066, 21 / 430, as the row above). Only R2's card sentence moved: it
     gained "so none is an aneurysm proband", +6 words on each of the same 10
     cards and 0 on the other 109, below the median's reach. By the rule,
     957 x 1.03 rounded up is 986 and 21 + 1 is 22, so both constants stay.
+
+    The "owner answers" row is the owner's answers of 2026-10-27, measured with this
+    parser on fresh builds of the tree after each item against one of 3bf08fb
+    (957, 1,066, 21 / 430, as the row above). A1's review statuses render
+    only inside the cohort-notes fold (two notes on each of the 77 pages
+    carrying PMID:34324492) and moved nothing. A2's qualifier on the card's
+    "Tested in N independent dataset(s)" line, owner-decided (E4), is 7 words
+    on 86 cards and 0 on the other 33 (measured per page), and the median
+    rose by 7 to 964. (b) did not move: the line is on 86 of 119 pages, under
+    the 90% share, and reads differently by count and declaration. By the
+    rule (a) was raised to 993, 964 x 1.03 rounded up, and (b) stays 22, one
+    over 21.
+
+    The last row is the review of those answers (2026-10-27), measured with
+    this parser on a fresh build of the fixed tree against one of ba2b2f9
+    (964, 1,073, 21 / 430 on both). Its gene-page changes are the wording of
+    the two cohort notes, inside the cohort-notes fold on the 77 pages
+    carrying PMID:34324492, and they moved nothing; the sentence saying what
+    "Pending review" marks is on methods.html, not on a gene page. By the
+    rule, 964 x 1.03 rounded up is 993 and 21 + 1 is 22, so both constants
+    stay.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
@@ -1984,10 +2170,11 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 986, the last row's 957 x 1.03 rounded up, and (b) at 22,
-    one more than 21 (owner decision E4 keeps both margins; they were 971 and
-    22 over the batch-2 row, 909 and 22 over 9a8f14d's, 922 and 23 over
-    2f6300a's, and 867 and 22 over 802d694's). **When this fails,
+    (a) is held at 993, the last row's 964 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 986 and
+    22 over the three rows before it, 971 and 22 over the batch-2 row, 909 and
+    22 over 9a8f14d's, 922 and 23 over 2f6300a's, and 867 and 22 over
+    802d694's). **When this fails,
     re-measure before anything else.** If the growth is a new study's or
     dataset's own data-driven prose, raise the budget and put the measurement
     here. Never fold a caveat the fold rule

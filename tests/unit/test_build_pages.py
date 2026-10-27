@@ -49,6 +49,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset, Stage
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile, EndBasis
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.models.scope import ScopeEntry
 from chd_atlas.orphanet_scope import Annotation, Warrant
 from chd_atlas.vocab import (
@@ -1694,8 +1695,23 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
 
     This is the project's characteristic failure in its purest form: the work
     was done, it was correct, it was validated, and no reader could reach it.
+
+    **A record's open question reaches the same place** (owner's standing
+    rule, 2026-10-27): after its description, escaped, on the one cohort of
+    the three this row cites that carries one, and on no other. It is the
+    `not_accessible` status here, so its label is pinned by literal too;
+    `test_build_methods.py` pins `pending_review`'s.
     """
-    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()])
+    registry = {
+        **_COHORTS,
+        "ukbb": _COHORTS["ukbb"].model_copy(
+            update={
+                "review_status": ReviewStatus.NOT_ACCESSIBLE,
+                "review_note": "The <S2> sheet & its notes could not be read.",
+            }
+        ),
+    }
+    page = _burden_page(tmp_path, facts_uncurated, [_burden_row()], cohorts=registry)
 
     # In a `<details>`, so the caveats are one click from every table rather than
     # repeated at full length above 23 of them -- and still in the document for
@@ -1714,6 +1730,12 @@ def test_the_cohort_caveats_a_curator_wrote_reach_the_reader(
     )
     assert "qualifies every number" not in page
     assert "enriched for syndromic CHD" in notes
+    assert (
+        "<li><strong>UK Biobank</strong> &mdash; Adults recruited at 40-69; survivorship bias "
+        "against severe CHD. <strong>Source not accessible:</strong> The &lt;S2&gt; sheet "
+        "&amp; its notes could not be read.</li>"
+    ) in notes
+    assert notes.count("<strong>Source not accessible:</strong>") == 1
     # The fold stays (P4: narrowing where a cohort caveat reaches is what this
     # test exists to stop) and ends on a link to the whole registry on
     # methods.html, so this section links its anchor like every other
@@ -2100,7 +2122,10 @@ def test_the_rail_states_rare_variant_evidence_and_no_bare_publication_count(
 
     rail = _slice_between(page, '<aside class="rail">', ("</aside>",))
     card = _card_variants(rail)
-    assert "<p>Tested in 1 independent dataset (a study by an atlas author).</p>" in card
+    assert (
+        "<p>Tested in 1 independent dataset (as far as the cohort registry records) (a study by "
+        "an atlas author).</p>"
+    ) in card
     assert '<p class="card-uncorrected"><a href="#study-42230622">' in card
     assert "<dt>rare-variant rows</dt>" not in rail
     assert "<dt>curated publications</dt>" not in rail
@@ -7794,8 +7819,8 @@ _NO_TESTS_REPORTED: Final = {
                 _sierant(consequence_class="synonymous", pvalue=1e-6, pvalue_adjusted=0.001),
             ],
             _ALL_STUDIES,
-            "Tested in 2 independent datasets (2 of the 3 studies by an atlas author); none "
-            "survives a correction its study published.",
+            "Tested in 2 independent datasets (as far as the cohort registry records) (2 of the "
+            "3 studies by an atlas author); none survives a correction its study published.",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7822,8 +7847,8 @@ _NO_TESTS_REPORTED: Final = {
                 ),
             ],
             _ALL_STUDIES,
-            "Tested in 2 independent datasets (1 of the 2 studies by an atlas author); none "
-            "survives a correction its study published.",
+            "Tested in 2 independent datasets (as far as the cohort registry records) (1 of the "
+            "2 studies by an atlas author); none survives a correction its study published.",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7835,7 +7860,8 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)],
             _ALL_STUDIES,
-            "Tested in 1 independent dataset (a study by an atlas author).",
+            "Tested in 1 independent dataset (as far as the cohort registry records) (a study by "
+            "an atlas author).",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7847,7 +7873,8 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_audain2021(case_cohorts=("ddd",), pvalue_adjusted=None)],
             _NO_TESTS_REPORTED,
-            "Tested in 1 independent dataset (a study by an atlas author).",
+            "Tested in 1 independent dataset (as far as the cohort registry records) (a study by "
+            "an atlas author).",
             [
                 '<a href="#study-34324492">Audain E et al. 2021</a> publishes no corrected p '
                 "for this gene; see its block · study by an atlas author"
@@ -7857,8 +7884,8 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_audain2021(case_cohorts=("ddd",), pvalue_adjusted=0.4)],
             _ALL_STUDIES,
-            "Tested in 1 independent dataset (a study by an atlas author); none survives a "
-            "correction its study published.",
+            "Tested in 1 independent dataset (as far as the cohort registry records) (a study by "
+            "an atlas author); none survives a correction its study published.",
             [],
             id="MYH11: one study by an atlas author, its correction failed",
         ),
@@ -7868,8 +7895,8 @@ _NO_TESTS_REPORTED: Final = {
                 _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None),
             ],
             _ALL_STUDIES,
-            "Tested in 1 independent dataset (each study by an atlas author); none survives a "
-            "correction its study published.",
+            "Tested in 1 independent dataset (as far as the cohort registry records) (each study "
+            "by an atlas author); none survives a correction its study published.",
             [
                 '<a href="#study-42230622">Audain E et al. 2026</a> publishes no corrected p '
                 "for this gene; judge its results against its scan of 138,609 tests (see its "
@@ -7880,7 +7907,8 @@ _NO_TESTS_REPORTED: Final = {
         pytest.param(
             [_sierant(pvalue_adjusted=0.2)],
             _ALL_STUDIES,
-            "Tested in 1 independent dataset; none survives a correction its study published.",
+            "Tested in 1 independent dataset (as far as the cohort registry records); none "
+            "survives a correction its study published.",
             [],
             id="no study by an atlas author: no declaration",
         ),
@@ -7925,6 +7953,12 @@ def test_a_card_with_no_surviving_result_counts_the_datasets_that_tested_the_gen
     pinned: one study, all of several, some of several -- counted in studies,
     not datasets, which the two-studies-one-family case is here to tell apart.
     A study by no atlas author adds nothing.
+
+    **The count carries the front page's qualifier** (owner answer
+    2026-10-27): "(as far as the cohort registry records)", straight after
+    the count and before any declaration, in every form here -- singular and
+    plural, with each declaration and with none. Pinned as literals, never as
+    the constant that renders it.
     """
     families = (
         frozenset({"PMID:34324492", "PMID:42230622"}),
