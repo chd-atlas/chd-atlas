@@ -1889,7 +1889,7 @@ def test_a_study_heading_never_renders_a_nameless_author(
     "    et al. 2026" -- a study heading naming nobody. `authors[0]` was read
     only by `search.py` before this section existed, so the page is where the
     pre-existing model weakness first became visible. Same shape as the blank
-    `symbol` defect `runner.py::_cell` exists to catch.
+    `symbol` defect `tables.cell_text` exists to catch.
     """
     nameless = _PUBLICATION.model_copy(update={"authors": ["   "]})
     page = _burden_page(

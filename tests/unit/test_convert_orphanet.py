@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -227,29 +228,60 @@ def test_the_converter_writes_each_files_own_header_beside_its_checksum(tmp_path
     with pytest.raises(ValueError, match="no version"):
         jdbor_release(product)
 
+    # Two more refusals, each of which survived every test until review
+    # (2026-10-27): a file whose root is not `<JDBOR>` -- some other XML, whose
+    # attributes would otherwise be cited as Orphadata's release -- and an
+    # entry that does not carry each recorded key exactly once, which a line
+    # edit would otherwise rewrite twice or not at all.
+    product.write_text(
+        _JDBOR.replace("JDBOR", "HPODisorderSetStatusList").format(
+            date="2027-01-02 03:04:05", version="1.3.50"
+        )
+    )
+    with pytest.raises(ValueError, match="not <JDBOR>"):
+        jdbor_release(product)
+    sources.write_text(
+        committed.replace("    file_date: ", "    file_date: x\n    file_date: ", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="expected one `file_date:` line, found 2"):
+        record_release(sources, "orphanet_product4", "sha256:" + "b" * 64, "v", "d")
+
+
+_RECORDED_RELEASE: Final = {
+    "orphanet_product4": ("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"),
+    "orphanet_product1": ("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"),
+}
+
 
 def test_the_recorded_orphadata_release_is_the_header_of_the_mirrored_files() -> None:
     """The values `sources.json` publishes and the landing page cites, pinned (R11).
 
     Transcribed from the `<JDBOR>` headers of the two downloads whose sha256s
-    the registry records (2026-06-23 release, read 2026-10-26). Where those
-    downloads are present under `local/data/orphanet/` -- a curator's machine,
-    never CI -- they are read again and must agree, so a re-download recorded
-    by hand rather than by the converter fails here.
+    the registry records (2026-06-23 release, read 2026-10-26). The downloads
+    themselves are read by the test below, where they exist.
     """
     registry, _ = load_sources(REPO_ROOT)
     recorded = {
         source_id: (registry.by_id[source_id].file_version, registry.by_id[source_id].file_date)
         for source_id in ("orphanet_product4", "orphanet_product1")
     }
-    assert recorded == {
-        "orphanet_product4": ("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"),
-        "orphanet_product1": ("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"),
-    }
-    local = REPO_ROOT / "local" / "data" / "orphanet"
-    for source_id, name in (
-        ("orphanet_product4", "en_product4.xml"),
-        ("orphanet_product1", "en_product1.xml"),
-    ):
-        if (local / name).is_file():
-            assert jdbor_release(local / name) == recorded[source_id], name
+    assert recorded == _RECORDED_RELEASE
+
+
+@pytest.mark.parametrize(
+    ("source_id", "name"),
+    [("orphanet_product4", "en_product4.xml"), ("orphanet_product1", "en_product1.xml")],
+)
+def test_a_local_orphadata_download_states_the_recorded_release(source_id: str, name: str) -> None:
+    """Where the download is present -- a curator's machine, never CI -- it must agree.
+
+    So a re-download recorded by hand rather than by the converter fails here.
+    `local/` is gitignored, so in CI the file is absent and the test is a
+    visible skip naming it; until review (2026-10-27) it was an `if` that
+    passed silently, which read the same as a check that ran.
+    """
+    path = REPO_ROOT / "local" / "data" / "orphanet" / name
+    if not path.is_file():
+        pytest.skip(f"local/data/orphanet/{name} is not present (gitignored; a curator's copy)")
+    assert jdbor_release(path) == _RECORDED_RELEASE[source_id]

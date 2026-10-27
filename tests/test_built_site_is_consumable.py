@@ -403,7 +403,7 @@ def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site
     pass `identities` themselves. This compares every published bundle against
     `mirrors/genes.tsv`. The count is derived, never pinned.
 
-    Compared after stripping, as `runner._cell` strips: HGNC's own name for
+    Compared after stripping, as `tables.cell_text` strips: HGNC's own name for
     HGNC:2348 ends in a space ("CREB binding lysine acetyltransferase "), the one
     cell of 1,850 in the mirror with surrounding whitespace (measured 2026-10-25).
     """

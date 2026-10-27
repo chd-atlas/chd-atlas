@@ -5,14 +5,17 @@ import json
 import re
 import shutil
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from chd_atlas.build.identity import GeneIdentity
+from chd_atlas.build.burden import BurdenRow, load_burden
+from chd_atlas.build.concordance import survives_own_correction
+from chd_atlas.build.identity import GeneIdentity, read_gene_identities
 from chd_atlas.build.profiles import ProfileCensus
-from chd_atlas.build.runner import BuildRefused, _gene_identities, _gene_registry, build_site
+from chd_atlas.build.runner import BuildRefused, _gene_registry, build_site
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.corpus import load_curation
 from chd_atlas.issues import Severity, ValidationIssue
@@ -88,7 +91,7 @@ def test_the_registry_reader_cleans_the_alias_cell_and_falls_a_blank_symbol_back
     is non-nullable, so TBL003 refuses the build first — but a single space in
     the cell is: `read_table` maps only the true empty string to null, so
     `HGNC:9999\t \t...` is a legal mirror row TBL003 does not catch, and
-    `HGNC:4173\t\t...` (truly empty) reaches here identically once `_cell`
+    `HGNC:4173\t\t...` (truly empty) reaches here identically once `cell_text`
     strips it. This is the regression the fix corrects: the previous guard read
     `if gene is None or symbol is None: continue` and dropped both rows
     outright, discarding a validated `name` along with the blank symbol —
@@ -266,7 +269,7 @@ def test_the_gate_refuses_on_an_error_and_builds_through_a_warning(
         assert (out / "manifest.json").is_file()
 
 
-def test_the_expression_census_reaches_the_manifest_and_the_page_unswapped(
+def test_the_censuses_reach_the_manifest_and_the_page_by_the_rules_handed_in(
     repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`profile_census`'s own published-vs-registry restriction is proven by a
@@ -298,6 +301,34 @@ def test_the_expression_census_reaches_the_manifest_and_the_page_unswapped(
         "chd_atlas.build.runner.profile_census",
         lambda profiles, published: ProfileCensus(genes=7, datasets=4),
     )
+
+    # **And the surviving-genes census counts by the card's predicate** (review,
+    # 2026-10-27). `build_site` hands `burden_census` `survives_own_correction`,
+    # and swapping it for "a corrected p below 0.05" survived every test: no
+    # committed row tells the two apart. KDM6A -- published, no surviving row --
+    # is given two rows that do: its upward synonymous row and a depleted row,
+    # each with a corrected p of 0.01. Neither supports the gene (a synonymous
+    # row is the negative control; a depleted one points the wrong way), so the
+    # census must not count it.
+    kdm6a = "HGNC:12637"
+    real_load = load_burden
+    loaded: dict[str, list[BurdenRow]] = {}
+
+    def with_decoys(root: Path) -> dict[str, list[BurdenRow]]:
+        burden = {gene: list(rows) for gene, rows in real_load(root).items()}
+        q = {"pvalue": 0.001, "pvalue_adjusted": 0.01, "pvalue_adjustment": "benjamini_hochberg"}
+        burden[kdm6a] = [
+            replace(row, effect=2.0, **q)  # type: ignore[arg-type]
+            if row.consequence_class == "synonymous" and row.cohort_stratum == "all"
+            else replace(row, **q)  # type: ignore[arg-type]
+            if row.effect is not None and row.effect < 1 and row.pvalue_adjusted == 1.0
+            else row
+            for row in burden[kdm6a]
+        ]
+        loaded.update(burden)
+        return burden
+
+    monkeypatch.setattr("chd_atlas.build.runner.load_burden", with_decoys)
     out = tmp_path / "dist"
 
     build_site(repo, out)
@@ -309,6 +340,24 @@ def test_the_expression_census_reaches_the_manifest_and_the_page_unswapped(
     page = (out / "index.html").read_text()
     assert re.search(r"<dt>Genes with developmental expression data</dt>\s*<dd>7</dd>", page)
     assert re.search(r"<dt>Developmental expression datasets</dt>\s*<dd>4</dd>", page)
+
+    published = [
+        entry["gene"] for entry in json.loads((out / "genes/index.json").read_text())["genes"]
+    ]
+    surviving = sum(
+        1 for gene in published if any(survives_own_correction(row) for row in loaded.get(gene, ()))
+    )
+    by_q_alone = sum(
+        1
+        for gene in published
+        if any(
+            row.pvalue_adjusted is not None and row.pvalue_adjusted < 0.05
+            for row in loaded.get(gene, ())
+        )
+    )
+    # The decoys separate the two predicates, or this measures one number twice.
+    assert kdm6a in published and by_q_alone == surviving + 1
+    assert manifest["counts"]["burden_surviving_genes"] == surviving
 
 
 def test_every_gene_label_the_registry_holds_reaches_the_site(repo: Path, tmp_path: Path) -> None:
@@ -540,22 +589,29 @@ def test_the_site_carries_the_terms_of_everything_it_republishes(
 def test_the_registry_reads_each_genes_identity_with_blank_cells_as_none(tmp_path: Path) -> None:
     """D52's ids come from one row of `mirrors/genes.tsv`, cleaned like the labels are.
 
-    A whitespace-only cell is absent, by the same `_cell` rule the symbol uses;
+    A whitespace-only cell is absent, by the same `cell_text` rule the symbol uses;
     a row with no `hgnc_id` has nothing to key on and is dropped. `ncbi_gene`
     must arrive as an `int` -- the bundle publishes it as one.
+
+    `read_gene_identities` is the one reader the build and `chd-atlas validate`
+    (GEN004) both use since review, 2026-10-27 -- validate held a copy of its
+    own until then -- so a padded id is read the same way by both: stripped.
+    A registry missing an id column is `None`, for TBL001 to report, never a
+    mapping of genes with no ids for GEN004 to report one by one.
     """
     mirror = tmp_path / "mirrors"
     mirror.mkdir()
     (mirror / "genes.tsv").write_text(
         "hgnc_id\tsymbol\tname\taliases\tensembl_gene\tncbi_gene\tlocus\tuniprot\tmane_select\n"
-        "HGNC:11604\tTBX5\tT-box transcription factor 5\t\tENSG00000089225\t6910\t12q24.21\t"
+        "HGNC:11604\tTBX5\tT-box transcription factor 5\t\t ENSG00000089225 \t6910\t12q24.21\t"
         "Q99593\tNM_181486.4\n"
         "HGNC:4173\tGATA4\tGATA binding protein 4\t\t\t\t \t\t\n"
         "\tNONAME\tUnkeyed row\t\t\t\t\t\t\n"
     )
 
-    identities = _gene_identities(tmp_path)
+    identities = read_gene_identities(tmp_path)
 
+    assert identities is not None
     assert list(identities) == ["HGNC:11604", "HGNC:4173"]
     assert identities["HGNC:11604"] == GeneIdentity(
         name="T-box transcription factor 5",
@@ -567,3 +623,6 @@ def test_the_registry_reads_each_genes_identity_with_blank_cells_as_none(tmp_pat
     )
     assert type(identities["HGNC:11604"].ncbi_gene) is int
     assert identities["HGNC:4173"] == GeneIdentity(name="GATA binding protein 4")
+
+    (mirror / "genes.tsv").write_text("hgnc_id\tsymbol\tname\tensembl_gene\nHGNC:1\tA\tB\tC\n")
+    assert read_gene_identities(tmp_path) is None

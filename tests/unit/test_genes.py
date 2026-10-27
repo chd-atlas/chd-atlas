@@ -397,7 +397,7 @@ def test_a_published_genes_identity_ids_are_held_to_the_rule_the_build_refuses_o
     rather than a build that refuses after writing has begun. The same row on
     a gene the gate does not publish reports nothing -- the build never links
     it -- and an unreadable registry reports nothing, because TBL008 already
-    names that error.
+    names that error. An empty one is reported once.
     """
     identities = {"HGNC:11604": identity} if identity is not None else {}
     unpublished = {"HGNC:2": GeneIdentity(ensembl_gene="ENSG1", ncbi_gene=-3)}
@@ -413,3 +413,10 @@ def test_a_published_genes_identity_ids_are_held_to_the_rule_the_build_refuses_o
         assert issues[0].message.startswith("HGNC:11604 is published")
         assert f"these ids: {problem}; the build refuses" in issues[0].message
     assert validate_identity_ids(None, {"HGNC:11604"}, "mirrors/genes.tsv") == []
+    # A registry that reads and holds no row is one GEN004 naming it -- never
+    # nothing, which is what `or None` at the call site made it until review
+    # (2026-10-27), and never one per published gene.
+    [empty] = validate_identity_ids({}, {"HGNC:11604", "HGNC:2"}, "mirrors/genes.tsv")
+    assert (empty.code, empty.severity) == ("GEN004", Severity.ERROR)
+    assert empty.message.startswith("the gene registry holds no gene rows, and 2 published")
+    assert validate_identity_ids({}, set(), "mirrors/genes.tsv") == []

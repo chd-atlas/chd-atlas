@@ -886,15 +886,35 @@ def test_an_unreadable_gene_registry_does_not_multiply_by_the_burden_mirror(
     Passing `known_genes or None` restores it to 1. The count is asserted, not
     just the code, because the defect was never a wrong code: BUR011 was right
     about all 145 genes. It was the burying that was wrong.
+
+    **Plus one GEN004 naming the empty registry** (review, 2026-10-27). GEN004
+    was handed the registry `or None` for the same reason, which switched it
+    off, and then the only error left was REF001 -- the curated assertion's.
+    With that assertion moved out, as here second, the report was **0
+    errors** and `build_site` raised from `external_links` after writing had
+    begun (measured on a copy): the failure R13 exists to report from
+    validate. Now one GEN004, and the build refuses before writing anything.
     """
-    root = _real_repo(tmp_path)
+    root = _real_repo(tmp_path / "repo")
     genes = root / "mirrors" / "genes.tsv"
     genes.write_text(genes.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
 
     report = validate_repository(root)
     codes = [issue.code for issue in report.issues if issue.severity is Severity.ERROR]
 
-    assert codes == ["REF001"]
+    assert codes == ["REF001", "GEN004"]
+
+    for assertion in (root / "curation" / "assertions").iterdir():
+        assertion.unlink()
+    report = validate_repository(root)
+    errors = [issue for issue in report.issues if issue.severity is Severity.ERROR]
+
+    assert [issue.code for issue in errors] == ["GEN004"]
+    assert "the gene registry holds no gene rows" in errors[0].message
+    out = tmp_path / "dist"
+    with pytest.raises(BuildRefused, match="GEN004"):
+        build_site(root, out)
+    assert not out.exists()
 
 
 def test_a_false_scope_attribution_is_caught_on_the_branch_that_actually_runs(

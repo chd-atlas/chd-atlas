@@ -56,10 +56,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 from chd_atlas.build.emit import Json
 from chd_atlas.identifiers import ENSEMBL_GENE_PATTERN
+from chd_atlas.tables import TABLE_SCHEMAS, cell_text, read_table
 
 GNOMAD_DATASET: Final = "gnomad_r4"
 
@@ -100,6 +102,52 @@ class ExternalLink:
 
     label: str
     href: str
+
+
+def read_gene_identities(root: Path) -> dict[str, GeneIdentity] | None:
+    """The identity columns of `mirrors/genes.tsv`, keyed on HGNC id. D52, R13.
+
+    **The one reader, for the build and for `chd-atlas validate` alike.**
+    GEN004 (`validate/genes.py::validate_identity_ids`) reports, by
+    `identity_id_problems`, what `external_links` refuses a page on; until
+    review (2026-10-27) each side read the registry through a copy of its own,
+    and a mutant to the validator's copy survived every test, so a padded or
+    blank cell could be read one way to validate and another to build. Every
+    cell is cleaned by `tables.cell_text`, the rule the build's labels use: a
+    blank or whitespace-only cell is absent, and a row with no `hgnc_id` has
+    nothing to key on and is dropped. `ncbi_gene` arrives as an `int`, as the
+    bundle publishes it.
+
+    `None` where the file is absent or unreadable, or lacks `hgnc_id`,
+    `ensembl_gene` or `ncbi_gene` -- each reported by a check of its own
+    (TBL008 for the first three, TBL001 for a missing column) -- so GEN004
+    does not report every published gene for the file's one fault. A registry
+    that reads and holds no row is `{}`, not `None`: GEN004 reports that once.
+    """
+    path = root / "mirrors" / "genes.tsv"
+    if not path.is_file():
+        return None
+    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
+    if frame is None or any(
+        column not in frame.columns for column in ("hgnc_id", "ensembl_gene", "ncbi_gene")
+    ):
+        return None
+
+    identities: dict[str, GeneIdentity] = {}
+    for row in frame.to_dicts():
+        gene = cell_text(row.get("hgnc_id"))
+        if gene is None:
+            continue
+        ncbi = row.get("ncbi_gene")
+        identities[gene] = GeneIdentity(
+            name=cell_text(row.get("name")),
+            locus=cell_text(row.get("locus")),
+            ensembl_gene=cell_text(row.get("ensembl_gene")),
+            ncbi_gene=int(ncbi) if ncbi is not None else None,
+            uniprot=cell_text(row.get("uniprot")),
+            mane_select=cell_text(row.get("mane_select")),
+        )
+    return identities
 
 
 def identity_payload(identity: GeneIdentity) -> dict[str, Json]:

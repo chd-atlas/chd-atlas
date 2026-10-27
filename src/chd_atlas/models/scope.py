@@ -53,7 +53,7 @@ from chd_atlas.identifiers import DiseaseId, OrphaId
 
 # Non-blank after stripping: a value of all whitespace passes a bare
 # `min_length` and renders as nothing, which is worse than an absent field
-# because it looks answered. Mirrors the defect `_cell` in `build/runner.py`
+# because it looks answered. Mirrors the defect `cell_text` in `tables.py`
 # exists to catch on the mirror side.
 _NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 

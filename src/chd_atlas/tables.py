@@ -78,6 +78,32 @@ class TableSchema:
         return {column.name: column.dtype for column in self.columns}
 
 
+def cell_text(value: object) -> str | None:
+    """One mirror cell as text, with blank and whitespace-only treated as absent.
+
+    `read_table` maps the empty string to null, so TBL003 catches `symbol` left
+    empty — and catches nothing when the cell holds a single space. A generated
+    mirror produces exactly that, and the space survived every check to be
+    published as the gene's browse label and its search result: a row rendering
+    as nothing, on a build reporting zero errors, against a `docs/data-api.md`
+    that promises `symbol` is "always a non-empty string you can render and
+    search". Found by adversarial review of #2.
+
+    Stripped rather than reported, because the fallback the caller already has —
+    keep the HGNC id — is better than either publishing the blank or refusing to
+    build over one stray character.
+
+    Here rather than in `build/runner.py`, where it was `_cell` until review
+    (2026-10-27): `build.identity.read_gene_identities` reads the registry's
+    identity columns for `chd-atlas validate` and for the build alike, and the
+    validator cannot import the build's runner, which imports it.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def read_table(
     path: Path, schema: TableSchema
 ) -> tuple[pl.DataFrame | None, list[ValidationIssue]]:

@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from chd_atlas.build.identity import GeneIdentity
+from chd_atlas.build.identity import read_gene_identities
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.corpus import Corpus, load_curation, unexpected_curation_entries
 from chd_atlas.genes import GeneRegistry
@@ -159,36 +159,6 @@ def _symbol_registry(root: Path) -> GeneRegistry | None:
     if frame is None or "hgnc_id" not in frame.columns or "symbol" not in frame.columns:
         return None
     return GeneRegistry(frame.iter_rows(named=True))
-
-
-def _gene_identities(root: Path) -> dict[str, GeneIdentity] | None:
-    """The two ids each `mirrors/genes.tsv` row links by, or None when it cannot be read.
-
-    For GEN004 (R13). Only the columns `identity.identity_id_problems` reads,
-    cleaned as `build/runner.py::_gene_identities` cleans them: a blank or
-    whitespace-only cell is absent. None rather than empty, for the reason
-    `_symbol_registry` gives: an empty mapping would report every published
-    gene's ids missing, burying the one TBL008 that says the file is unread.
-    """
-    path = root / "mirrors" / "genes.tsv"
-    if not path.is_file():
-        return None
-    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
-    if frame is None or any(
-        column not in frame.columns for column in ("hgnc_id", "ensembl_gene", "ncbi_gene")
-    ):
-        return None
-    identities: dict[str, GeneIdentity] = {}
-    for row in frame.select(["hgnc_id", "ensembl_gene", "ncbi_gene"]).iter_rows(named=True):
-        gene = (row["hgnc_id"] or "").strip()
-        if not gene:
-            continue
-        ensembl = (row["ensembl_gene"] or "").strip() or None
-        ncbi = row["ncbi_gene"]
-        identities[gene] = GeneIdentity(
-            ensembl_gene=ensembl, ncbi_gene=int(ncbi) if ncbi is not None else None
-        )
-    return identities
 
 
 def _mirror_gene_labels(root: Path) -> list[tuple[str, str, str]]:
@@ -725,16 +695,21 @@ def validate_repository(root: Path) -> ValidationReport:
         )
         # GEN004 (owner decision 2026-10-26, R13): the identity ids every
         # published gene page links by, read by the rule the build refuses a
-        # page on. In this branch because the published population is the
-        # gate's, computed from the curated scope a failed corpus load empties.
-        # `or None` for the reason the burden call above uses it: a header-only
-        # registry reads as empty, not unreadable, and would report all 119
-        # published genes' ids missing (measured 2026-10-26, burying the one
-        # REF001 `test_an_unreadable_gene_registry_does_not_multiply_by_the_
-        # burden_mirror` holds the report to).
+        # page on, through the reader the build uses (`read_gene_identities`).
+        # In this branch because the published population is the gate's,
+        # computed from the curated scope a failed corpus load empties.
+        #
+        # It passed `_gene_identities(root) or None` until review (2026-10-27),
+        # so that a header-only registry -- which reads, as empty, and which
+        # TBL008 does not report -- would not report all 119 published genes'
+        # ids missing. That also switched the check off: with no curated
+        # assertion to raise REF001, such a registry validated with 0 errors
+        # and `build_site` raised from `external_links` after writing 133
+        # files (measured on a copy of 5f7161b). An empty registry is now one
+        # GEN004 naming the file, from `validate_identity_ids`.
         issues.extend(
             validate_identity_ids(
-                _gene_identities(root) or None, published, str(root / "mirrors" / "genes.tsv")
+                read_gene_identities(root), published, str(root / "mirrors" / "genes.tsv")
             )
         )
 

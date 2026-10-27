@@ -178,14 +178,39 @@ def validate_identity_ids(
     business. A published gene with no registry row at all lacks both ids.
 
     ERROR, because the build refuses on it. A validator reports and never
-    raises. `identities` is `None` when `mirrors/genes.tsv` cannot be read,
-    which TBL008 already reports as an error, so this returns nothing rather
-    than one GEN004 per published gene.
+    raises. `identities` is `build.identity.read_gene_identities`' return, the
+    reader the build uses. `None` is a registry that is absent, unreadable or
+    missing an id column, which TBL008 or TBL001 reports as an error, so this
+    returns nothing rather than one GEN004 per published gene.
+
+    **An empty mapping is not `None`, and is one GEN004** (review,
+    2026-10-27). A header-only `mirrors/genes.tsv` reads, as no rows, and
+    neither TBL008 nor TBL001 fires on it. The caller passed `or None` to
+    spare the report one error per published gene, which switched the check
+    off: measured on a copy with TBX5's assertion moved out (so no REF001
+    either), validate reported 0 errors and the build raised from
+    `external_links` after writing had begun. So an empty registry with
+    published genes is one error naming the file, and the per-gene loop does
+    not run.
     """
     if identities is None:
         return []
+    genes = sorted(published)
+    if not identities and genes:
+        return [
+            ValidationIssue(
+                code="GEN004",
+                severity=Severity.ERROR,
+                location=location,
+                message=(
+                    f"the gene registry holds no gene rows, and {len(genes)} published genes' "
+                    "pages link gnomAD and ClinVar by the ids it carries; the build refuses "
+                    "every such page"
+                ),
+            )
+        ]
     issues: list[ValidationIssue] = []
-    for gene in sorted(published):
+    for gene in genes:
         missing, malformed = identity_id_problems(identities.get(gene, EMPTY_IDENTITY))
         problems = ([f"no {' or '.join(missing)}"] if missing else []) + malformed
         if problems:

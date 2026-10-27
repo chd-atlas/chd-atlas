@@ -2012,7 +2012,7 @@ def _study_label(pmid: str, publications: Mapping[str, Publication]) -> str:
     # `Publication.authors` constrains the *list* to `min_length=1`, not its
     # elements, so a whitespace-only first author passes every validator and
     # renders "    et al. 2026" -- a study heading naming nobody. Same defect
-    # `runner.py::_cell` exists to catch on the mirror side, reaching a page for
+    # `tables.cell_text` exists to catch on the mirror side, reaching a page for
     # the first time here: `authors[0]` was previously read only by `search.py`.
     author = publication.authors[0].strip()
     if not author:
@@ -5571,7 +5571,7 @@ def build_gene_pages(
     `build_landing` take; a gene absent from it reads as its own HGNC id, the
     same registry fallback those two apply.
 
-    `identities` is `runner._gene_identities`' return (D52). Given a mapping,
+    `identities` is `identity.read_gene_identities`' return (D52). Given a mapping,
     every gene must carry the ids its required links are keyed on: a gene
     absent from it gets `EMPTY_IDENTITY`, which `external_links` refuses. `None`
     renders no identity block at all -- the unit suites that do not exercise
