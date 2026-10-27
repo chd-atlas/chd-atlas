@@ -71,8 +71,10 @@ def cohort_families(
     the collections were not disjoint: PMID:34324492's `decipher` cases may
     include DDD participants, and PMID:42230622 names `ddd`. Declared in the
     registry, the overlap merges the two into one family -- two families now,
-    measured on a real build -- with no change here, as this was written to
-    allow, and nobody is told that a reused cohort is independent evidence.
+    measured on a real build -- and nobody is told that a reused cohort is
+    independent evidence. The walk did not change for it; its inputs did: this
+    and `shared_cohorts` each gained the required `cohorts` parameter that
+    carries the declarations, so every caller now hands the registry in.
 
     Sorted on the sorted tuple of study ids. Components come out of a set walk,
     and `encode_json`'s `sort_keys` orders dict keys only, so an array derived
@@ -241,6 +243,19 @@ def gene_concordance(
     one -- the rule `burden_payload` follows, for the same reason: an object
     whose shape varies is a trap for a consumer that reads a field off one gene
     and expects it on the next.
+
+    **Each family entry also carries `members`, every study's own state** (one
+    per study, sorted by study id, on every entry, a singleton's included), by
+    the same `family_state` rule over that study's rows alone. Added with
+    schema 2.19 (review, 2026-10-27) because I3 made a family of two studies,
+    and the browse strip's hover then attributed the family's state to both:
+    measured on a build of 5f7161b, 10 of the 119 browse rows read
+    "PMID:34324492, PMID:42230622: enriched, and survives this study's own
+    correction" where only PMID:34324492's rows survive (PMID:42230622
+    publishes no corrected p), and on 46 one of the two named studies has no
+    row for the gene at all. The family's `state` is the strongest of its
+    members' -- `family_state` over the union is the maximum over the parts --
+    and it stays what the glyph and the tally read.
     """
     by_study: dict[str, list[BurdenRow]] = {}
     for row in rows:
@@ -255,7 +270,11 @@ def gene_concordance(
         member_rows = [row for study in sorted(family) for row in by_study.get(study, ())]
         state = family_state(member_rows)
         states.append(state)
-        entries.append({"studies": sorted(family), "state": state.value})
+        members: list[Json] = [
+            {"study": study, "state": family_state(by_study.get(study, ())).value}
+            for study in sorted(family)
+        ]
+        entries.append({"studies": sorted(family), "state": state.value, "members": members})
 
     return {
         # The denominator, and the reason the tally cannot read as a verdict.

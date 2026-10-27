@@ -15,7 +15,7 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow
-from chd_atlas.build.concordance import cohort_families, evidence_axes
+from chd_atlas.build.concordance import cohort_families, evidence_axes, gene_concordance
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.identity import GeneIdentity
@@ -1609,6 +1609,27 @@ def test_two_studies_on_collections_declared_overlapping_are_named_and_counted_o
         "Audain E et al. 2026",
     ]
 
+    # **A study of the family with no row for this gene is marked** (review,
+    # 2026-10-27): the row is still the family's, its cells come from the other
+    # study alone, and an unmarked label named PMID:34324492 as reporting on a
+    # gene it has no block for -- 46 of 118 matrix pages on a build of 5f7161b.
+    # The families are the corpus's, as the runner derives them, not this
+    # gene's: the gene carries PMID:42230622's row only. A one-study family
+    # with no row is not marked: every cell of its row says `not tested`.
+    lone = _burden_page(
+        tmp_path / "lone",
+        facts_uncurated,
+        rows[:1],
+        publications=_ALL_STUDIES,
+        cohorts=declared,
+        families=(*cohort_families(rows, declared), frozenset({"PMID:40127276"})),
+    )
+    assert "These two studies" not in lone
+    assert re.findall(r'<th scope="row">([^<]*)</th>', lone) == [
+        "Audain E et al. 2021 (no row for this gene) + Audain E et al. 2026",
+        "Sierant MC et al. 2025",
+    ]
+
 
 # `test_the_section_says_what_a_missing_row_means_without_asserting_why` and
 # `test_the_synonymous_negative_control_is_explained_only_where_one_exists` sat
@@ -2706,7 +2727,7 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
     legend = page[page.index("</table>") :]
 
     for css, caption in (
-        ("dot full", "enriched, and survives that study&#x27;s own correction"),
+        ("dot full", "enriched, and a result survives its own study&#x27;s correction"),
         ("dot half", "enriched nominally, or no correction published"),
         ("dot none", "tested, no enrichment detected"),
         ("dot untested", "not tested by that dataset"),
@@ -2716,6 +2737,63 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
         assert pair.group(1).strip() == caption, (
             f"{css!r} is captioned {pair.group(1).strip()!r}, expected {caption!r}"
         )
+
+
+def test_the_strip_hover_names_each_study_of_a_family_with_its_own_state(
+    tmp_path: Path,
+    facts_two: dict[str, GeneFacts],
+    validity_two: dict[str, GeneValidity],
+) -> None:
+    """A glyph is a family's; its hover says what each study in it says (review, 2026-10-27).
+
+    Since I3 one family holds PMID:34324492 and PMID:42230622, and the hover
+    read "<both ids>: <family state>". Measured on a build of 5f7161b: 10
+    browse rows said both survive their own correction where only
+    PMID:34324492's rows do -- PMID:42230622 publishes no corrected p -- and 46
+    gave a state to a study with no row for the gene. Here TBX5's family is
+    `corrected` on PMID:34324492's row alone and PMID:42230622's is `nominal`;
+    GATA4's family is PMID:42230622's `no_enrichment`, and PMID:34324492 has no
+    row for it, so it keeps the `not_tested` sentence. Rendered from the
+    concordance the runner derives, so the payload's `members` and the hover
+    are tested as one.
+    """
+    families = (
+        frozenset({"PMID:34324492", "PMID:42230622"}),
+        frozenset({"PMID:40127276"}),
+    )
+    rows = {
+        TBX5: [_audain2021(gene=TBX5), _burden_row(gene=TBX5)],
+        GATA4: [_burden_row(pvalue=0.6)],
+    }
+    emitter = Emitter(root=tmp_path)
+    build_gene_index_page(
+        facts_two,
+        emitter,
+        symbols={GATA4: "GATA4", TBX5: "TBX5"},
+        validity=validity_two,
+        burden_counts={},
+        concordance={gene: gene_concordance(rows[gene], families) for gene in facts_two},
+        publications=_ALL_STUDIES,
+    )
+    page = _page(tmp_path, "index.html")
+    strips = re.findall(r'<span class="strip">(.*?)<span class="strip-tally">', page)
+
+    one_family = "One cohort family, counted once."
+    assert [re.findall(r'title="([^"]*)"', strip) for strip in strips] == [
+        [
+            "PMID:34324492: enriched, and survives this study&#x27;s own correction. "
+            "PMID:42230622: enriched nominally; not after correction, or no correction "
+            f"published. {one_family}",
+            "PMID:40127276: this dataset did not test this gene",
+        ],
+        [
+            "PMID:34324492: this dataset did not test this gene. PMID:42230622: tested, no "
+            f"enrichment detected. {one_family}",
+            "PMID:40127276: this dataset did not test this gene",
+        ],
+    ]
+    # The glyph and the tally stay the family's: TBX5's family is full.
+    assert re.findall(r'<span class="dot (\w+)"', strips[0]) == ["full", "untested"]
 
 
 # One matrix cell's state, `title`, visible effect and statistic, in order.

@@ -258,7 +258,8 @@ wrong by the next one.
   DECIPHER overlapping (`overlaps_with` on every [`cohorts.json`](#cohortsjson)
   record, `[]` where none), which merged PMID:34324492 and PMID:42230622 into
   one cohort family: `counts.cohort_families` went from 3 to 2, and every
-  `independent_datasets` array from three families to two. It added `file_version`
+  `independent_datasets` array from three families to two, each family gaining
+  `members`, every study's own state. It added `file_version`
   and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
   every [`scope.json`](#scopejson) term, `false` unless curated, and
   `burden_surviving_genes` to `counts`. Additive.
@@ -451,8 +452,11 @@ assumptions are now false — see the next section.
         "enriched": 2,
         "corrected": 1,
         "families": [
-          { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
-          { "studies": ["PMID:40127276"], "state": "corrected" }
+          { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal",
+            "members": [ { "study": "PMID:34324492", "state": "not_tested" },
+                         { "study": "PMID:42230622", "state": "nominal" } ] },
+          { "studies": ["PMID:40127276"], "state": "corrected",
+            "members": [ { "study": "PMID:40127276", "state": "corrected" } ] }
         ]
       }
     }
@@ -598,7 +602,9 @@ assumptions are now false — see the next section.
 The browse page: the same 119 rows `genes/index.json` publishes, rendered as a
 table a person can read and filter. Each row carries the HGNC id and the
 symbol — both linked to that gene's page — `headline_confidence`, the disease
-it is graded for, the gene's `independent_datasets` as a strip,
+it is graded for, the gene's `independent_datasets` as a strip (one glyph
+per cohort family, whose hover names each of the family's studies with that
+study's own state, from `members`),
 `validity_state`, `atlas_curation`, `burden_row_count` and the gene's lesion
 groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
@@ -671,8 +677,8 @@ abridged, and each is documented in full further down.
   "independent_datasets": {
     "tested": 2, "enriched": 2, "corrected": 1,
     "families": [
-      { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
-      { "studies": ["PMID:40127276"], "state": "corrected" }
+      { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal", "members": [ … ] },
+      { "studies": ["PMID:40127276"], "state": "corrected", "members": [ … ] }
     ]
   },
   "expression_profile": { "datasets": [ { "dataset": "E-MTAB-6814", … } ] }
@@ -1154,8 +1160,11 @@ is computed here; see the previous section for why.
   "enriched": 2,
   "corrected": 1,
   "families": [
-    { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
-    { "studies": ["PMID:40127276"], "state": "corrected" }
+    { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal",
+      "members": [ { "study": "PMID:34324492", "state": "not_tested" },
+                   { "study": "PMID:42230622", "state": "nominal" } ] },
+    { "studies": ["PMID:40127276"], "state": "corrected",
+      "members": [ { "study": "PMID:40127276", "state": "corrected" } ] }
   ]
 }
 ```
@@ -1171,9 +1180,18 @@ does or likely does include DDD participants — so there are two families, one 
 them those two studies. A family's `state` reads all of its studies' rows; a
 gene page names the overlap above the two studies' blocks.
 
+**`members` says what each study in the family says on its own** (since
+`2.19`): one entry per study, sorted by study id, on every family, a one-study
+family included, each with that study's `state` by the same rule over its rows
+alone. A family's `state` is the strongest of its members'. It is there because
+a family's state is not every member's: in the example above, TBX5's, the
+family is `nominal` on PMID:42230622's rows, and PMID:34324492 has no row for
+the gene at all. Attribute a state to a study from `members`, never from the
+family; the glyph and the tally are the family's.
+
 | `state` | meaning |
 | --- | --- |
-| `corrected` | enriched, and survives that study's own published correction |
+| `corrected` | enriched, and a row survives its own study's published correction |
 | `nominal` | enriched, but nominal only — or the study published no correction at all |
 | `no_enrichment` | that dataset tested the gene and detected nothing |
 | `not_tested` | that dataset did not test this gene |
@@ -1201,8 +1219,8 @@ agreement, and a synonymous row is never support: it is the negative control.
    them is what turns "nobody looked" into "somebody looked and found nothing".
 
 `families` is always present, ordered deterministically, and **always carries one
-entry per cohort family in the whole corpus** — three today. A gene no study
-reported gets three `not_tested` entries, not an empty array; `[]` occurs only if
+entry per cohort family in the whole corpus** — two today. A gene no study
+reported gets two `not_tested` entries, not an empty array; `[]` occurs only if
 the corpus has no burden data at all. That is deliberate: every gene shows the
 same slots, so a dataset that did not test this gene is visible as an absence
 rather than as a shorter list.
@@ -1580,7 +1598,10 @@ atlas computes none of them." — and a link to
 [`methods.html#rare-variants`](#methodshtml), *How to read these results*. The
 line is scoped to the study
 tables because the evidence matrix beneath it shows tallies the atlas derives
-(how many rows a cell summarises). A `corrected` or `nominal` matrix cell also
+(how many rows a cell summarises). A matrix row is a cohort family and names its
+studies; in a family of two or more, a study with no row for the gene is
+marked "(no row for this gene)", since the family's cells cannot say which
+study they come from. A `corrected` or `nominal` matrix cell also
 names one row: the most significant of the rows that give the cell that state —
 the surviving rows under `corrected`, the supporting rows under `nominal` — with
 its effect and one p-value. An unbounded odds ratio keeps its lower bound there,

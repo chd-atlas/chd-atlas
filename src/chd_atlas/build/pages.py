@@ -2543,8 +2543,9 @@ def _strip_notes(
     """Each curated `Publication.summary_caveat` of a study the strips name, once.
 
     The strips summarise every study's result for every gene -- PMID:34324492
-    sits in a family on all of them, and "enriched, and survives that study's
-    own correction" is a stronger summary than any count -- so the caveat the
+    sits in a family on all of them, and a hover reading "PMID:34324492:
+    enriched, and survives this study's own correction" is a stronger summary
+    than any count -- so the caveat the
     gene page's card prints beside that study's counts is printed here too,
     under the legend, in study-id order. The page has no study blocks to link
     to, so each note names its study by label and PMID.
@@ -2579,19 +2580,30 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
     **Fill encodes the correction**, so a single glyph carries two facts a
     reader would otherwise need two columns for: that a dataset showed
     enrichment, and whether that survived the study's own correction. TAB2 is
-    the case it was designed against -- three families all pointing the same
-    way, of which only one survives correction.
+    the case it was designed against -- every family pointing the same way,
+    and fewer surviving correction: it read "3 of 3 tested · 1 corrected"
+    over three families until owner decision 2026-10-27 (I3) made two of its
+    three studies one family, and reads "2 of 2 tested · 1 corrected" since.
 
     The tally counts *tested* families and says both numbers, because either
-    alone misleads. `3 of 3` hides that two do not survive correction;
+    alone misleads. `2 of 2` hides that one does not survive correction;
     `1 corrected` hides that PMID:42230622 publishes no correction on any row
     and so can never earn one.
 
     A family that did not test the gene gets its own glyph and is excluded from
     the denominator. That is not presentation: KDM6A is ClinGen definitive and
-    shows nothing in either dataset that tested it, and "0 of 3" beside a green
-    chip reads as the data contradicting the classification, where "0 of 2
-    tested" reads as what it is.
+    shows nothing in either dataset that tested it, and a denominator that also
+    counted a family which never looked would add one more dataset to those
+    finding nothing, beside a green chip. KLF13, which one of the two families
+    tested, reads "1 of 1 tested" (measured on a build of 5f7161b).
+
+    **The hover names each study with its own state** (`members`, review
+    2026-10-27). The glyph and the tally are the family's; the `title` is
+    where a reader asks which study said what, and it built "<studies>:
+    <family state>" until then, which attributed a family's state to every
+    study in it -- "enriched, and survives this study's own correction" of a
+    study that publishes no corrected p, and a state at all of a study with no
+    row for the gene. A family of two or more says it is one, counted once.
     """
     families = concordance.get("families") or ()
     if not isinstance(families, Sequence):
@@ -2601,9 +2613,16 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
         if not isinstance(entry, Mapping):
             continue
         state = str(entry.get("state", ""))
-        studies = entry.get("studies") or ()
-        names = ", ".join(str(study) for study in studies) if isinstance(studies, Sequence) else ""
-        title = f"{names}: {_STATE_TITLE.get(state, state)}"
+        members = entry.get("members") or ()
+        said = [
+            f"{member.get('study', '')}: "
+            f"{_STATE_TITLE.get(str(member.get('state', '')), str(member.get('state', '')))}"
+            for member in (members if isinstance(members, Sequence) else ())
+            if isinstance(member, Mapping)
+        ]
+        # ". " between studies, not "; ": the `nominal` state's own sentence
+        # carries a semicolon.
+        title = ". ".join(said) + (". One cohort family, counted once." if len(said) > 1 else "")
         glyph = _STATE_GLYPH.get(state, "untested")
         body = "&ndash;" if glyph == "untested" else ""
         glyphs.append(f'<span class="dot {glyph}" title="{html.escape(title)}">{body}</span>')
@@ -2653,6 +2672,15 @@ def _evidence_matrix(
     its state is not true of. Where a cell holds more than one row the count is
     stated, so a reader knows the cell summarises and the table below is the
     record.
+
+    **In a family of two or more studies, a study with no row for this gene is
+    marked in the row's label** ("(no row for this gene)"), because the
+    family's cells cannot say which of its studies they come from. Until
+    review (2026-10-27) the label joined every member's name, so 46 of the 118
+    pages with a matrix (measured on a build of 5f7161b) named a study as part
+    of the row whose cells it contributes nothing to, and which has no block
+    on the page. A one-study family is not marked: its cells already say
+    `not tested` in every column.
     """
     if not rows or not families or not axes:
         return ""
@@ -2671,7 +2699,11 @@ def _evidence_matrix(
     body: list[str] = []
     for family in families:
         members = [row for study in sorted(family) for row in by_study.get(study, ())]
-        label = " + ".join(_study_label(study, publications) for study in sorted(family))
+        label = " + ".join(
+            _study_label(study, publications)
+            + (" (no row for this gene)" if len(family) > 1 and study not in by_study else "")
+            for study in sorted(family)
+        )
         cells: list[str] = []
         for variant, comparator in axes:
             in_cell = [

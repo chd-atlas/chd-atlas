@@ -611,6 +611,26 @@ def test_the_independent_datasets_section_states_the_shape_the_build_publishes(
     assert "never `len(families)`" in section
     assert "KDM6A causes Kabuki syndrome" in section
 
+    # **How many families, read off the build** (review, 2026-10-27). The
+    # section said "three today" and "three `not_tested` entries" for a release
+    # after I3 made them two: nothing here read the count, only the states, the
+    # denominator and the obligations, so a sentence stating a number passed
+    # beside a build publishing another.
+    [count] = {len(gene["families"]) for gene in published}
+    assert f"one entry per cohort family in the whole corpus** — {_WORDS[count]} today" in section
+    assert f"A gene no study reported gets {_WORDS[count]} `not_tested` entries" in section
+
+    # `members` (2.19): every study of the family, in its order, and the family's
+    # state the strongest of theirs -- the claim the section makes, on what ships.
+    rank = ["not_tested", "no_enrichment", "nominal", "corrected"]
+    for gene in published:
+        for family in gene["families"]:
+            assert [member["study"] for member in family["members"]] == family["studies"]
+            assert family["state"] == max(
+                (member["state"] for member in family["members"]), key=rank.index
+            )
+    assert "Attribute a state to a study from `members`, never from the family" in section
+
 
 def test_the_omics_section_documents_profiles_stratified_top_not_ranked_by_significance() -> None:
     """16a: `top` was documented as "ranked by significance" with no

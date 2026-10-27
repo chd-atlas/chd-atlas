@@ -441,6 +441,10 @@ from chd_atlas.corpus import Corpus
 #   (`ddd` and `decipher`), `[]` elsewhere. A population change too: the two
 #   studies citing them become one cohort family, so `counts.cohort_families`
 #   and every bundle's `independent_datasets.families` go from 3 to 2.
+# * Every `independent_datasets.families` entry (bundle and `genes/index.json`
+#   row) gains `members`: one `{study, state}` per study in the family, sorted
+#   by study, each study's own state by the family rule over its rows alone. A
+#   family of two studies made the family's state no longer every member's.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

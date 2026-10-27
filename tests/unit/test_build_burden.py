@@ -213,10 +213,12 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
 
     - **Families are not studies.** The two published genes' rows name *eight*
       studies, and the fixture puts them in **one** family, so `len({row.study})`
-      gives 8 where the answer is 1. They are equal over the committed corpus --
-      three studies on disjoint collections -- which is exactly why a fixture has
-      to separate them: the day a fourth study reuses DDD or PCGC, a study count
-      would tell a reader that a reused cohort is independent evidence.
+      gives 8 where the answer is 1. They were equal over the committed corpus --
+      three studies, three families -- until owner decision 2026-10-27 (I3)
+      declared DDD and DECIPHER overlapping and made two of the three studies one
+      family: 2 families for 3 studies since. A fixture separates them by more
+      than one, so a study count cannot pass for a family count, which would
+      tell a reader that a reused cohort is independent evidence.
 
     - **Genes are those with rows, not the published population.** `HGNC:3` is
       published and has none, so `len(published)` gives 3 where the answer is 2.

@@ -839,7 +839,7 @@ def test_the_front_page_teaches_the_glyphs_before_a_reader_meets_them(tmp_path: 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
 
     for css, caption in (
-        ("dot full", "enriched, and survives that study&#x27;s own correction"),
+        ("dot full", "enriched, and a result survives its own study&#x27;s correction"),
         ("dot half", "enriched nominally, or no correction published"),
         ("dot none", "tested, no enrichment detected"),
         ("dot untested", "not tested by that dataset"),

@@ -1,12 +1,14 @@
 # tests/unit/test_build_concordance.py
 """Whether independent datasets agree -- and what makes two datasets independent.
 
-Every guard here is latent on the committed corpus, whose three studies draw on
-disjoint collections and therefore form three singleton families. They are driven
-by fixtures rather than left until the day a fourth study reuses a cohort,
-because a feature nobody exercised is a feature that breaks the first time it
-matters -- the same reason `shared_cohorts` was tested before a second study
-existed.
+The committed corpus exercises few of these guards: its three studies cite
+disjoint collection ids and form two families, PMID:34324492 and PMID:42230622
+merged by the overlap the registry declares between DECIPHER and DDD (owner
+decision 2026-10-27, I3), and PMID:40127276 alone. This read "three singleton
+families" until then. The guards are driven by fixtures rather than left until
+the day a study reuses a cohort, because a feature nobody exercised is a feature
+that breaks the first time it matters -- the same reason `shared_cohorts` was
+tested before a second study existed.
 """
 
 from __future__ import annotations
@@ -375,9 +377,21 @@ def test_the_tally_counts_tested_families_and_reports_both_statistics() -> None:
         "enriched": 3,
         "corrected": 1,
         "families": [
-            {"studies": ["PMID:1"], "state": "nominal"},
-            {"studies": ["PMID:2"], "state": "nominal"},
-            {"studies": ["PMID:3"], "state": "corrected"},
+            {
+                "studies": ["PMID:1"],
+                "state": "nominal",
+                "members": [{"study": "PMID:1", "state": "nominal"}],
+            },
+            {
+                "studies": ["PMID:2"],
+                "state": "nominal",
+                "members": [{"study": "PMID:2", "state": "nominal"}],
+            },
+            {
+                "studies": ["PMID:3"],
+                "state": "corrected",
+                "members": [{"study": "PMID:3", "state": "corrected"}],
+            },
         ],
     }
 
@@ -426,8 +440,16 @@ def test_a_gene_no_study_reported_gets_a_not_tested_entry_per_family() -> None:
         "enriched": 0,
         "corrected": 0,
         "families": [
-            {"studies": ["PMID:1"], "state": "not_tested"},
-            {"studies": ["PMID:2"], "state": "not_tested"},
+            {
+                "studies": ["PMID:1"],
+                "state": "not_tested",
+                "members": [{"study": "PMID:1", "state": "not_tested"}],
+            },
+            {
+                "studies": ["PMID:2"],
+                "state": "not_tested",
+                "members": [{"study": "PMID:2", "state": "not_tested"}],
+            },
         ],
     }
 
@@ -441,12 +463,21 @@ def test_a_gene_no_study_reported_gets_a_not_tested_entry_per_family() -> None:
 
 
 def test_a_family_of_two_studies_is_evaluated_over_both_their_rows() -> None:
-    """One dataset, two papers: the family speaks once, with everything it has.
+    """One dataset, several papers: the family speaks once, with everything it has.
 
     Otherwise the merge in `cohort_families` would be cosmetic -- two studies
     would collapse into one row of the strip while only one of them was read.
+
+    **And each member keeps its own state** (`members`, review 2026-10-27),
+    because the strip's hover names every study, and it attributed the
+    family's state to each: on a build of 5f7161b, 10 browse rows said
+    PMID:42230622 survives its own correction, a study that publishes no
+    corrected p, and 46 gave a state to a study with no row for the gene. Here
+    the family is `corrected` on PMID:2's row alone; PMID:1 looked and found
+    nothing, and PMID:3 has no row and is `not_tested`, the state a study that
+    did not report on the gene keeps.
     """
-    families = (frozenset({"PMID:1", "PMID:2"}),)
+    families = (frozenset({"PMID:1", "PMID:2", "PMID:3"}),)
     rows = [
         _row(study="PMID:1", pvalue=0.9),
         _row(study="PMID:2", pvalue=0.001, pvalue_adjusted=0.01, pvalue_adjustment="bonferroni"),
@@ -458,7 +489,17 @@ def test_a_family_of_two_studies_is_evaluated_over_both_their_rows() -> None:
         "tested": 1,
         "enriched": 1,
         "corrected": 1,
-        "families": [{"studies": ["PMID:1", "PMID:2"], "state": "corrected"}],
+        "families": [
+            {
+                "studies": ["PMID:1", "PMID:2", "PMID:3"],
+                "state": "corrected",
+                "members": [
+                    {"study": "PMID:1", "state": "no_enrichment"},
+                    {"study": "PMID:2", "state": "corrected"},
+                    {"study": "PMID:3", "state": "not_tested"},
+                ],
+            }
+        ],
     }
 
 
