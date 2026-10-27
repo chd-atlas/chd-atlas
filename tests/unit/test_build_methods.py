@@ -728,8 +728,8 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         '<h2 id="cohorts">Cohorts</h2>'
         "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
         "its curator recorded. A row may not name every collection its study drew on: the "
-        "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
-        "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
+        "rows for PMID:34324492 name 11 of the 189 case sources its S2 Table lists, and those "
+        "11 hold 6,211 of its 7,958 cases. Two studies that name the same collection describe "
         "partly the same people; two that name collections this registry records as "
         "overlapping may; and two that name neither may still share people this registry "
         "does not record. The same records are published as "
@@ -752,7 +752,7 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
 
     **It claimed a completeness the registry does not have** until 2026-10-26:
     "every sample collection a rare-variant study in this atlas draws on". The
-    rows for PMID:34324492 name 4 collections, while that study's S2 Table
+    rows for PMID:34324492 named 4 collections, while that study's S2 Table
     lists 189 case sources holding 7,958 cases, of which those 4 hold 4,242
     (counted from the supplement's `s007.xlsx`, sheet "S2 Table": 189 source
     rows summing to its "N" row, 7,958). A reader told the list is complete
@@ -761,13 +761,20 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     every collection a row names -- and that a row may not name all its study
     drew on.
 
+    **11 and 6,211 since owner decision R12 (2026-10-27)**, which registered
+    the seven sources S2 identifies by PMID with 50 or more cases. Each
+    description opens with S2's own count for its source, and the literal
+    below is those counts as read from S2 that day -- so a count mistyped in
+    a description, or two counts swapped between sources, fails here, which
+    the sum alone would not catch for a swap.
+
     Every figure in the sentence that the repository can check is checked:
 
     * "every sample collection a rare-variant row ... names" describes the list
       both ways: the registry is exactly the ids the mirror's rows cite;
-    * the 4 is that study's distinct case cohorts in the mirror;
-    * 4,242 is the sum of the counts those 4 descriptions open with (1,615,
-      1,221, 629 and 777), and 7,958 is the total `taa_cases` states.
+    * the 11 is that study's distinct case cohorts in the mirror;
+    * 6,211 is the sum of the counts those 11 descriptions open with, and
+      7,958 is the total `taa_cases` states.
 
     189 is the supplement's alone; nothing committed carries it.
     """
@@ -779,7 +786,26 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     )
     opening = [re.match(r"([\d,]+) ", registry[cohort].description) for cohort in named]
     assert all(opening), f"a description for {named} does not open with its case count"
-    held = sum(int(match.group(1).replace(",", "")) for match in opening if match)
+    counts = {
+        cohort: int(match.group(1).replace(",", ""))
+        for cohort, match in zip(named, opening, strict=True)
+        if match
+    }
+    # S2 Table's "Number of Individuals" for each source, read from `s007.xlsx`.
+    assert counts == {
+        "decipher": 1221,
+        "isca": 629,
+        "pmid18535492_22349727_cases": 63,
+        "pmid22318994_cases": 742,
+        "pmid22912587_cases": 340,
+        "pmid22929023_cases": 123,
+        "pmid22939634_cases": 432,
+        "pmid22969434_cases": 178,
+        "pmid26655555_cases": 91,
+        "signature": 1615,
+        "taa_cases": 777,
+    }
+    held = sum(counts.values())
     assert "777 of its 7,958 cases" in registry["taa_cases"].description
 
     intro = re.search(r'<h2 id="cohorts">Cohorts</h2><p>(.*?)</p>', real_page, re.S)
@@ -788,7 +814,7 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         f"the rows for PMID:34324492 name {len(named)} of the 189 case sources its S2 Table "
         f"lists, and those {len(named)} hold {held:,} of its 7,958 cases."
     ) in intro.group(1)
-    assert (len(named), held) == (4, 4242)
+    assert (len(named), held) == (11, 6211)
 
 
 def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -> None:

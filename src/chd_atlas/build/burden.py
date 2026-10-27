@@ -594,9 +594,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     from a row without those sentences is computing something else.
 
     **The whole registry is published, not only the ids the published rows
-    cite.** The two sets are identical today -- 13 and 13 -- and identical
-    figures are one figure to every test (CLAUDE.md section 4.30), so this says
-    which one it is: this is a *resolution table*, and a table that omitted an id
+    cite.** The two sets were identical when measured -- 20 and 20 on
+    2026-10-27 -- and identical figures are one figure to every test (CLAUDE.md
+    section 4.30), so this says which one it is: this is a *resolution table*,
+    and a table that omitted an id
     some row cites would 404 exactly where a reader needed it. The direction is
     also the safe one -- `validate_burden_references` (BUR009) already refuses a
     row citing a cohort this file does not carry, so publishing the registry
@@ -606,10 +607,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     Sorted by id: `encode_json`'s `sort_keys` orders dict keys and never list
     elements, so an unsorted array here checksums differently between two builds
     of one commit. `url` is emitted as `null` rather than omitted where a
-    collection has no public page (4 of the 13), because an object whose shape
-    varies is a trap for a consumer reading a field off one record and expecting
-    it on the next -- the rule `admission_provenance` and `burden_payload`
-    already follow.
+    collection has no public page (11 of the 20 on 2026-10-27), because an
+    object whose shape varies is a trap for a consumer reading a field off one
+    record and expecting it on the next -- the rule `admission_provenance` and
+    `burden_payload` already follow.
     """
     emitter.write_json(
         COHORTS,

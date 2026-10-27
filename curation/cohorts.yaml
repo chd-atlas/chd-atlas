@@ -109,6 +109,62 @@ cohorts:
     description: >-
       629 CHD cases from the ISCA consortium's shared clinical array data.
     url: https://clinicalgenome.org/
+  # Owner decision 2026-10-26 (R12): the seven case sources PMID:34324492's S2
+  # Table identifies by PMID and credits with 50 or more cases, 1,969 in all,
+  # registered so that a study curated later which names one of these series
+  # is seen to share people with PMID:34324492 (`shared_cohorts`). Read from
+  # the supplement's `s007.xlsx` (sheet "S2 Table") on 2026-10-27.
+  #
+  # Each description states what S2 states of the series -- its case count,
+  # its phenotype (CHD for all seven) and its platform, quoted -- and that S2
+  # lists it, and nothing else: no claim about the series was checked against
+  # the paper S2 cites for it. S2's notes column is blank for all seven, so
+  # S2 suggests no overlap between one of them and another registered cohort,
+  # and none is declared. No url: a series has no home page of its own, and
+  # the cohort list's link reads "website". The ids are the cited PMIDs; the
+  # one S2 cites under two PMIDs carries both.
+  - id: pmid22318994_cases
+    name: CHD case series of PMID:22318994
+    description: >-
+      742 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+  - id: pmid22939634_cases
+    name: CHD case series of PMID:22939634
+    description: >-
+      432 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix 6.0 array, Agilent CGH 44k/105K.
+  - id: pmid22912587_cases
+    name: CHD case series of PMID:22912587
+    description: >-
+      340 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+  - id: pmid22969434_cases
+    name: CHD case series of PMID:22969434
+    description: >-
+      178 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+  - id: pmid22929023_cases
+    name: CHD case series of PMID:22929023
+    description: >-
+      123 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as CGH
+      array, Agilent CGH 44k/105k/180k oligo array.
+  - id: pmid26655555_cases
+    name: CHD case series of PMID:26655555
+    description: >-
+      91 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set and cited there as Table S2 of
+      PMID:26655555; S2 gives the platform as Affymetrix Array 6.0.
+  - id: pmid18535492_22349727_cases
+    name: CHD case series of PMID:18535492 and PMID:22349727
+    description: >-
+      63 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as one source of its CNV case set and cited there under both
+      PMIDs; S2 gives the platform as CGH array.
   # Rewritten 2026-10-26. It published a curator's instruction ("and the page
   # must say so"), credited the study with a scope judgement it does not make,
   # and gave a row's case set as 7,958 beside rows that count fewer. Each clause

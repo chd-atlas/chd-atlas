@@ -51,7 +51,7 @@ What the build produced, and a checksum for every file in it.
   "counts": {
     "assertions": 1, "burden_combined": 108, "burden_rows": 1210,
     "burden_surviving_genes": 32, "cohort_families": 2,
-    "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
+    "cohorts": 20, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
   },
@@ -262,7 +262,11 @@ wrong by the next one.
   `members`, every study's own state. It added `file_version`
   and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
   every [`scope.json`](#scopejson) term, `false` unless curated, and
-  `burden_surviving_genes` to `counts`. Additive.
+  `burden_surviving_genes` to `counts`. It registered seven more case
+  collections, the series PMID:34324492's S2 Table identifies by PMID with 50
+  or more cases, and that study's rows name them in `case_cohorts`:
+  `counts.cohorts` went from 13 to 20, and `counts.cohort_families` did not
+  move, since no other study names any of them. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -2176,8 +2180,8 @@ working with numbers stripped of the sentences that say what they count.
   contribution is
   enriched for **syndromic** CHD; `gnomad_controls` is not screened for
   congenital heart disease. None of these is expressible as a column.
-- `url` is the collection's public page, or **`null`** where it has none (4 of
-  the 13 today). Always present, never omitted.
+- `url` is the collection's public page, or **`null`** where it has none (11
+  of the 20 today). Always present, never omitted.
 - `overlaps_with` (since `2.19`) lists, sorted, the collections this one is
   declared to share people with although no row names both — `ddd` and
   `decipher` list each other — and is `[]` elsewhere. Declared on both entries,
@@ -2187,6 +2191,15 @@ working with numbers stripped of the sentences that say what they count.
 The array is sorted by `id`. There is no `role` field: a collection is cases in
 one study and could be controls in another, so which it was is a property of the
 burden row that cites it — the column it appears in — not of the collection.
+
+**A row may not name every collection its study drew on.** PMID:34324492's S2
+Table lists case sources that no row names, and
+[`methods.html#cohorts`](#methodshtml) states how many and how many of its cases
+they hold. So two studies that name no collection in common, and none this file
+records as overlapping, may still share people, and `cohort_families` cannot see
+it. The seven `CHD case series of PMID:…` records, added in `2.19`, are the
+sources that table identifies by PMID with 50 or more cases; each description
+says what the table says of its series and nothing more.
 
 `counts.cohorts` in `manifest.json` is the length of this array. It is **not**
 `counts.cohort_families`, which counts how many independent collections the

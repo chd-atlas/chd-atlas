@@ -74,13 +74,15 @@ overlap machinery cannot see.
 The CNV part does not have that problem, and the difference is the point. S2
 Table lists 189 case sources for 7,958 cases (measured 2026-10-26; this
 paragraph said "~190 sources are mostly single-case reports plus four
-collections" until then): the four collections registered as this study's case
-cohorts hold 4,242, 105 single-case sources hold 105, 69 sources of 2 to 49
-cases hold 471, and 11 unregistered sources of 50 or more hold 3,140. None is a
-CNV study this atlas carries, so aggregating them puts no deletion in the
-mirror twice. The de novo part aggregates two studies this atlas intends to
-carry individually. What the unregistered sources cost is visibility, not a
-double count; see the comment on `CASE_COHORTS`.
+collections" until then). The 11 registered as this study's case cohorts hold
+6,211 of them (2026-10-27, owner decision R12: the four it named before, 4,242,
+and the seven S2 identifies by PMID with 50 or more cases, 1,969); of the
+other 178, 105 single-case sources hold 105, 69 sources of 2 to 49 cases hold
+471, and 4 sources of 50 or more hold 1,171. None is a CNV study this atlas
+carries, so aggregating them puts no deletion in the mirror twice. The de novo
+part aggregates two studies this atlas intends to carry individually. What the
+unregistered sources cost is visibility, not a double count; see the comment
+on `CASE_COHORTS`.
 
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
@@ -117,14 +119,24 @@ from convert_burden import gene_symbols, read_sheet
 STUDY: Final = "PMID:34324492"
 SOURCE: Final = "audain2021_s6"
 
-# S2/S3 Tables. Only four of S2's 189 case sources are registered, and they hold
-# 4,242 of its 7,958 cases (53%). This comment called the rest "~190
-# single-case PMID sources" until 2026-10-26; measured from S2 that day, 105 of
-# the other 185 are single cases (105 individuals), 69 hold 2 to 49 (471 in all)
-# and 11 hold 50 or more (3,140 in all). The unregistered sources are named on
-# no row, so `shared_cohorts` cannot report an overlap between one of them and
-# a study curated later: check S2 before curating another CHD cohort.
-CASE_COHORTS: Final = "decipher;isca;signature;taa_cases"
+# S2/S3 Tables. 11 of S2's 189 case sources are registered, and they hold 6,211
+# of its 7,958 cases (78%). This comment called the rest "~190 single-case PMID
+# sources" until 2026-10-26, when four were registered, holding 4,242 (53%).
+# Owner decision R12 (2026-10-27) added the seven S2 identifies by PMID with 50
+# or more cases: 742 + 432 + 340 + 178 + 123 + 91 + 63 = 1,969, read from S2's
+# own counts and recorded in each `curation/cohorts.yaml` description. Of the
+# 178 still unregistered, measured from S2 that day, 105 are single cases (105
+# individuals), 69 hold 2 to 49 (471 in all) and 4 hold 50 or more (1,171 in
+# all); those 4 are the S2 sources labelled by a collection name rather than a
+# publication, which the owner decided are not registered. The unregistered
+# sources are named on no row, so `shared_cohorts` cannot report an overlap
+# between one of them and a study curated later: check S2 before curating
+# another CHD cohort. Alphabetical, as before.
+CASE_COHORTS: Final = (
+    "decipher;isca;pmid18535492_22349727_cases;pmid22318994_cases;pmid22912587_cases;"
+    "pmid22929023_cases;pmid22939634_cases;pmid22969434_cases;pmid26655555_cases;"
+    "signature;taa_cases"
+)
 CONTROL_COHORTS: Final = "gain_controls;ottawa_controls;wtccc_controls"
 
 # The Methods' filtered set, on which the permutation test was run; see

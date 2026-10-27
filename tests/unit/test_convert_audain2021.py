@@ -62,7 +62,23 @@ def test_the_row_the_converter_builds_carries_the_current_note_and_denominators(
     assert [row["gene"] for row in rows] == ["HGNC:11592"]
     (row,) = rows
     assert row["method_note"] == _METHOD_NOTE
-    assert "taa_cases" in row["case_cohorts"].split(";")
+    # Every case source registered for this study, as a literal: the four S2
+    # collections, then the seven S2 series identified by PMID with 50 or more
+    # cases (owner decision R12, 2026-10-27). The committed mirror reads the
+    # same, but cannot see a converter that dropped one and was not re-run.
+    assert row["case_cohorts"].split(";") == [
+        "decipher",
+        "isca",
+        "pmid18535492_22349727_cases",
+        "pmid22318994_cases",
+        "pmid22912587_cases",
+        "pmid22929023_cases",
+        "pmid22939634_cases",
+        "pmid22969434_cases",
+        "pmid26655555_cases",
+        "signature",
+        "taa_cases",
+    ]
     # Literals, not `N_CASES`/`N_CONTROLS`: a test reading the constants
     # compares the converter to itself.
     assert (row["n_cases"], row["n_controls"]) == ("6746", "14024")
