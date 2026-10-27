@@ -163,9 +163,10 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
         # impossible. It is a subset invariant and nothing more. It cannot see
         # the wrong band of S8 Table read in place of "only CHD": every band's
         # `case` is within it (measured 2026-10-27, "only CHD" plus "only TAA"
-        # is "CHD+TAA", which is S6's `case`, for all 528 genes). What catches
-        # a misread band is `scripts/convert_audain2021.py`, which locates the
-        # column from S8's header rows and refuses a sheet where it cannot.
+        # is "CHD+TAA", which is S6's `case`, for all 528 genes, a blank read
+        # as none). What catches a misread band is
+        # `scripts/convert_audain2021.py`, which locates the column from S8's
+        # header rows and refuses a sheet where it cannot.
         for carriers, total in (
             ("n_case_carriers", "n_cases"),
             ("n_control_carriers", "n_controls"),

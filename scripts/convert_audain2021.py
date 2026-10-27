@@ -121,8 +121,10 @@ found exactly once is refused. Nothing downstream could catch a misread band:
 BUR003 holds `n_chd_case_carriers` to at most `n_case_carriers`, and every
 band's `case` is within that bound -- measured 2026-10-27, "only CHD" plus
 "only TAA" equals "CHD+TAA" for all 528 genes, a blank read as none -- so the
-TAA-only or the combined count read in its place validated clean and
-published as the CHD-only one.
+TAA-only or the combined count read in its place validated clean. The review
+re-ran the converter both ways (2026-10-27): 0 errors each time, and read from
+the TAA-only band, four cards said S8 counts 0 of the carriers among its CHD
+cases.
 
 DENOMINATORS
 ------------
