@@ -604,9 +604,11 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "support, and a forest plot draws a surviving row filled. Where a study is by an "
         "author of this atlas, its block says so.",
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-        "studies draw on the same sample collection they describe partly the same people, "
-        "so combining their results would count those people twice; a gene page names any "
-        "sample collection its studies share, as this atlas has recorded them.",
+        "studies draw on the same sample collection they describe partly the same people, and "
+        "where they draw on collections this atlas records as overlapping they may, so "
+        "combining their results would count those people twice; a gene page names any "
+        "sample collection its studies share, and any overlap between theirs, as this atlas "
+        "has recorded them.",
         "In each study's table, <code>cases</code> and <code>controls</code> each show "
         "<em>observed / total</em> (for a row tested against a mutation model, "
         "<code>controls</code> is instead the count that model expected), and <strong>every "

@@ -364,11 +364,15 @@ _RARE_VARIANTS: Final = (
     "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
     "support, and a forest plot draws a surviving row filled. Where a study is by an "
     "author of this atlas, its block says so.</p>"
-    # was pages._POOLING_NOTICE in full
+    # was pages._POOLING_NOTICE in full. The overlap clauses since owner
+    # decision 2026-10-27 (I3): DECIPHER and DDD are declared overlapping
+    # (`Cohort.overlaps_with`), and the page's notice names such a pair.
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-    "studies draw on the same sample collection they describe partly the same people, "
-    "so combining their results would count those people twice; a gene page names any "
-    "sample collection its studies share, as this atlas has recorded them.</p>"
+    "studies draw on the same sample collection they describe partly the same people, and "
+    "where they draw on collections this atlas records as overlapping they may, so "
+    "combining their results would count those people twice; a gene page names any "
+    "sample collection its studies share, and any overlap between theirs, as this atlas "
+    "has recorded them.</p>"
     # was pages._BURDEN_PREAMBLE; "In each study's table," anchors what it describes
     "<p>In each study's table, <code>cases</code> and <code>controls</code> each show "
     "<em>observed / total</em> (for a row tested against a mutation model, "

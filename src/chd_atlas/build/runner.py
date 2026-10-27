@@ -417,7 +417,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # genes would show different numbers of family slots and an untested dataset
     # would stop looking like one.
     all_burden_rows = [row for rows in burden.values() for row in rows]
-    families = cohort_families(all_burden_rows)
+    families = cohort_families(all_burden_rows, cohort_registry(corpus.cohorts))
     axes = evidence_axes(all_burden_rows)
     # One census, two consumers: the front page states it in prose and the
     # manifest publishes it as `counts`. Derived here rather than in either, so

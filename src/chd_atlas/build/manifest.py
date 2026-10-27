@@ -437,6 +437,10 @@ from chd_atlas.corpus import Corpus
 #   surviving its own study's correction, the genes whose card lists one.
 # * Every `sources.json` entry gains `file_version` and `file_date`, what the
 #   file states about itself, `null` but for the two Orphadata products.
+# * Every `cohorts.json` record gains `overlaps_with`, the declared overlaps
+#   (`ddd` and `decipher`), `[]` elsewhere. A population change too: the two
+#   studies citing them become one cohort family, so `counts.cohort_families`
+#   and every bundle's `independent_datasets.families` go from 3 to 2.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

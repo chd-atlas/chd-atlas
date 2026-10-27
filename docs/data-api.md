@@ -50,7 +50,7 @@ What the build produced, and a checksum for every file in it.
 {
   "counts": {
     "assertions": 1, "burden_combined": 108, "burden_rows": 1210,
-    "burden_surviving_genes": 32, "cohort_families": 3,
+    "burden_surviving_genes": 32, "cohort_families": 2,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
@@ -254,7 +254,11 @@ wrong by the next one.
   `correction_genes` and `genome_wide_threshold` to every record of
   [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
   ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
-  `null`: its 248 counted panel genes, not comparisons. It added `file_version`
+  `null`: its 248 counted panel genes, not comparisons. It declared DDD and
+  DECIPHER overlapping (`overlaps_with` on every [`cohorts.json`](#cohortsjson)
+  record, `[]` where none), which merged PMID:34324492 and PMID:42230622 into
+  one cohort family: `counts.cohort_families` went from 3 to 2, and every
+  `independent_datasets` array from three families to two. It added `file_version`
   and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
   every [`scope.json`](#scopejson) term, `false` unless curated, and
   `burden_surviving_genes` to `counts`. Additive.
@@ -447,9 +451,8 @@ assumptions are now false — see the next section.
         "enriched": 2,
         "corrected": 1,
         "families": [
-          { "studies": ["PMID:34324492"], "state": "not_tested" },
-          { "studies": ["PMID:40127276"], "state": "corrected" },
-          { "studies": ["PMID:42230622"], "state": "nominal" }
+          { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
+          { "studies": ["PMID:40127276"], "state": "corrected" }
         ]
       }
     }
@@ -668,9 +671,8 @@ abridged, and each is documented in full further down.
   "independent_datasets": {
     "tested": 2, "enriched": 2, "corrected": 1,
     "families": [
-      { "studies": ["PMID:34324492"], "state": "not_tested" },
-      { "studies": ["PMID:40127276"], "state": "corrected" },
-      { "studies": ["PMID:42230622"], "state": "nominal" }
+      { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
+      { "studies": ["PMID:40127276"], "state": "corrected" }
     ]
   },
   "expression_profile": { "datasets": [ { "dataset": "E-MTAB-6814", … } ] }
@@ -1152,19 +1154,22 @@ is computed here; see the previous section for why.
   "enriched": 2,
   "corrected": 1,
   "families": [
-    { "studies": ["PMID:34324492"], "state": "not_tested" },
-    { "studies": ["PMID:40127276"], "state": "corrected" },
-    { "studies": ["PMID:42230622"], "state": "nominal" }
+    { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal" },
+    { "studies": ["PMID:40127276"], "state": "corrected" }
   ]
 }
 ```
 
 **A family is not a study.** It is a set of studies that share at least one
-sample collection, walked transitively — so two papers drawing on the same
-cohort describe the same people and count **once**. Today the three curated
-studies draw on disjoint collections, so there are three singleton families; the
-grouping exists so that the day a fourth study reuses DDD or PCGC, nobody is
-told a reused cohort is independent evidence.
+sample collection, or draw on collections [`cohorts.json`](#cohortsjson) records
+as overlapping (`overlaps_with`), walked transitively — so two papers that can
+describe the same people count **once**. The three curated studies cite
+disjoint collection ids, but since `2.19` DECIPHER (cited by PMID:34324492) and
+DDD (cited by PMID:42230622) are declared overlapping — DDD links its
+participants into DECIPHER, and an author of PMID:34324492 confirms its case set
+does or likely does include DDD participants — so there are two families, one of
+them those two studies. A family's `state` reads all of its studies' rows; a
+gene page names the overlap above the two studies' blocks.
 
 | `state` | meaning |
 | --- | --- |
@@ -2112,7 +2117,8 @@ them. Added in schema `2.9`.
       "id": "taa_cases",
       "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
       "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases; the study's abstract describes its probands as \"probands with CHD including cases with sporadic thoracic aortic aneurysm\". Thoracic aortic aneurysm is outside this atlas's scope …",
-      "url": null
+      "url": null,
+      "overlaps_with": []
     }
   ]
 }
@@ -2138,6 +2144,11 @@ working with numbers stripped of the sentences that say what they count.
   congenital heart disease. None of these is expressible as a column.
 - `url` is the collection's public page, or **`null`** where it has none (4 of
   the 13 today). Always present, never omitted.
+- `overlaps_with` (since `2.19`) lists, sorted, the collections this one is
+  declared to share people with although no row names both — `ddd` and
+  `decipher` list each other — and is `[]` elsewhere. Declared on both entries,
+  checked when the registry loads. `cohort_families` merges studies across these
+  as across a shared id, so it is part of what makes two studies one dataset.
 
 The array is sorted by `id`. There is no `role` field: a collection is cases in
 one study and could be controls in another, so which it was is a property of the
@@ -2145,7 +2156,8 @@ burden row that cites it — the column it appears in — not of the collection.
 
 `counts.cohorts` in `manifest.json` is the length of this array. It is **not**
 `counts.cohort_families`, which counts how many independent collections the
-rare-variant evidence groups into (3 today) and is what
+rare-variant evidence groups into (2 today, 3 before `2.19` declared DDD and
+DECIPHER overlapping) and is what
 [`independent_datasets`](#independent_datasets-a-count-of-datasets-never-a-verdict)
 is derived from.
 

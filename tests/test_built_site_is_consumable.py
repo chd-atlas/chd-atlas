@@ -349,6 +349,53 @@ def test_tbx5s_card_says_how_wide_each_surviving_result_is(site: Path) -> None:
     assert own + named == expected
 
 
+def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_counted(
+    site: Path,
+) -> None:
+    """Owner decision 2026-10-27 (I3), on the real corpus, read from the payloads.
+
+    `cohorts.json` declares DDD and DECIPHER overlapping, so PMID:42230622
+    (`ddd`) and PMID:34324492 (`decipher`) are one cohort family. Every
+    consumer of families must agree (CLAUDE.md section 4.28): the manifest's
+    and the front page's dataset count, every bundle's `families`, and the
+    notice on every page whose rows cite both -- derived here from the rows
+    and the declarations, never pinned per page. Measured on the build it was
+    written against: 3 families became 2, and 72 pages gained the notice.
+    """
+    cohorts = _read(site, "cohorts.json")["cohorts"]
+    declared = {(cohort["id"], other) for cohort in cohorts for other in cohort["overlaps_with"]}
+    assert declared == {("ddd", "decipher"), ("decipher", "ddd")}
+    families = _read(site, "manifest.json")["counts"]["cohort_families"]
+    assert families == 2
+    landing = (site / "index.html").read_text(encoding="utf-8")
+    assert re.search(rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>", landing)
+
+    noticed = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        cited: dict[str, set[str]] = {}
+        for row in bundle["burden"]:
+            cited.setdefault(row["study"], set()).update(
+                row["case_cohorts"], row["control_cohorts"]
+            )
+        studies = sorted(cited)
+        linked = [
+            (left, right)
+            for i, left in enumerate(studies)
+            for right in studies[i + 1 :]
+            if cited[left] & cited[right]
+            or any((a, b) in declared for a in cited[left] for b in cited[right])
+        ]
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        assert page.count("These two studies are not independent.") == len(linked), entry["gene"]
+        noticed += bool(linked)
+        assert len(bundle["independent_datasets"]["families"]) == families, entry["gene"]
+        grouped = [set(family["studies"]) for family in bundle["independent_datasets"]["families"]]
+        for left, right in linked:
+            assert any({left, right} <= group for group in grouped), (entry["gene"], left, right)
+    assert noticed == 72
+
+
 def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
     """D52 on the committed corpus. A runner that stops passing `identities` to
     `build_genes` publishes six nulls on every bundle -- which the API doc defines
@@ -1660,7 +1707,7 @@ _BOILERPLATE_SHARE = 0.9
 # 23, so the ratchet stays tight. See the test for the series and the rule.
 # Lower each when a page sheds prose; raising one is a decision, and its commit
 # says why.
-_MEDIAN_VISIBLE_WORDS = 909
+_MEDIAN_VISIBLE_WORDS = 971
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -1776,6 +1823,7 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     802d694, the gene card's link to methods     841    957  21 sentences, 395 words
     2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
     9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
+    owner decisions 2026-10-26, batch 2 (R1-I3)  942  1,051  21 sentences, 415 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1800,6 +1848,23 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     smaller moves elsewhere; the median fell by 13. Both constants were lowered
     to the new measurement, not left at their old headroom.
 
+    The last row is the second batch of owner decisions (R1, R3, R5, R8, R9,
+    R11, R13, I3; 2026-10-26/27), measured on fresh builds of the clean tree
+    after each item against one of e0393f4 (882, 1,001, 21 / 404, as at
+    9a8f14d). Two items moved the figures, both owner-decided sentences (E4):
+    R5's card line naming the ClinGen panel that scoped a syndrome, on 10
+    cards (+4, to 886); and I3, which merged PMID:34324492 and PMID:42230622
+    into one cohort family -- both legends gained the clause saying a family
+    also merges across collections recorded as overlapping, 11 words on the
+    118 matrix legends (+11, to 897; boilerplate words 404 to 415, still 21
+    sentences), and its notice naming the declared DDD-DECIPHER overlap is 45
+    words on the 72 pages carrying both studies (+45, to 942; 897 is the
+    median of the same build with that notice's words subtracted). R1, R3,
+    R8, R9, R11 and R13 moved neither figure: R3's 35 card lines sit on 25
+    pages, below the median's reach, and R8 changes only hrefs. The notice is
+    particular to the page's data, so the fold rule keeps it visible; (a) was
+    raised to 971, 942 x 1.03 rounded up, and (b) stays 22, one over 21.
+
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
     the review's fixes to methods.html left every gene page's bytes as at
@@ -1811,9 +1876,10 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 909, the last row's 882 x 1.03 rounded up, and (b) at 22,
-    one more than 21 (owner decision E4 keeps both margins; they were 922 and
-    23 over 2f6300a's row, and 867 and 22 over 802d694's). **When this fails,
+    (a) is held at 971, the last row's 942 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 909 and
+    22 over 9a8f14d's row, 922 and 23 over 2f6300a's, and 867 and 22 over
+    802d694's). **When this fails,
     re-measure before anything else.** If the growth is a new study's or
     dataset's own data-driven prose, raise the budget and put the measurement
     here. Never fold a caveat the fold rule

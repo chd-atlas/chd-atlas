@@ -26,7 +26,7 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.paths import COHORTS
@@ -218,8 +218,23 @@ def load_burden(root: Path) -> dict[str, list[BurdenRow]]:
     return {gene: sorted(rows, key=_sort_key) for gene, rows in grouped.items()}
 
 
-def shared_cohorts(rows: Iterable[BurdenRow]) -> dict[tuple[str, str], tuple[str, ...]]:
-    """Which sample collections each pair of studies has in common.
+class Overlap(NamedTuple):
+    """Why two studies are not independent: what they share, or are declared to.
+
+    `shared` is every collection both studies cite. `declared` is every pair
+    `(left's collection, right's collection)` that `curation/cohorts.yaml`
+    records as overlapping (`Cohort.overlaps_with`), the left study's first --
+    two ids for partly the same people, which no shared id can show.
+    """
+
+    shared: tuple[str, ...]
+    declared: tuple[tuple[str, str], ...]
+
+
+def shared_cohorts(
+    rows: Iterable[BurdenRow], cohorts: Mapping[str, Cohort]
+) -> dict[tuple[str, str], Overlap]:
+    """Which sample collections each pair of studies has in common, or overlapping.
 
     The reason `curation/cohorts.yaml` exists. The atlas publishes per-study rows
     and no pooled statistic, because pooling studies that share samples inflates
@@ -232,26 +247,39 @@ def shared_cohorts(rows: Iterable[BurdenRow]) -> dict[tuple[str, str], tuple[str
     stable order. Pairs sharing nothing are omitted: the interesting fact is the
     overlap, and an entry per independent pair would bury it.
 
-    **Still latent, but for a different reason than when this was written.** It
-    said "the committed corpus carries one study"; it carries three, and they
-    draw on disjoint collections, so this returns an empty mapping. That is no
-    longer a curiosity: `concordance.cohort_families` walks these edges to decide
-    what counts as an independent dataset, so an empty result here is exactly what
-    makes the three studies three families. Implemented and tested against a
-    fixture rather than left until two studies share a cohort, because a feature
-    nobody exercised is a feature that breaks the day it is first needed.
+    **No longer latent, and live by declaration rather than by a shared id**
+    (owner decision 2026-10-27, I3). The three studies cite disjoint ids, so
+    this returned an empty mapping, and `concordance.cohort_families`, which
+    walks these edges, made them three families. But PMID:34324492 cites
+    `decipher` and PMID:42230622 `ddd`, and DDD links its participants into
+    DECIPHER: an author of the first answered that its case set does or likely
+    does include DDD participants. `cohorts` is the registry, and a pair of
+    collections it declares overlapping (`Cohort.overlaps_with`) is an edge as
+    a shared id is, so the two studies are one family. Required, never
+    defaulted, so no consumer can read families without the declarations
+    (CLAUDE.md section 4.28): the families, every card's dataset count, the
+    matrix, the browse strip and the page's notice all come through here.
     """
     by_study: dict[str, set[str]] = {}
     for row in rows:
         by_study.setdefault(row.study, set()).update(row.case_cohorts, row.control_cohorts)
+    declared_with = {
+        identifier: set(cohort.overlaps_with) for identifier, cohort in cohorts.items()
+    }
 
-    overlaps: dict[tuple[str, str], tuple[str, ...]] = {}
+    overlaps: dict[tuple[str, str], Overlap] = {}
     studies = sorted(by_study)
     for index, left in enumerate(studies):
         for right in studies[index + 1 :]:
             common = by_study[left] & by_study[right]
-            if common:
-                overlaps[(left, right)] = tuple(sorted(common))
+            declared = sorted(
+                (mine, theirs)
+                for mine in by_study[left]
+                for theirs in by_study[right]
+                if theirs in declared_with.get(mine, ())
+            )
+            if common or declared:
+                overlaps[(left, right)] = Overlap(tuple(sorted(common)), tuple(declared))
     return overlaps
 
 
@@ -458,11 +486,12 @@ def burden_census(
     **`families` is the dataset count, never `len({row.study for row in rows})`.**
     A cohort family is a connected component over shared sample collections, so
     two papers drawing on one collection describe the same people and count once
-    (`concordance.cohort_families`). The two are equal over the committed corpus
-    — three studies on disjoint collections — which is precisely why they are
-    separated here and separated again in the tests: the day a fourth study
-    reuses DDD or PCGC, a study count on this page would tell a reader that a
-    reused cohort is independent evidence. Taken as a parameter rather than
+    (`concordance.cohort_families`). The two were equal over the committed
+    corpus — three studies citing disjoint collections — which is precisely why
+    they were separated here and separated again in the tests. They parted on
+    owner decision 2026-10-27 (I3): DECIPHER and DDD are declared overlapping
+    (`Cohort.overlaps_with`), so PMID:34324492 and PMID:42230622 are one family
+    and the census reads 2 families for 3 studies. Taken as a parameter rather than
     recomputed, so this page and the strip on every browse row count the same
     families.
 
@@ -591,6 +620,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
                     "name": cohort.name,
                     "description": cohort.description,
                     "url": cohort.url,
+                    # The registry's declared overlaps (owner decision
+                    # 2026-10-27, I3), sorted, `[]` where none: the edges
+                    # `cohort_families` merges on besides a shared id.
+                    "overlaps_with": sorted(str(other) for other in cohort.overlaps_with),
                 }
                 for cohort in sorted(cohorts, key=lambda item: str(item.id))
             ]

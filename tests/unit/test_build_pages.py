@@ -1419,13 +1419,17 @@ def _burden_page(
     publications: dict[str, Publication] | None = None,
     families: tuple[frozenset[str], ...] | None = None,
     axes: tuple[tuple[str, str], ...] | None = None,
+    cohorts: dict[str, Cohort] | None = None,
 ) -> str:
     """Render one gene page.
 
     `families` and `axes` default to the derivation the runner performs, so a
     test that does not care about the matrix still renders a real one rather
-    than an empty section -- and a test that does care can pin them.
+    than an empty section -- and a test that does care can pin them. `cohorts`
+    defaults to `_COHORTS`, and the families are derived over the same registry
+    the page is handed, as the runner derives them (I3).
     """
+    registry = _COHORTS if cohorts is None else cohorts
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
         facts,
@@ -1435,8 +1439,8 @@ def _burden_page(
         assertions={},
         publications=publications or {_PUBLICATION.id: _PUBLICATION},
         burden={GATA4: rows},
-        cohorts=_COHORTS,
-        families=families if families is not None else cohort_families(rows),
+        cohorts=registry,
+        families=families if families is not None else cohort_families(rows, registry),
         axes=axes if axes is not None else evidence_axes(rows),
     )
     return _page(tmp_path, name)
@@ -1547,6 +1551,63 @@ def test_two_studies_sharing_a_cohort_are_declared_not_independent(
 
     assert "These two studies are not independent." in page
     assert "Deciphering Developmental Disorders (DDD)" in page
+
+
+def test_two_studies_on_collections_declared_overlapping_are_named_and_counted_once(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """Owner decision 2026-10-27 (I3): the declaration is the only link here.
+
+    PMID:34324492 cites DECIPHER and PMID:42230622 cites DDD; no collection is
+    shared. With the registry declaring the two overlapping, the page names
+    the overlap the way it names a shared collection -- "may describe", for a
+    likely overlap the registry records rather than one a shared id proves --
+    and the matrix shows the two studies as one family row. The same rows over
+    a registry without the declaration show neither, which is what every page
+    carrying both studies showed until the declaration.
+    """
+    rows = [
+        _burden_row(case_cohorts=("ddd",)),
+        _audain2021(case_cohorts=("decipher",), control_cohorts=("gnomad",)),
+    ]
+    declared = {
+        **_COHORTS,
+        "ddd": _COHORTS["ddd"].model_copy(update={"overlaps_with": ["decipher"]}),
+        "decipher": Cohort(
+            id="decipher", name="DECIPHER", description="Submitted cases.", overlaps_with=["ddd"]
+        ),
+    }
+    page = _burden_page(
+        tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES, cohorts=declared
+    )
+
+    notices = re.findall(r'<p class="notice-inline"><strong>These two studies.*?</p>', page)
+    assert notices == [
+        '<p class="notice-inline"><strong>These two studies are not independent.</strong> '
+        "Audain E et al. 2021 draws on DECIPHER and Audain E et al. 2026 on Deciphering "
+        "Developmental Disorders (DDD), collections this atlas records as overlapping, so "
+        "their results may describe partly the same people and must not be combined.</p>"
+    ]
+    assert re.findall(r'<th scope="row">([^<]*)</th>', page) == [
+        "Audain E et al. 2021 + Audain E et al. 2026"
+    ]
+
+    undeclared = _burden_page(
+        tmp_path / "undeclared",
+        facts_uncurated,
+        rows,
+        publications=_ALL_STUDIES,
+        cohorts={
+            **declared,
+            "ddd": _COHORTS["ddd"],
+            "decipher": declared["decipher"].model_copy(update={"overlaps_with": []}),
+        },
+    )
+    assert "These two studies" not in undeclared
+    assert re.findall(r'<th scope="row">([^<]*)</th>', undeclared) == [
+        "Audain E et al. 2021",
+        "Audain E et al. 2026",
+    ]
 
 
 # `test_the_section_says_what_a_missing_row_means_without_asserting_why` and
@@ -6466,7 +6527,7 @@ def test_a_study_s_own_combination_is_stated_in_its_block_and_labelled_for_what_
         publications={_PUBLICATION.id: _PUBLICATION, **_SIERANT_PUBLICATION},
         burden={GATA4: rows},
         cohorts=_COHORTS,
-        families=cohort_families(rows),
+        families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         combined={GATA4: [_combined()]},
     )
@@ -8762,7 +8823,7 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
         publications=publications,
         burden={GATA4: rows},
         cohorts=_COHORTS,
-        families=cohort_families(rows),
+        families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         scope_warrants=_ORPHANET_WARRANTS,
     )

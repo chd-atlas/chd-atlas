@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from chd_atlas.build.burden import BurdenRow
+from chd_atlas.build.burden import BurdenRow, Overlap, shared_cohorts
 from chd_atlas.build.concordance import (
     FamilyState,
     cohort_families,
@@ -23,6 +23,7 @@ from chd_atlas.build.concordance import (
     is_upward,
     survives_own_correction,
 )
+from chd_atlas.models.cohort import Cohort
 
 
 def _row(**overrides: object) -> BurdenRow:
@@ -74,10 +75,46 @@ def test_two_studies_sharing_a_cohort_are_one_family() -> None:
         _row(study="PMID:3", case_cohorts=("decipher",), control_cohorts=("gain",)),
     ]
 
-    assert cohort_families(rows) == (
+    assert cohort_families(rows, {}) == (
         frozenset({"PMID:1", "PMID:2"}),
         frozenset({"PMID:3"}),
     )
+
+
+def test_a_declared_overlap_is_the_only_link_two_studies_need() -> None:
+    """Owner decision 2026-10-27 (I3): two ids for partly the same people.
+
+    PMID:34324492 cites `decipher` and PMID:42230622 `ddd`, and no id is
+    shared, so they were two families on every page -- while DDD links its
+    participants into DECIPHER, and an author of the first study answered that
+    its cases do or likely do include DDD participants. `cohorts.yaml` now
+    declares the two overlapping, and here the declaration is the **only**
+    link: without the registry the same rows are three families, with it two,
+    and `shared_cohorts` names the declared pair rather than a shared id. The
+    third study, linked to nothing, stays apart.
+    """
+    rows = [
+        _row(study="PMID:1", case_cohorts=("decipher",), control_cohorts=("gain",)),
+        _row(study="PMID:2", case_cohorts=("ddd",), control_cohorts=("ukbb",)),
+        _row(study="PMID:3", case_cohorts=("pcgc",), control_cohorts=()),
+    ]
+    registry = {
+        "ddd": Cohort(id="ddd", name="DDD", description="d", overlaps_with=["decipher"]),
+        "decipher": Cohort(id="decipher", name="DECIPHER", description="d", overlaps_with=["ddd"]),
+    }
+
+    assert cohort_families(rows, {}) == (
+        frozenset({"PMID:1"}),
+        frozenset({"PMID:2"}),
+        frozenset({"PMID:3"}),
+    )
+    assert cohort_families(rows, registry) == (
+        frozenset({"PMID:1", "PMID:2"}),
+        frozenset({"PMID:3"}),
+    )
+    assert shared_cohorts(rows, registry) == {
+        ("PMID:1", "PMID:2"): Overlap(shared=(), declared=(("decipher", "ddd"),))
+    }
 
 
 def test_a_transitive_chain_collapses_to_one_family() -> None:
@@ -95,7 +132,7 @@ def test_a_transitive_chain_collapses_to_one_family() -> None:
         _row(study="PMID:3", case_cohorts=("b",), control_cohorts=()),
     ]
 
-    assert cohort_families(rows) == (frozenset({"PMID:1", "PMID:2", "PMID:3"}),)
+    assert cohort_families(rows, {}) == (frozenset({"PMID:1", "PMID:2", "PMID:3"}),)
 
 
 def test_families_sort_deterministically_because_they_reach_published_bytes() -> None:
@@ -112,7 +149,7 @@ def test_families_sort_deterministically_because_they_reach_published_bytes() ->
         _row(study="PMID:5", case_cohorts=("x",), control_cohorts=()),
     ]
 
-    assert cohort_families(rows) == (
+    assert cohort_families(rows, {}) == (
         frozenset({"PMID:2"}),
         frozenset({"PMID:5"}),
         frozenset({"PMID:9"}),

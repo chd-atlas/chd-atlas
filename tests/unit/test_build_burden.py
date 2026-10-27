@@ -9,6 +9,7 @@ from pathlib import Path
 from chd_atlas.build.burden import (
     BurdenRow,
     CombinedRow,
+    Overlap,
     build_cohorts,
     burden_census,
     burden_payload,
@@ -156,7 +157,7 @@ def test_two_studies_drawing_on_one_collection_are_named_as_not_independent() ->
         _row(study="PMID:3", case_cohorts=("gel",), control_cohorts=()),
     ]
 
-    assert shared_cohorts(rows) == {("PMID:1", "PMID:2"): ("ddd",)}
+    assert shared_cohorts(rows, {}) == {("PMID:1", "PMID:2"): Overlap(("ddd",), ())}
 
 
 def _row(**overrides: object) -> BurdenRow:
@@ -393,12 +394,22 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     - **`url` is `null`, never absent**, where a collection has no public page.
       An object whose shape varies is a trap for a consumer reading a field off
       one record and expecting it on the next.
+    - **`overlaps_with` is published, sorted, `[]` where none** (owner decision
+      2026-10-27, I3): the declared overlaps that make two studies one cohort
+      family, so a consumer can see why `independent_datasets` merged them.
+      Listed out of order in the fixture so the sort is observed.
     """
     emitter = Emitter(root=tmp_path)
     build_cohorts(
         (
             Cohort(id="zebra", name="Zebra", description="Cited by nothing here.", url=None),
-            Cohort(id="ukbb", name="UK Biobank", description="Adults 40-69.", url="https://u"),
+            Cohort(
+                id="ukbb",
+                name="UK Biobank",
+                description="Adults 40-69.",
+                url="https://u",
+                overlaps_with=["zebra", "unused"],
+            ),
             Cohort(id="unused", name="Unused", description="No row names this.", url=None),
         ),
         emitter,
@@ -412,7 +423,9 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
         "name": "UK Biobank",
         "description": "Adults 40-69.",
         "url": "https://u",
+        "overlaps_with": ["unused", "zebra"],
     }
+    assert published[2]["overlaps_with"] == []
     # `url` present and null rather than omitted -- `"url" in ...` fails on an
     # omitted key where `.get("url") is None` would pass on both.
     assert "url" in published[1] and published[1]["url"] is None

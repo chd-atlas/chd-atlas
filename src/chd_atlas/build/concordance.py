@@ -18,12 +18,13 @@ reasons.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Final
 
 from chd_atlas.build.burden import BurdenRow, shared_cohorts
 from chd_atlas.build.emit import Json
+from chd_atlas.models.cohort import Cohort
 
 # The threshold both states are read against, and the one number in the rule
 # `methods.html#rare-variants` states as the atlas's own (owner decision
@@ -48,12 +49,15 @@ class FamilyState(StrEnum):
     NOT_TESTED = "not_tested"
 
 
-def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
+def cohort_families(
+    rows: Iterable[BurdenRow], cohorts: Mapping[str, Cohort]
+) -> tuple[frozenset[str], ...]:
     """Studies grouped into sets that do not describe independent people.
 
     A family is a connected component of the graph whose nodes are studies and
-    whose edges are shared sample collections. `shared_cohorts` computes the
-    edges; this walks them.
+    whose edges are shared sample collections, and collections the registry
+    declares overlapping (`cohorts`, `Cohort.overlaps_with`). `shared_cohorts`
+    computes the edges; this walks them.
 
     **Transitivity is why this is a graph walk and not a pairwise read of
     `shared_cohorts`.** If A shares a collection with B and B with C, all three
@@ -62,11 +66,13 @@ def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
     mapping alone cannot say so.
 
     Measured 2026-08-05 over the committed corpus: three studies, three
-    singleton families, because they draw on disjoint collections. The
-    definition is therefore currently indistinguishable from "one family per
-    study" -- and it is written this way so that the day a fourth study reuses
-    DDD or PCGC, the merge happens with no code change, and nobody is ever told
-    that a reused cohort is independent evidence.
+    singleton families, because they cite disjoint collections. That read
+    "draw on disjoint collections" until owner decision 2026-10-27 (I3), and
+    the collections were not disjoint: PMID:34324492's `decipher` cases may
+    include DDD participants, and PMID:42230622 names `ddd`. Declared in the
+    registry, the overlap merges the two into one family -- two families now,
+    measured on a real build -- with no change here, as this was written to
+    allow, and nobody is told that a reused cohort is independent evidence.
 
     Sorted on the sorted tuple of study ids. Components come out of a set walk,
     and `encode_json`'s `sort_keys` orders dict keys only, so an array derived
@@ -85,7 +91,7 @@ def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
             study = parent[study]
         return study
 
-    for left, right in shared_cohorts(materialised):
+    for left, right in shared_cohorts(materialised, cohorts):
         parent[find(left)] = find(right)
 
     grouped: dict[str, set[str]] = {}

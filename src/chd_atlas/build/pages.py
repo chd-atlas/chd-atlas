@@ -71,7 +71,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
 from urllib.parse import quote
 
-from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
+from chd_atlas.build.burden import BurdenRow, CombinedRow, Overlap, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
 from chd_atlas.build.concordance import (
     FamilyState,
@@ -394,15 +394,17 @@ _STRATUM_LABEL: Final[dict[str, str]] = {
 _MATRIX_LEGEND: Final = (
     evidence_legend(swatches=True)
     + '<p class="strip-legend">Rows are <strong>independent cohort families</strong>, not '
-    "studies: two papers sharing a sample collection describe the same people and appear "
-    "once. " + EVIDENCE_POWER_CAVEAT + "</p>"
+    "studies: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and appear once. "
+    + EVIDENCE_POWER_CAVEAT
+    + "</p>"
 )
 
 _STRIP_LEGEND: Final = (
     evidence_legend(swatches=False)
     + '<p class="strip-legend">One glyph per <strong>independent cohort family</strong>, not '
-    "per study: two papers sharing a sample collection describe the same people and count "
-    "once. "
+    "per study: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and count once. "
     + EVIDENCE_POWER_CAVEAT
     + " The tally reads <em>enriched</em> of <em>tested</em>: the first "
     "number counts datasets that found something, the second counts datasets that looked. "
@@ -2124,7 +2126,7 @@ def _burden_section(
     if not rows:
         return ""
 
-    overlaps = shared_cohorts(rows)
+    overlaps = shared_cohorts(rows, cohorts)
     studies = sorted({row.study for row in rows})
     # One block per study, and each block's heading is the card's link target
     # (D55): two studies sharing an anchor would send one study's caveats link
@@ -2219,12 +2221,8 @@ def _burden_section(
         )
 
     shared = "".join(
-        f'<p class="notice-inline"><strong>These two studies are not independent.</strong> '
-        f"{html.escape(_study_label(left, publications))} and "
-        f"{html.escape(_study_label(right, publications))} both draw on "
-        f"{html.escape(_names(common, cohorts))}, so their results describe partly "
-        f"the same people and must not be combined.</p>"
-        for (left, right), common in overlaps.items()
+        _overlap_notice(left, right, overlap, publications, cohorts)
+        for (left, right), overlap in overlaps.items()
     )
 
     # The pooling sentence is conditional. Rendered unconditionally it asserted
@@ -3758,6 +3756,48 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
         "recorded for them</summary><ul>"
         + "".join(items)
         + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
+    )
+
+
+def _overlap_notice(
+    left: str,
+    right: str,
+    overlap: Overlap,
+    publications: Mapping[str, Publication],
+    cohorts: Mapping[str, Cohort],
+) -> str:
+    """Why two studies on one page are not independent, the way the page names a shared one.
+
+    A shared collection reads as it always has: both "draw on" it, so their
+    results "describe partly the same people". A declared overlap (owner
+    decision 2026-10-27, I3; `Cohort.overlaps_with`) is two collections, one
+    per study, so it says which each draws on, that this atlas records them as
+    overlapping, and "may describe", because the registry records a likely
+    overlap, not a counted one: PMID:34324492's author answered that its case
+    set does or likely does include DDD participants. Measured on a real build
+    the day it was written: 72 pages carry both PMID:34324492 and PMID:42230622,
+    and each now carries this notice once.
+    """
+    first = html.escape(_study_label(left, publications))
+    second = html.escape(_study_label(right, publications))
+    clauses = []
+    if overlap.shared:
+        clauses.append(
+            f"{first} and {second} both draw on {html.escape(_names(overlap.shared, cohorts))}"
+        )
+    if overlap.declared:
+        mine = sorted({collection for collection, _ in overlap.declared})
+        theirs = sorted({collection for _, collection in overlap.declared})
+        clauses.append(
+            f"{first} draws on {html.escape(_names(mine, cohorts))} and {second} on "
+            f"{html.escape(_names(theirs, cohorts))}, collections this atlas records as "
+            "overlapping"
+        )
+    verb = "describe" if overlap.shared else "may describe"
+    return (
+        '<p class="notice-inline"><strong>These two studies are not independent.</strong> '
+        f"{', and '.join(clauses)}, so their results {verb} partly the same people and "
+        "must not be combined.</p>"
     )
 
 

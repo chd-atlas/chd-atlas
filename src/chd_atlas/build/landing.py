@@ -458,9 +458,10 @@ def _render(
     variants, or a de novo enrichment test, which are different analyses and are named as
     such on each gene's page. An
     <strong>independent dataset</strong> is a cohort family rather than a
-    paper: two studies drawing on the same sample collection describe the same people and
-    count once. How many datasets agree about a gene is shown on every row of the browse
-    page, and it is a count of evidence — never a verdict on the gene.</p>
+    paper: two studies drawing on the same sample collection, or on collections this atlas
+    records as overlapping, can describe the same people and count once. How many
+    datasets agree about a gene is shown on every row of the browse page, and it is a
+    count of evidence — never a verdict on the gene.</p>
   {_own_lab_sentence(census.studies, corpus)}
   {_GLYPH_KEY}
 
