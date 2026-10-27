@@ -15,6 +15,7 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow
+from chd_atlas.build.cell_types import CellTypeExpression
 from chd_atlas.build.concordance import cohort_families, evidence_axes, gene_concordance
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
@@ -61,6 +62,8 @@ from chd_atlas.vocab import (
     ValiditySource,
     ValidityState,
 )
+from tests.unit.test_build_cell_type_chart import dataset as cell_type_dataset
+from tests.unit.test_build_cell_type_chart import payload as cell_type_payload
 
 TBX5 = "HGNC:11604"
 GATA4 = "HGNC:4173"
@@ -4501,6 +4504,7 @@ def _expression_page(
     facts: dict[str, GeneFacts] | None = None,
     name: str = "HGNC_4173.html",
     phases: CardiacPhaseFile | None = None,
+    cell_types: dict[str, CellTypeExpression] | None = None,
 ) -> str:
     """One gene page, built only to exercise the expression section.
 
@@ -4528,6 +4532,7 @@ def _expression_page(
         profiles=profiles,
         datasets=datasets or {},
         phases=phases,
+        cell_types=cell_types,
     )
     return _page(tmp_path, name)
 
@@ -4984,6 +4989,21 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
         )
     )
     assert caveat in unfolded(bad_news_section)
+
+    # The combined banner replaces the bulk one on a gene with cell-type data;
+    # it carries the same caveat sentence, outside every fold.
+    with_cells = _expression_section_text(
+        _expression_page(
+            tmp_path,
+            {GATA4: below_floor},
+            {"E-MTAB-6814": _profile_dataset(detection_floor=1.0), "hoc": cell_type_dataset()},
+            cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+        )
+    )
+    assert (
+        "A low or absent value is not evidence a gene is unimportant to heart development."
+        in unfolded(with_cells)
+    )
 
 
 def test_the_expression_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
@@ -9178,3 +9198,61 @@ def test_a_study_no_cohort_family_holds_is_refused_rather_than_miscounted(
 def test_a_count_of_one_names_one_carrier(carriers: int, total: int, unit: str, shown: str) -> None:
     """ "1 carriers / 14,040" rendered in tables and on the card until 2026-10-26."""
     assert _count(carriers, total, unit) == shown
+
+
+_COMBINED_BANNER = (
+    '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks; the timeline '
+    "below is from bulk tissue. A low or absent value is not evidence a gene is unimportant "
+    "to heart development.</p>"
+)
+
+
+def _bulk_profile() -> ExpressionProfile:
+    return _expression_profile(
+        (
+            _dataset_profile_entry(
+                stages=(_stage_entry(tissues=(_tissue_entry(placement=_placement()),)),)
+            ),
+        )
+    )
+
+
+def test_a_gene_with_cell_type_data_carries_the_combined_banner_and_not_the_bulk_only_one(
+    tmp_path: Path,
+) -> None:
+    page = _expression_page(
+        tmp_path,
+        {GATA4: _bulk_profile()},
+        {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()},
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert _COMBINED_BANNER in section
+    assert "Every measurement below is from bulk tissue" not in section
+    # The cell-type block opens the section, before the first bulk dataset block.
+    assert section.index("<h3>Cell types (Farah et al. 2024)</h3>") < section.index("E-MTAB-6814")
+    assert section.index(_COMBINED_BANNER) < section.index("<h3>Cell types")
+
+
+def test_a_gene_without_cell_type_data_keeps_the_bulk_banner_and_no_block(
+    tmp_path: Path,
+) -> None:
+    # TBX5 has no entry in `cell_types`; GATA4 beside it does.
+    page = _expression_page(
+        tmp_path,
+        {GATA4: _bulk_profile(), TBX5: _bulk_profile()},
+        {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()},
+        facts={
+            GATA4: _facts(GATA4, AtlasCuration.NOT_YET_CURATED),
+            TBX5: _facts(TBX5, AtlasCuration.NOT_YET_CURATED),
+        },
+        name="HGNC_11604.html",
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert "Every measurement below is from bulk tissue" in section
+    assert "Cell-type values pool" not in section
+    assert "Cell types (Farah" not in section
+    assert '<svg class="ct-svg"' not in section

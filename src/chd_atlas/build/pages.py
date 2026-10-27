@@ -72,6 +72,8 @@ from typing import Final, NamedTuple
 from urllib.parse import quote
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow, Overlap, _sort_key, shared_cohorts
+from chd_atlas.build.cell_type_chart import cell_type_block
+from chd_atlas.build.cell_types import EMPTY_CELL_TYPE_EXPRESSION, CellTypeExpression
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
 from chd_atlas.build.concordance import (
     FamilyState,
@@ -4155,6 +4157,16 @@ _BULK_TISSUE_NOTICE: Final = (
     "figures</a>.</p>"
 )
 
+# The banner of a gene that has cell-type data, in place of `_BULK_TISSUE_NOTICE`
+# (never beside it: that notice says every measurement below is bulk, which is
+# false once a cell-type block opens the section). It keeps the same caveat
+# sentence, unconditional, and says what the two layers are.
+_CELL_TYPE_NOTICE: Final = (
+    '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks; the timeline '
+    "below is from bulk tissue. A low or absent value is not evidence a gene is unimportant "
+    "to heart development.</p>"
+)
+
 # `_EXPRESSION_READING_NOTES` and `_PERCENTILE_COMPARABILITY_NOTICE` sat here
 # until 2026-10-26: the reading notes every gene page folded under "How to read
 # these figures". They moved, with their histories, to `methods._EXPRESSION`
@@ -5601,6 +5613,7 @@ def _expression_section(
     profile: ExpressionProfile,
     datasets: Mapping[str, Dataset],
     phases: CardiacPhaseFile | None,
+    cell_types: CellTypeExpression = EMPTY_CELL_TYPE_EXPRESSION,
 ) -> str:
     """Developmental expression: percentile, tau and phase, per organ and stage.
 
@@ -5632,15 +5645,29 @@ def _expression_section(
     general, the comparability sentence has no position to be false in. What
     stays is `_BULK_TISSUE_NOTICE`'s short form, visible and unconditional,
     which links there.
+
+    **Cell types open the section.** A gene with a non-empty
+    `cell_types["datasets"]` gets `_CELL_TYPE_NOTICE` instead of
+    `_BULK_TISSUE_NOTICE` and a `cell_type_block` per dataset before the bulk
+    blocks; a gene without keeps the bulk notice and no block. Each cell-type
+    entry's dataset must be in `datasets` (`KeyError` otherwise): the block
+    draws the dataset's own declared cell types and regions, and a missing
+    record would leave nothing to draw them from. A gene with cell-type data
+    but no bulk profile gets the cell-type block and the banner in place of
+    `_NOT_CURATED_EXPRESSION`, whose "not yet curated" would contradict it.
     """
     entries = profile["datasets"]
-    if not entries:
+    cell_entries = cell_types["datasets"]
+    if not entries and not cell_entries:
         return "<h2>Developmental expression</h2>" + _NOT_CURATED_EXPRESSION
 
     blocks = "".join(
         _dataset_block(entry, datasets.get(entry["dataset"]), phases) for entry in entries
     )
-    return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
+    if not cell_entries:
+        return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
+    cells = "".join(cell_type_block(entry, datasets[entry["dataset"]]) for entry in cell_entries)
+    return "<h2>Developmental expression</h2>" + _CELL_TYPE_NOTICE + cells + blocks
 
 
 def build_gene_pages(
@@ -5663,6 +5690,7 @@ def build_gene_pages(
     scope_labels: Mapping[str, str] | None = None,
     identities: Mapping[str, GeneIdentity] | None = None,
     scope_terms: Mapping[str, ScopeEntry] | None = None,
+    cell_types: Mapping[str, CellTypeExpression] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -5706,6 +5734,9 @@ def build_gene_pages(
     with no band is the panel the source's own browser already publishes, and
     every figure it would have summarised is in the tables regardless.
 
+    `cell_types` is `gene_cell_type_expression`'s return; a gene absent from it
+    gets `EMPTY_CELL_TYPE_EXPRESSION` and keeps the bulk-only section.
+
     Sorted, like every loop in this build that iterates a mapping: `sort_keys`
     orders dict keys in a JSON payload and has nothing to say about the order
     files are written in, and a differing write order would move nothing here
@@ -5714,6 +5745,7 @@ def build_gene_pages(
     profile_by_gene = profiles or {}
     dataset_registry = datasets or {}
     combined_by_gene = combined or {}
+    cell_type_by_gene = cell_types or {}
     warrants = scope_warrants or {}
     labels = scope_labels or {}
     graders = _panel_graders(validity, symbols)
@@ -5780,7 +5812,10 @@ def build_gene_pages(
             # position, and therefore every existing test slicing this page by
             # position, unchanged.
             + _expression_section(
-                profile_by_gene.get(gene, EMPTY_EXPRESSION_PROFILE), dataset_registry, phases
+                profile_by_gene.get(gene, EMPTY_EXPRESSION_PROFILE),
+                dataset_registry,
+                phases,
+                cell_type_by_gene.get(gene, EMPTY_CELL_TYPE_EXPRESSION),
             )
             + "</div></div>"
         )

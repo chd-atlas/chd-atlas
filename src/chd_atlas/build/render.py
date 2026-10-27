@@ -308,6 +308,24 @@ STYLESHEET: Final = """
      drift. `charts.py` emits no colour of its own -- a hex baked into a shape
      would render a light chart on a dark page, and it is the class names below
      that make that constraint enforceable in one place. */
+  /* The cell-type block (`cell_type_chart`): the same hues as the charts above,
+     one rule per mark, light and dark through the variables. */
+  .cell-types { margin: 1rem 0 1.5rem; }
+  .ct-caption, .ct-tau { color: var(--muted); font-size: 0.9rem; margin: 0.35rem 0; }
+  .ct-scroll { overflow-x: auto; }
+  .ct-svg { display: block; }
+  .ct-svg text { fill: var(--fg); font-size: 12px; }
+  .ct-svg .ct-small, .ct-svg .ct-group, .ct-svg .ct-muted { fill: var(--muted); font-size: 10.5px; }
+  .ct-svg .ct-group { letter-spacing: 0.06em; text-transform: uppercase; }
+  .ct-svg .ct-mid { text-anchor: middle; }
+  .ct-svg .ct-end { text-anchor: end; }
+  .ct-svg .ct-num { font-variant-numeric: tabular-nums; }
+  .ct-grid { stroke: var(--border); stroke-dasharray: 2 3; }
+  .ct-floor { stroke: var(--notice-border); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .ct-below { fill: var(--notice-bg); }
+  .ct-whisker { stroke: var(--evidence); stroke-width: 2; }
+  .ct-dot { fill: var(--evidence); fill-opacity: 0.85; }
+  .ct-ring { fill: none; stroke: var(--muted); stroke-width: 1.2; }
   .chart { width: 100%; height: auto; max-width: 40rem; overflow: visible; }
   .chart-line { fill: none; stroke: var(--link); stroke-width: 2; }
   .chart-point { fill: var(--link); }

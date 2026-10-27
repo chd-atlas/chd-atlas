@@ -472,6 +472,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         # The same mapping the bundles were built from, so a page cannot state a
         # combination its own bundle does not carry.
         combined=combined,
+        cell_types=cell_type_expression,
         scope_warrants=warrants,
         scope_labels={str(e.id): e.label for e in corpus.chd_scope},
         # The registry itself, for the card's line on a syndrome a ClinGen
