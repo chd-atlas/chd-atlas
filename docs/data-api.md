@@ -1480,9 +1480,12 @@ Top to bottom:
    own**, whether or not another study's results survive: "<study> publishes
    no corrected p for this gene; judge its results against its scan of 138,609
    tests (see its block)", with the scan size from the publication's
-   `tests_reported`; where none is recorded the line ends "see its block". The
-   atlas applies no threshold of its own. Whether a study
-   published a correction is read per gene, from its rows.
+   `tests_reported`; where none is recorded the line ends "see its block".
+   Under the one rule `methods.html#rare-variants` states, such a study's rows
+   survive nothing, so none of them is listed on the card; the evidence matrix
+   still marks one as supporting where it points to enrichment in cases and
+   its p is below 0.05. Whether a study published a correction is read per
+   gene, from its rows.
 
    With no surviving row, how many independent datasets (cohort families, not
    studies) tested the gene, declaring any study among them by an author of
