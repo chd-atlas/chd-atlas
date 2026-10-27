@@ -225,7 +225,7 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
         "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
         "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
         "tumours, the pericardium and the like), plus eight lesions the ontology files "
-        "elsewhere, each with its subtypes: coarctation of the aorta, a patent ductus "
+        "elsewhere, with any subtypes: coarctation of the aorta, a patent ductus "
         "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
         "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
         "The findings counted still include some that are not malformations, such as a "
@@ -606,7 +606,7 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
         "studies draw on the same sample collection they describe partly the same people, and "
         "where they draw on collections this atlas records as overlapping they may, so "
-        "combining their results would count those people twice; a gene page names any "
+        "combining their results could count those people twice; a gene page names any "
         "sample collection its studies share, and any overlap between theirs, as this atlas "
         "has recorded them.",
         "In each study's table, <code>cases</code> and <code>controls</code> each show "
@@ -730,8 +730,9 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "its curator recorded. A row may not name every collection its study drew on: the "
         "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
         "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
-        "partly the same people, and two that name none in common may still share people "
-        "this registry does not record. The same records are published as "
+        "partly the same people; two that name collections this registry records as "
+        "overlapping may; and two that name neither may still share people this registry "
+        "does not record. The same records are published as "
         '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
         '<dl class="cohort-list">'
         "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"

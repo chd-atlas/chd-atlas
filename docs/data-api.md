@@ -1621,13 +1621,21 @@ every fold:
   enrichment at these cohort sizes is not evidence against a gene — and that
   no statistic is pooled across studies: "The atlas computes no pooled
   statistic across studies: pooling two that share a sample collection would
-  count the same people twice." — and, where the card lists a surviving row,
+  count the same people twice, and pooling two that draw on collections this
+  atlas records as overlapping could." — and, where the card lists a surviving row,
   that a cell and the card can lead with different rows: "A cell names the
   most significant of the rows behind its state; the card lists a study's
   surviving rows with a damaging union before its parts, so the two can lead
   with different rows.";
-- any sample collection the gene's studies share, as this atlas has recorded
-  them;
+- for two of the gene's studies that are not independent, a notice naming why,
+  as this atlas has recorded it: a sample collection both draw on ("… so their
+  results describe partly the same people and must not be combined"), or
+  collections [`cohorts.json`](#cohortsjson) records as overlapping
+  (`overlaps_with`), one per study ("… collections this atlas records as
+  overlapping, so their results may describe partly the same people and must
+  not be combined"). On today's corpus no two studies share a collection, and
+  every such notice is the second kind: PMID:34324492's DECIPHER beside
+  PMID:42230622's DDD, on every page carrying both;
 - on a block from a study by an author of this atlas, a one-line declaration:
   "Declaration: this study is by an author of this atlas; its results are
   republished as published and read by the same rule as every other
@@ -2266,7 +2274,7 @@ structural CHD is frequent but not part of the diagnosis.
   what Orphanet records. "Structural" is HPO's `Abnormal heart morphology`
   branch minus its cardiomyopathy, cardiomegaly, tumour, pericardium,
   endocardium and imaging-finding branches, plus eight lesions HPO files
-  elsewhere, each with its subtypes: coarctation of the aorta, patent ductus
+  elsewhere, with any subtypes: coarctation of the aorta, patent ductus
   arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic
   stenosis, truncus arteriosus, interrupted aortic arch and anomalous pulmonary
   venous return, over the pinned HPO release. The last six were added in `2.19`,

@@ -606,9 +606,17 @@ _MIRRORED_NOTICE: Final = (
 # "children" (2026-10-26): `shared_cohorts` unions case and control collections,
 # and a shared collection may be a control cohort of adults -- UK Biobank's
 # registry note says "~500,000 UK adults recruited at ages 40-69".
+#
+# The declared-overlap clause since review (2026-10-27): the reason it gave was
+# a shared collection alone, and on the 72 pages carrying both PMID:34324492
+# and PMID:42230622 the reason is a declared overlap (`Cohort.overlaps_with`,
+# owner decision I3), for which "may describe partly the same people" is all
+# the registry knows -- so "would" for a shared collection, "could" for the
+# declared kind, as `methods.html#rare-variants` words the two.
 _POOLING_NOTICE: Final = (
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-    "two that share a sample collection would count the same people twice.</p>"
+    "two that share a sample collection would count the same people twice, and pooling "
+    "two that draw on collections this atlas records as overlapping could.</p>"
 )
 
 # The matrix and the card each lead with one row, by two rules the owner kept
@@ -1763,8 +1771,9 @@ def _report_url(record: ValidityRecord, symbol: str | None) -> str | None:
     is exactly the bare homepage links that site's page for the gene instead,
     `https://panelapp-aus.org/panels/entities/<HGNC symbol>`: verified
     2026-10-26 to answer 200 for TBX5, whose PanelApp Australia API record
-    lists it on 11 panels. **The one URL this atlas builds rather than
-    republishes**, because the one GenCC supplies names no gene and so cannot
+    lists it on 11 panels. **The one report URL this atlas builds rather than
+    republishes** (the identity links are built too, from ids, by
+    `identity.external_links`), because the one GenCC supplies names no gene and so cannot
     lead to the record the row reports. Every other submitter's URL, and a
     PanelApp Australia URL that is anything but the homepage, is GenCC's as
     given; the mirror and the bundle keep GenCC's value. The symbol is the gene
@@ -2499,10 +2508,11 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
     #
     # **The count is shown only where the reader must apply it** (2026-10-26).
     # Both branches opened "This study reported N comparisons in all", and
-    # `tests_reported` does not always count comparisons: PMID:40127276's 248 is
-    # its panel *genes* (`curation/publications.yaml` says so), each tested in
-    # two arms over three consequence classes, so the sentence was false on all
-    # 36 pages carrying that study. Where a study corrected every row the reader
+    # `tests_reported` did not always count comparisons: PMID:40127276's was
+    # 248, its panel *genes*, each tested in two arms over three consequence
+    # classes, so the sentence was false on all 36 pages carrying that study.
+    # (Its `tests_reported` is null since owner decision 2026-10-26, W1, and
+    # the 248 is `correction_genes`.) Where a study corrected every row the reader
     # applies no threshold of their own, so no count is needed, and none is
     # stated; where it did not, the count is the Bonferroni denominator the
     # sentence after it uses -- true of PMID:42230622, whose 138,609 is one

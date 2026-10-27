@@ -163,7 +163,7 @@ SCOPE_RULE: Final = (
     "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
     "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
     "tumours, the pericardium and the like), plus eight lesions the ontology files "
-    "elsewhere, each with its subtypes: coarctation of the aorta, a patent ductus "
+    "elsewhere, with any subtypes: coarctation of the aorta, a patent ductus "
     "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
     "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
     "The findings counted still include some that are not malformations, such as a "
@@ -315,9 +315,9 @@ _CURATED_EVIDENCE: Final = (
 # may be adults (UK Biobank's note: "~500,000 UK adults recruited at ages
 # 40-69"); the overlap clause says what the page can know -- collections shared
 # *as this atlas has recorded them* -- since `shared_cohorts` sees only shared
-# registry ids, and two studies may share individuals no entry names (review
-# raised DDD and DECIPHER; the registry records no link between them); the
-# synonymous paragraph
+# registry ids and declared overlaps, and two studies may share individuals no
+# entry names (review raised DDD and DECIPHER, which the registry has declared
+# overlapping since owner decision 2026-10-27, I3); the synonymous paragraph
 # lost "the same uncorrected scale" (true of the one study that publishes a
 # synonymous row, stated in general) and "a scan of that size" (no antecedent
 # here).
@@ -367,10 +367,12 @@ _RARE_VARIANTS: Final = (
     # was pages._POOLING_NOTICE in full. The overlap clauses since owner
     # decision 2026-10-27 (I3): DECIPHER and DDD are declared overlapping
     # (`Cohort.overlaps_with`), and the page's notice names such a pair.
+    # "could count", not "would" (review, 2026-10-27): the people are counted
+    # twice only if the overlap the clause before calls a "may" is real.
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
     "studies draw on the same sample collection they describe partly the same people, and "
     "where they draw on collections this atlas records as overlapping they may, so "
-    "combining their results would count those people twice; a gene page names any "
+    "combining their results could count those people twice; a gene page names any "
     "sample collection its studies share, and any overlap between theirs, as this atlas "
     "has recorded them.</p>"
     # was pages._BURDEN_PREAMBLE; "In each study's table," anchors what it describes
@@ -492,14 +494,19 @@ _RARE_VARIANTS: Final = (
 # source has no record to resolve against. The 4 is pinned against the mirror,
 # 4,242 against the four descriptions' own counts and 7,958 against
 # `taa_cases`'s; 189 is the supplement's alone and nothing here can check it.
+# The declared-overlap clause since review (2026-10-27): "two that name none in
+# common may still share people this registry does not record" stopped being
+# the whole truth when the registry recorded one such pair (`ddd` and
+# `decipher`, owner decision I3).
 _COHORTS_INTRO: Final = (
     '<h2 id="cohorts">Cohorts</h2>'
     "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
     "its curator recorded. A row may not name every collection its study drew on: the "
     "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
     "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
-    "partly the same people, and two that name none in common may still share people "
-    "this registry does not record. The same records are published as "
+    "partly the same people; two that name collections this registry records as "
+    "overlapping may; and two that name neither may still share people this registry "
+    "does not record. The same records are published as "
     f'<a href="{COHORTS}"><code>{COHORTS}</code></a>.</p>'
 )
 

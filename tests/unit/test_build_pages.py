@@ -1934,7 +1934,8 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     section = _burden_section_text(one)
     assert (
         "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-        "two that share a sample collection would count the same people twice.</p>" in section
+        "two that share a sample collection would count the same people twice, and pooling "
+        "two that draw on collections this atlas records as overlapping could.</p>" in section
     )
     assert "children" not in section
     # Immediately after the matrix, not four paragraphs above it.
@@ -2165,9 +2166,11 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
     a forest and on one without, so it cannot come to depend on either layout.
 
     **And it states no count (2026-10-26).** It opened "This study reported N
-    comparisons in all", and for PMID:40127276 N is `tests_reported: 248` --
+    comparisons in all", and for PMID:40127276 N was `tests_reported: 248` --
     the study's panel *genes*, each tested in two arms over three consequence
-    classes -- so the sentence was false on all 36 pages carrying that study. A
+    classes -- so the sentence was false on all 36 pages carrying that study.
+    (That `tests_reported` is null since owner decision W1, 2026-10-26; the 248
+    is its `correction_genes`.) A
     study that corrected every row needs no denominator from the reader; the
     count is shown only where the reader must apply it, beside the Bonferroni
     arithmetic, which is true of PMID:42230622 (138,609 is one Fisher test per

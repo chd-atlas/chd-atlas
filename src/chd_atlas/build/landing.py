@@ -234,6 +234,53 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     )
 
 
+def _panel_correction_note(studies: Sequence[str], corpus: Corpus) -> str:
+    """Whose correction a "surviving" result survived ran over a panel (review, 2026-10-27).
+
+    The census card "Genes with a rare-variant result surviving its study's
+    correction" counts by each study's own correction, and owner decision R3
+    exists because "surviving" reads as genome-wide: PMID:40127276's
+    Benjamini-Hochberg ran over its 248 panel genes (`Publication.
+    correction_genes`). Measured on a build of 5f7161b: 22 of the 32 genes
+    that card counts survive only that study's correction. The card's label is
+    the owner's and stays; this says, beside it, which studies' corrections
+    were over a panel, read from the studies whose rows reach a published
+    bundle (`BurdenCensus.studies`) and their curated `correction_genes`.
+    Empty where no such study is published, since nothing then needs saying.
+    """
+    curated = {str(publication.id): publication for publication in corpus.publications}
+    panels = [
+        (study, size)
+        for study in studies
+        if (publication := curated.get(study)) is not None
+        and (size := publication.correction_genes) is not None
+    ]
+    if not panels:
+        return ""
+    if len(panels) == 1:
+        [(study, size)] = panels
+        scope = (
+            f"For {study}, the correction a result must survive ran over its "
+            f"{_number(size)}-gene panel"
+        )
+    else:
+        scope = (
+            f"For {_and([study for study, _ in panels])}, the correction a result must survive "
+            "ran over each study's gene panel ("
+            + ", ".join(f"{_number(size)} genes for {study}" for study, size in panels)
+            + ")"
+        )
+    return (
+        f"<p>{scope}, not the genome. "
+        '<a href="methods.html#rare-variants">How to read rare-variant results</a>.</p>'
+    )
+
+
+def _and(items: Sequence[str]) -> str:
+    """`a`, `a and b`, `a, b and c`."""
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
 # The two Orphadata products, in the order the citation names them.
 _ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
 
@@ -250,7 +297,9 @@ def _orphadata_version(sources: SourceRegistry) -> str:
     two products of one release (07:57:18 and 07:53:50 on 2026-06-23), so one
     release with one day prints once, and products that differ print each.
     `""` where neither product records one: there is then nothing to cite,
-    and the sentence ends where it did before.
+    and the sentence ends where it did before. Version and day are both
+    escaped, being transcribed text; the day reached the page unescaped until
+    review (2026-10-27).
     """
     by_id = sources.by_id
     stated = [
@@ -265,10 +314,13 @@ def _orphadata_version(sources: SourceRegistry) -> str:
         return ""
     if len(releases) == 1 and len(stated) == len(_ORPHADATA):
         version, day = releases[0]
-        return f" Data version {html.escape(version)}, {day}."
+        return f" Data version {html.escape(version)}, {html.escape(day)}."
     return (
         " Data version "
-        + "; ".join(f"{html.escape(version)}, {day} ({label})" for label, version, day in stated)
+        + "; ".join(
+            f"{html.escape(version)}, {html.escape(day)} ({label})"
+            for label, version, day in stated
+        )
         + "."
     )
 
@@ -438,8 +490,8 @@ def _render(
       assessment, never one this atlas authored: {_number(panel_graded_count)} on a ClinGen
       expert panel's classification, {_number(published_gene_count - panel_graded_count)} on
       two or more Gene Curation Coalition submitters agreeing where no panel disputes it.
-      Rare-variant statistics are reported per independent cohort family, and none is
-      pooled across them.</p>
+      Rare-variant statistics are reported per study, and none is pooled across
+      studies.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
 
@@ -462,6 +514,7 @@ def _render(
     records as overlapping, can describe the same people and count once. How many
     datasets agree about a gene is shown on every row of the browse page, and it is a
     count of evidence — never a verdict on the gene.</p>
+  {_panel_correction_note(census.studies, corpus)}
   {_own_lab_sentence(census.studies, corpus)}
   {_GLYPH_KEY}
 

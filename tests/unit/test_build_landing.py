@@ -8,6 +8,7 @@ import re
 import shutil
 from datetime import date
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -483,7 +484,13 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     assert "Every gene here is published on an upstream expert panel" not in text
     # D49: the figures count every rare-variant test, and a de novo enrichment is
     # not a burden test, so the front page never calls them "burden statistics".
-    assert "Rare-variant statistics are reported per independent cohort family" in sentence
+    # Per study, not "per independent cohort family" (review, 2026-10-27): rows
+    # are each one study's, and since I3 one family holds two studies.
+    assert (
+        "Rare-variant statistics are reported per study, and none is pooled across studies."
+        in sentence
+    )
+    assert "reported per independent cohort family" not in text
     assert "burden statistic" not in text.lower()
     # D49: the definition names all three analyses, as literal prose (not the
     # source constant), and says "copy-number variants" so a future non-deletion
@@ -768,6 +775,70 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
         assert "whose results this atlas publishes" not in listed
     else:
         assert f"<p>{sentence}</p>" in listed
+
+
+_PANEL_NOTE_LINK: Final = (
+    '<a href="methods.html#rare-variants">How to read rare-variant results</a>.'
+)
+
+
+@pytest.mark.parametrize(
+    ("panels", "note"),
+    [
+        pytest.param(
+            {"PMID:2": 248},
+            "For PMID:2, the correction a result must survive ran over its 248-gene panel, not "
+            f"the genome. {_PANEL_NOTE_LINK}",
+            id="one published study corrected over a panel",
+        ),
+        pytest.param(
+            {"PMID:1": 1200, "PMID:3": 248},
+            "For PMID:1 and PMID:3, the correction a result must survive ran over each study's "
+            "gene panel (1,200 genes for PMID:1, 248 genes for PMID:3), not the genome. "
+            f"{_PANEL_NOTE_LINK}",
+            id="two, each with its own panel",
+        ),
+        pytest.param({"PMID:9": 248}, None, id="the only such study is outside the gate"),
+        pytest.param({}, None, id="no study corrected over a panel"),
+    ],
+)
+def test_the_front_page_says_whose_correction_ran_over_a_panel_not_the_genome(
+    tmp_path: Path, panels: dict[str, int], note: str | None
+) -> None:
+    """The surviving count's qualifier (review, 2026-10-27; owner decision R3).
+
+    "Genes with a rare-variant result surviving its study's correction" is the
+    owner's label and reads as genome-wide, and 22 of the 32 genes it counted on
+    a build of 5f7161b survive only PMID:40127276's Benjamini-Hochberg over its
+    248 panel genes. So the page names each published study whose correction
+    ran over a panel, from its curated `correction_genes`. Only the studies
+    whose rows reach a published bundle: `PMID:9` tests only a gene outside the
+    gate, so a note naming it would qualify a count it is not in.
+    """
+    burden = {
+        "HGNC:1": [_burden_row(study="PMID:1"), _burden_row(study="PMID:2")],
+        "HGNC:2": [_burden_row(study="PMID:3")],
+        "HGNC:9": [_burden_row(study="PMID:9")],
+    }
+    published = {"HGNC:1", "HGNC:2", TBX5}
+    families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
+    census = burden_census(burden, published, families, survives=survives_own_correction)
+    corpus = Corpus(
+        root=Path("."),
+        assertions=(_assertion(),),
+        publications=tuple(
+            _study(pmid, own_lab=False).model_copy(update={"correction_genes": panels.get(pmid)})
+            for pmid in ("PMID:1", "PMID:2", "PMID:3", "PMID:9")
+        ),
+    )
+
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+    listed = _prose(_section(text, "<h2>What's published</h2>"))
+
+    if note is None:
+        assert "not the genome" not in text
+    else:
+        assert f"<p>{note}</p>" in listed
 
 
 def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) -> None:
@@ -1087,6 +1158,39 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
             "http://sciences.orphadata.com/</a>.</em>",
             id="no header recorded: nothing to cite",
         ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata(
+                        "orphanet_product4", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"
+                    ),
+                    _orphadata("orphanet_product1"),
+                ]
+            ),
+            "Data version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23 (product 4).</em>",
+            id="one product's header: named, never cited as both",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata("orphanet_product4", "1.3 <b> & 4", "2026<12>01 01:00:00"),
+                    _orphadata("orphanet_product1", "1.3 <b> & 4", "2026<12>01 02:00:00"),
+                ]
+            ),
+            "Data version 1.3 &lt;b&gt; &amp; 4, 2026&lt;12&gt;01.</em>",
+            id="markup in a header is escaped, the date as the version",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata("orphanet_product4", "1.3 <b>", "2026<12>01 01:00:00"),
+                    _orphadata("orphanet_product1", "1.2 & 4", "2025<06>23 02:00:00"),
+                ]
+            ),
+            "Data version 1.3 &lt;b&gt;, 2026&lt;12&gt;01 (product 4); 1.2 &amp; 4, "
+            "2025&lt;06&gt;23 (product 1).</em>",
+            id="and escaped per product where the releases differ",
+        ),
     ],
 )
 def test_the_orphadata_citation_states_the_release_each_product_was_mirrored_from(
@@ -1100,7 +1204,11 @@ def test_the_orphadata_citation_states_the_release_each_product_was_mirrored_fro
     citation prints them: once where both products are one release on one day
     (the literal in the test above), each by name where they differ, and
     nothing where no header was recorded -- never a version one product
-    carries attributed to both.
+    carries attributed to both, which is also why a release only one product
+    records is printed against that product's name (review, 2026-10-27: the
+    `len(stated) == len(_ORPHADATA)` guard that keeps it so survived every
+    test). Both header fields are a curator's transcription interpolated into
+    HTML, so both are escaped; the date reached the page unescaped until then.
     """
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, sources=sources)
