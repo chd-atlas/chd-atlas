@@ -2137,24 +2137,27 @@ One record per omics dataset, serialised generically from the curated model
 this file, with nothing filtered out: `id`, `archive`, `technology`, `tissue`,
 `developmental_stage`, `organism`, `n_samples`, `licence`, `contrasts`,
 `design`, `cardiac_tissues`, `stages`, `cell_types`, `regions`,
-`detection_floor`, `floor_source`, `quantile_estimator` and `publication`. This is what an omics row's `dataset`
-column resolves against, the way `publications.json` resolves a PMID.
+`detection_floor`, `floor_source`, `quantile_estimator` and `publication`.
+This is what an omics row's `dataset` column resolves against, the way
+`publications.json` resolves a PMID.
 
-**The last six (`design` onward) are what distinguishes a bulk developmental
-expression dataset from every other kind mirrored here.** `design` is either
+**The eight from `design` to `quantile_estimator` are what distinguishes a bulk developmental
+expression dataset from every other kind mirrored here.** `design` is one of
 `"contrast"` (a differential-expression comparison — `expression`,
-`proteomics`, `phospho`) or `"profile"` (a raw abundance series across
+`proteomics`, `phospho`), `"profile"` (a raw abundance series across
 development — `profiles`, see
 [`expression_profile`](#the-bundles-expression_profile-object-a-developmental-transcriptome-never-a-contrast)
-above). `cardiac_tissues` and `stages` are `[]` and
+above) or `"cell_type_profile"` (single-cell abundance by cell type and
+region, described below). `cardiac_tissues` and `stages` are `[]` and
 `detection_floor`/`floor_source`/`quantile_estimator` are `null` on a
 `"contrast"` record — never omitted — so every record has one shape whichever
 design it declares. `cardiac_tissues` names which of a profile dataset's own
 tissue tokens this atlas reads as "the heart" for that dataset.
 
-`cell_types` (each `token`, `label`, `compartment`) and `regions` are `[]` on every
-record except a `"cell_type_profile"`-design one, the single-cell design that is
-indexed by cell type and region instead of by stage; no such record is curated yet.
+`cell_types` (each `token`, `label`, `compartment`) and `regions` are `[]` on
+every record except a `"cell_type_profile"`-design one, the single-cell design
+that is indexed by cell type and region instead of by stage; the curation model
+rejects them on any other design. No such record is curated yet.
 
 `stages` is one entry per developmental stage the dataset declares. Each
 carries the stage's own `token` — the literal string the mirror's rows use,

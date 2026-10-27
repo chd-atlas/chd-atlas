@@ -367,3 +367,25 @@ def test_a_cell_type_profile_dataset_needs_no_stages() -> None:
     dataset = _cell_type_dataset()
     assert dataset.stages == ()
     assert dataset.cardiac_tissues == ()
+
+
+@pytest.mark.parametrize("design", ["contrast", "profile"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        pytest.param(
+            {"cell_types": [{"token": "T", "label": "T", "compartment": "c"}]}, id="cell_types"
+        ),
+        pytest.param({"regions": ["LV"]}, id="regions"),
+    ],
+)
+def test_cell_types_and_regions_are_refused_on_any_other_design(
+    design: str, field: dict[str, object]
+) -> None:
+    """The `[]`-unless-`cell_type_profile` claim in the model comment and in
+    docs/data-api.md is enforced here, not only stated.
+    """
+    base = _profile_dataset().model_dump() if design == "profile" else _dataset()
+    base.update(field)
+    with pytest.raises(ValidationError, match=f"design '{design}' declares no cell_types"):
+        Dataset.model_validate(base)

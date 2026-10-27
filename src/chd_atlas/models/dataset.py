@@ -211,6 +211,12 @@ class Dataset(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def cell_types_and_regions_belong_to_their_design(self) -> Dataset:
+        if self.design is not DatasetDesign.CELL_TYPE_PROFILE and (self.cell_types or self.regions):
+            raise ValueError(f"design '{self.design.value}' declares no cell_types or regions")
+        return self
+
+    @model_validator(mode="after")
     def a_profile_dataset_is_fully_declared(self) -> Dataset:
         """Everything the derivation needs, required where it is used.
 
