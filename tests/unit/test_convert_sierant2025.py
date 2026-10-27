@@ -28,7 +28,7 @@ from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from burden_mirror import COMBINED_ORDER, COMBINED_SORT_KEY, merge_study  # noqa: E402
+from burden_mirror import COMBINED_ORDER, COMBINED_SORT_KEY, ORDER, merge_study  # noqa: E402
 from convert_sierant2025 import (  # noqa: E402
     _BAND_ROW,
     _BLOCKS,
@@ -414,6 +414,8 @@ def test_the_two_arms_are_built_with_the_units_and_denominators_they_measured() 
         assert row["pvalue_adjustment"] == "benjamini_hochberg"
         assert row["case_cohorts"] == "pcgc"
         assert row["study"] == STUDY
+        # Exactly the mirror's columns, in the schema's order.
+        assert tuple(row) == ORDER == BURDEN.column_names
 
 
 def test_a_header_row_too_short_to_hold_the_layout_is_refused_by_name() -> None:

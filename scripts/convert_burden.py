@@ -100,41 +100,6 @@ _CONSEQUENCE: Final[dict[str, str]] = {
     "syn": "synonymous",
 }
 
-# The order `TABLE_SCHEMAS["burden"]` declares. Written out rather than imported
-# so this script stays runnable without the package installed, matching
-# `convert_hgnc.py`.
-_ORDER: Final[tuple[str, ...]] = (
-    "study",
-    "gene",
-    "cohort_stratum",
-    "lesion_group",
-    "variant_class",
-    "consequence_class",
-    "origin",
-    "maf_max",
-    "count_unit",
-    "n_case_carriers",
-    "n_cases",
-    "n_chd_case_carriers",
-    "comparator",
-    "n_control_carriers",
-    "n_controls",
-    "expected_count",
-    "effect",
-    "effect_measure",
-    "effect_bound",
-    "ci_low",
-    "ci_high",
-    "pvalue",
-    "pvalue_test",
-    "pvalue_adjusted",
-    "pvalue_adjustment",
-    "case_cohorts",
-    "control_cohorts",
-    "method_note",
-    "source",
-)
-
 _DATE_CORRUPTED: Final = re.compile(r"\d{4}-\d{2}-\d{2}")
 _CELL_REF: Final = re.compile(r"([A-Z]+)\d+")
 
