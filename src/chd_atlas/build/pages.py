@@ -69,8 +69,9 @@ import html
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
+from urllib.parse import quote
 
-from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
+from chd_atlas.build.burden import BurdenRow, CombinedRow, Overlap, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
 from chd_atlas.build.concordance import (
     FamilyState,
@@ -122,6 +123,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile
+from chd_atlas.models.scope import ScopeAuthority, ScopeEntry
 from chd_atlas.orphanet_scope import Warrant
 from chd_atlas.vocab import (
     CONTESTED,
@@ -392,15 +394,17 @@ _STRATUM_LABEL: Final[dict[str, str]] = {
 _MATRIX_LEGEND: Final = (
     evidence_legend(swatches=True)
     + '<p class="strip-legend">Rows are <strong>independent cohort families</strong>, not '
-    "studies: two papers sharing a sample collection describe the same people and appear "
-    "once. " + EVIDENCE_POWER_CAVEAT + "</p>"
+    "studies: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and appear once. "
+    + EVIDENCE_POWER_CAVEAT
+    + "</p>"
 )
 
 _STRIP_LEGEND: Final = (
     evidence_legend(swatches=False)
     + '<p class="strip-legend">One glyph per <strong>independent cohort family</strong>, not '
-    "per study: two papers sharing a sample collection describe the same people and count "
-    "once. "
+    "per study: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and count once. "
     + EVIDENCE_POWER_CAVEAT
     + " The tally reads <em>enriched</em> of <em>tested</em>: the first "
     "number counts datasets that found something, the second counts datasets that looked. "
@@ -602,9 +606,17 @@ _MIRRORED_NOTICE: Final = (
 # "children" (2026-10-26): `shared_cohorts` unions case and control collections,
 # and a shared collection may be a control cohort of adults -- UK Biobank's
 # registry note says "~500,000 UK adults recruited at ages 40-69".
+#
+# The declared-overlap clause since review (2026-10-27): the reason it gave was
+# a shared collection alone, and on the 72 pages carrying both PMID:34324492
+# and PMID:42230622 the reason is a declared overlap (`Cohort.overlaps_with`,
+# owner decision I3), for which "may describe partly the same people" is all
+# the registry knows -- so "would" for a shared collection, "could" for the
+# declared kind, as `methods.html#rare-variants` words the two.
 _POOLING_NOTICE: Final = (
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-    "two that share a sample collection would count the same people twice.</p>"
+    "two that share a sample collection would count the same people twice, and pooling "
+    "two that draw on collections this atlas records as overlapping could.</p>"
 )
 
 # The matrix and the card each lead with one row, by two rules the owner kept
@@ -953,6 +965,54 @@ def _row_label(row: BurdenRow) -> str:
 _OWN_LAB_MARK: Final = " · study by an atlas author"
 
 
+def _correction_scope(row: BurdenRow, publication: Publication | None) -> str:
+    """What a card line's row survived, where its study says (owner decision 2026-10-26, R3).
+
+    "Surviving its own study's correction" read as genome-wide on every line,
+    and for PMID:40127276 it is not: that study's q is a Benjamini-Hochberg
+    correction over its 248 panel genes (`Publication.correction_genes`,
+    measured against Dataset S6), and the same study draws a genome-wide line
+    of its own at p < 2.6e-6 (`Publication.genome_wide_threshold`, from its
+    Fig. 1 legend; `_genome_wide`). Measured on a build of e0393f4: 67
+    non-synonymous rows on 25 published genes survive at q < 0.05, and 25 of
+    them, on 13 genes, are below the study's genome-wide line -- two strengths
+    of finding the card printed identically. TBX5's case-control damaging row
+    (p 1.34e-4, q 0.00369) is the first kind and its de novo damaging row (p
+    1.07e-8) the second.
+
+    So a line's row gains its corrected p and the panel it was corrected over.
+    Only the line's own row: the rest of the group are named, not stated, and
+    carry no corrected p. The statistic is named by `_statistic`, so it is `q`
+    only where the correction is a false-discovery rate, as on the matrix and
+    the forest panel. Renders only where the field is curated, so every other
+    study today renders exactly as before.
+    """
+    if publication is None or publication.correction_genes is None:
+        return ""
+    if row.pvalue_adjusted is None:
+        return ""
+    return f" · {_statistic(row)} within its {publication.correction_genes:,}-gene panel"
+
+
+def _genome_wide(row: BurdenRow, publication: Publication | None) -> str:
+    """`p <raw p>` where a row clears its study's own genome-wide line, else "" (R3).
+
+    Strictly below, as the paper's "P-value < 2.6 x 10^-6" reads; formatted as
+    the study tables format a p. Marked on **every** surviving row of a card
+    line, the named ones too, not only the line's own row: measured on a real
+    build, marking the line's row alone left 15 of the 25 genome-wide rows
+    unmarked and 6 of the 13 genes with one -- FLT4's case-control
+    loss-of-function row (p 1.75e-15) sat named under a damaging row that
+    survives within the panel only. Independent of `correction_genes`: a study
+    may state a genome-wide line without correcting over a panel.
+    """
+    if publication is None or publication.genome_wide_threshold is None:
+        return ""
+    if row.pvalue is None or not row.pvalue < publication.genome_wide_threshold:
+        return ""
+    return f"p {row.pvalue:.3g}"
+
+
 def _card_rare_variants(
     rows: Sequence[BurdenRow],
     families: tuple[frozenset[str], ...],
@@ -1098,16 +1158,24 @@ def _card_rare_variants(
         for study, analysis in sorted(groups):
             surviving = sorted(groups[(study, analysis)], key=_sort_key)
             first, others = surviving[0], surviving[1:]
-            also = (
-                f" · also surviving: {'; '.join(_row_label(row) for row in others)}"
-                if others
-                else ""
-            )
+            publication = publications.get(study)
+            named = []
+            for row in others:
+                genome_wide = _genome_wide(row, publication)
+                named.append(
+                    f"{_row_label(row)} (genome-wide, {genome_wide})"
+                    if genome_wide
+                    else _row_label(row)
+                )
+            also = f" · also surviving: {'; '.join(named)}" if named else ""
+            genome_wide = _genome_wide(first, publication)
             name = _study_label(study, publications)
             line = (
                 f"{name} · {analysis} — {_row_label(first)}: "
                 f"{_count(first.n_case_carriers, first.n_cases, first.count_unit)} vs "
-                f"{_controls(first)}{also}{own_lab(study)}"
+                f"{_controls(first)}{_correction_scope(first, publication)}"
+                f"{f' · genome-wide ({genome_wide})' if genome_wide else ''}"
+                f"{also}{own_lab(study)}"
             )
             # `caveats` where a surviving row's `method_note` qualifies these
             # counts -- it is footnoted in the study's block, outside every
@@ -1403,8 +1471,39 @@ def _card_no_association(fact: GeneFacts, gene_validity: GeneValidity) -> str:
     return f'<p class="card-no-association">{html.escape(sentence)}</p>'
 
 
+# The two scope classes whose authority is a ClinGen expert panel, for which a
+# marked syndrome's card line names the panel (`_card_scope`, R5).
+_CLINGEN_SCOPES: Final = frozenset(
+    {ScopeAuthority.CLINGEN_CHD_PANEL, ScopeAuthority.CLINGEN_EXPERT_PANEL}
+)
+
+
+def _panel_graders(
+    validity: Mapping[str, GeneValidity], symbols: Mapping[str, str]
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """`(disease, panel)` -> the genes that ClinGen panel graded for that disease.
+
+    Over every gene the validity mirrors curate in scope, published or not, by
+    registry symbol (the HGNC id where the registry names none), sorted. For
+    `_card_scope`, which must name them when the panel a syndrome is scoped on
+    is not the one that graded the page's own gene.
+    """
+    graders: dict[tuple[str, str], set[str]] = {}
+    for gene, gene_validity in validity.items():
+        for record in gene_validity.records:
+            if record.source is ValiditySource.CLINGEN and record.gcep is not None:
+                graders.setdefault((record.disease, record.gcep), set()).add(
+                    symbols.get(gene, gene)
+                )
+    return {key: tuple(sorted(names)) for key, names in graders.items()}
+
+
 def _card_scope(
-    fact: GeneFacts, gene_validity: GeneValidity, warrants: Mapping[str, Warrant]
+    fact: GeneFacts,
+    gene_validity: GeneValidity,
+    warrants: Mapping[str, Warrant],
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """Why a syndrome's grade is on a CHD atlas, beside the chip. D55.
 
@@ -1432,25 +1531,109 @@ def _card_scope(
     among the 21 Orphanet lines measured 2026-10-26. The clause then names the
     Orphanet syndromes the frequency was recorded for, so it is never read as
     a frequency recorded for the subtype itself.
+
+    **A syndrome a ClinGen expert panel scoped gets the line too** (owner
+    decision 2026-10-26, R5): "Graded for Holt-Oram syndrome as a whole
+    syndrome; in scope on its curation by ClinGen's Syndromic Disorders Gene
+    Curation Expert Panel." Ten genes are graded at their headline for such a
+    syndrome and their cards said nothing. Which terms are syndromes is the
+    curated `ScopeEntry.syndrome` mark, because nothing else says it: ZIC3 and
+    NODAL are graded for "congenital heart disease with heterotaxy syndrome",
+    which is CHD itself. Rendered only when **every** headline disease is a
+    marked term an authority of a ClinGen class scoped, for the reason the
+    Orphanet line needs all of them.
+
+    **The reason clause is not the owner's "because <panel> curates it"**,
+    which reads as sufficient and is not: measured 2026-10-26 on the ClinGen
+    mirror, the Syndromic Disorders panel curates 176 disease terms and 3 are
+    in scope, Hearing Loss 63 and 1. What `admitted_by` records, and SCP005
+    checks against the mirror, is that the term is listed on that panel's
+    curation of it -- so the line says it is in scope *on* that curation. The
+    authority is the term's `attributed_to`, verbatim, after "ClinGen's".
+
+    **That panel need not be the one that graded this gene** (review,
+    2026-10-27). `attributed_to` names the panel whose curation scopes the
+    *term*. EVC2's grade for Ellis-van Creveld syndrome is the Skeletal
+    Disorders panel's, and the term is scoped on the Kidney Cystic and
+    Ciliopathy Disorders panel's curation of it for EVC; "in scope on its
+    curation by" that panel read as the panel having graded EVC2. Where no
+    ClinGen record of this gene for the term is that panel's, the clause names
+    the genes that panel did grade for it (`panel_graders`, from the validity
+    mirror the build already holds): "in scope on ClinGen's <panel>'s curation
+    of it for EVC." Measured on a build of 5f7161b: 1 of the 10 lines (EVC2);
+    the other nine panels graded the page's own gene. None found is a scope
+    term SCP005 refuses, so it raises rather than inventing a gene.
+
+    **Each disease is paired with its own panel.** With two diseases the
+    clause sorted the panels apart from the diseases and joined the two lists,
+    so Holt-Oram syndrome and TARP syndrome read as curated by the Congenital
+    Heart Disease and the Syndromic Disorders panels -- the reverse of the
+    terms' attributions. Several diseases now get one "ClinGen's <panel>'s
+    curation of <disease>" each, in the order the line names the diseases.
+    Latent: every one of the ten lines names one disease.
     """
     headline = fact.headline_confidence
     if headline is None:
         return ""
-    graded = {record.disease for record in _warrant_records(fact, gene_validity)}
-    if not graded or not graded <= warrants.keys():
+    warranting = _warrant_records(fact, gene_validity)
+    graded = {record.disease for record in warranting}
+    if not graded:
         return ""
     diseases = _graded_diseases(gene_validity, headline)
     noun = "a whole syndrome" if len(diseases) == 1 else "whole syndromes"
-    found = [warrants[disease] for disease in sorted(graded)]
-    recorded_for = (
-        ""
-        if all(warrant.via == "direct" for warrant in found)
-        else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
-    )
-    sentence = (
-        f"Graded for {_and_join(diseases)} as {noun}; in scope because Orphanet records a "
-        f"structural heart malformation in at least 30% of cases{recorded_for}."
-    )
+    if graded <= warrants.keys():
+        found = [warrants[disease] for disease in sorted(graded)]
+        recorded_for = (
+            ""
+            if all(warrant.via == "direct" for warrant in found)
+            else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
+        )
+        reason = (
+            "in scope because Orphanet records a structural heart malformation in at least 30% "
+            f"of cases{recorded_for}"
+        )
+    else:
+        terms = [(scope_terms or {}).get(disease) for disease in sorted(graded)]
+        marked = [
+            term
+            for term in terms
+            if term is not None and term.syndrome and term.admitted_by in _CLINGEN_SCOPES
+        ]
+        if len(marked) != len(terms):
+            return ""
+        labels = {record.disease: record.disease_label for record in warranting}
+        clauses: list[tuple[str, str, tuple[str, ...]]] = []
+        for term in sorted(marked, key=lambda term: (labels[term.id], term.id)):
+            own = {
+                record.gcep
+                for record in gene_validity.records
+                if record.source is ValiditySource.CLINGEN and record.disease == term.id
+            }
+            others: tuple[str, ...] = ()
+            if term.attributed_to not in own:
+                others = (panel_graders or {}).get((term.id, term.attributed_to), ())
+                if not others:
+                    raise ValueError(
+                        f"scope term {term.id} is attributed to {term.attributed_to!r}, which "
+                        f"graded no gene for it in the validity mirror; SCP005 refuses this"
+                    )
+            clauses.append((f"ClinGen's {term.attributed_to}", labels[term.id], others))
+        if len(clauses) == 1:
+            [(panel, _, others)] = clauses
+            reason = (
+                f"in scope on {panel}'s curation of it for {_and_join(others)}"
+                if others
+                else f"in scope on its curation by {panel}"
+            )
+        else:
+            reason = "in scope on " + _and_join(
+                [
+                    f"{panel}'s curation of {label}"
+                    + (f" for {_and_join(others)}" if others else "")
+                    for panel, label, others in clauses
+                ]
+            )
+    sentence = f"Graded for {_and_join(diseases)} as {noun}; {reason}."
     return f'<p class="card-scope">{html.escape(sentence)}</p>'
 
 
@@ -1465,6 +1648,8 @@ def _rail(
     publications: Mapping[str, Publication] | None = None,
     warrants: Mapping[str, Warrant] | None = None,
     identity: GeneIdentity | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """The clinician card: the summary column, for every gene whether curated here or not.
 
@@ -1564,7 +1749,7 @@ def _rail(
         f"{_card_gloss(fact)}"
         f"{_card_dispute(fact, gene_validity)}"
         f"{_card_no_association(fact, gene_validity)}"
-        f"{_card_scope(fact, gene_validity, warrants or {})}"
+        f"{_card_scope(fact, gene_validity, warrants or {}, scope_terms, panel_graders)}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
         '<p><a href="../methods.html">How to read this page</a> &middot; '
@@ -1572,13 +1757,47 @@ def _rail(
     )
 
 
-def _validity_row(record: ValidityRecord) -> Row:
+# GenCC's `report_url` for every PanelApp Australia submission: the site's bare
+# homepage, on all 5,478 of them in the mirror (measured 2026-10-26), so the
+# validity table's "open" link landed on a page that does not name the gene.
+_PANELAPP_AUSTRALIA: Final = "PanelApp Australia"
+_PANELAPP_AUSTRALIA_HOME: Final = "https://panelapp-aus.org"
+
+
+def _report_url(record: ValidityRecord, symbol: str | None) -> str | None:
+    """Where a validity row's report link goes: GenCC's URL, with one exception (R8).
+
+    Owner decision 2026-10-26. A PanelApp Australia record whose `report_url`
+    is exactly the bare homepage links that site's page for the gene instead,
+    `https://panelapp-aus.org/panels/entities/<HGNC symbol>`: verified
+    2026-10-26 to answer 200 for TBX5, whose PanelApp Australia API record
+    lists it on 11 panels. **The one report URL this atlas builds rather than
+    republishes** (the identity links are built too, from ids, by
+    `identity.external_links`), because the one GenCC supplies names no gene and so cannot
+    lead to the record the row reports. Every other submitter's URL, and a
+    PanelApp Australia URL that is anything but the homepage, is GenCC's as
+    given; the mirror and the bundle keep GenCC's value. The symbol is the gene
+    registry's, percent-encoded; a gene the registry does not name keeps the
+    homepage rather than a URL built on its HGNC id.
+    """
+    if (
+        record.source is ValiditySource.GENCC
+        and record.submitter == _PANELAPP_AUSTRALIA
+        and record.report_url == _PANELAPP_AUSTRALIA_HOME
+        and symbol
+    ):
+        return f"{_PANELAPP_AUSTRALIA_HOME}/panels/entities/{quote(symbol, safe='')}"
+    return record.report_url
+
+
+def _validity_row(record: ValidityRecord, symbol: str | None = None) -> Row:
     """One mirrored classification as a row, in the section's one vocabulary.
 
     `classification_term` is what the authority published, not the rung it maps
     onto: GenCC's `Supportive` maps to no rung at all, and a table showing the
     mapped value would render that submitter's row as blank or, worse, as a
-    grade nobody gave.
+    grade nobody gave. `symbol` is the gene's registry symbol, for
+    `_report_url`.
     """
     curator = record.gcep if record.source is ValiditySource.CLINGEN else record.submitter
     return Row(
@@ -1588,12 +1807,14 @@ def _validity_row(record: ValidityRecord) -> Row:
             _inheritance(record.moi),
             record.classification_term,
             _date(_record_date(record)),
-            _report_link(record.report_url, record.sop),
+            _report_link(_report_url(record, symbol), record.sop),
         )
     )
 
 
-def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
+def _validity_section(
+    gene_validity: GeneValidity, notes: str = "", symbol: str | None = None
+) -> str:
     """The mirrored classifications: the expert panel's first, then everyone else's. D51.
 
     `notes` (the Orphanet scope notes) is placed after the intro and before the
@@ -1629,8 +1850,8 @@ def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
     panel = [r for r in gene_validity.records if r.source is ValiditySource.CLINGEN]
     submitted = [r for r in gene_validity.records if r.source is ValiditySource.GENCC]
     listed = [r for r in submitted if not _repeats_the_panel(r, panel)]
-    panel_rows = [_validity_row(record) for record in panel]
-    listed_rows = [_validity_row(record) for record in listed]
+    panel_rows = [_validity_row(record, symbol) for record in panel]
+    listed_rows = [_validity_row(record, symbol) for record in listed]
     folded = len(listed) < len(submitted)
     clingen_listed = any(record.submitter == "ClinGen" for record in listed)
     return (
@@ -1791,7 +2012,7 @@ def _study_label(pmid: str, publications: Mapping[str, Publication]) -> str:
     # `Publication.authors` constrains the *list* to `min_length=1`, not its
     # elements, so a whitespace-only first author passes every validator and
     # renders "    et al. 2026" -- a study heading naming nobody. Same defect
-    # `runner.py::_cell` exists to catch on the mirror side, reaching a page for
+    # `tables.cell_text` exists to catch on the mirror side, reaching a page for
     # the first time here: `authors[0]` was previously read only by `search.py`.
     author = publication.authors[0].strip()
     if not author:
@@ -1986,7 +2207,7 @@ def _burden_section(
     if not rows:
         return ""
 
-    overlaps = shared_cohorts(rows)
+    overlaps = shared_cohorts(rows, cohorts)
     studies = sorted({row.study for row in rows})
     # One block per study, and each block's heading is the card's link target
     # (D55): two studies sharing an anchor would send one study's caveats link
@@ -2081,12 +2302,8 @@ def _burden_section(
         )
 
     shared = "".join(
-        f'<p class="notice-inline"><strong>These two studies are not independent.</strong> '
-        f"{html.escape(_study_label(left, publications))} and "
-        f"{html.escape(_study_label(right, publications))} both draw on "
-        f"{html.escape(_names(common, cohorts))}, so their results describe partly "
-        f"the same people and must not be combined.</p>"
-        for (left, right), common in overlaps.items()
+        _overlap_notice(left, right, overlap, publications, cohorts)
+        for (left, right), overlap in overlaps.items()
     )
 
     # The pooling sentence is conditional. Rendered unconditionally it asserted
@@ -2291,10 +2508,11 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
     #
     # **The count is shown only where the reader must apply it** (2026-10-26).
     # Both branches opened "This study reported N comparisons in all", and
-    # `tests_reported` does not always count comparisons: PMID:40127276's 248 is
-    # its panel *genes* (`curation/publications.yaml` says so), each tested in
-    # two arms over three consequence classes, so the sentence was false on all
-    # 36 pages carrying that study. Where a study corrected every row the reader
+    # `tests_reported` did not always count comparisons: PMID:40127276's was
+    # 248, its panel *genes*, each tested in two arms over three consequence
+    # classes, so the sentence was false on all 36 pages carrying that study.
+    # (Its `tests_reported` is null since owner decision 2026-10-26, W1, and
+    # the 248 is `correction_genes`.) Where a study corrected every row the reader
     # applies no threshold of their own, so no count is needed, and none is
     # stated; where it did not, the count is the Bonferroni denominator the
     # sentence after it uses -- true of PMID:42230622, whose 138,609 is one
@@ -2407,8 +2625,9 @@ def _strip_notes(
     """Each curated `Publication.summary_caveat` of a study the strips name, once.
 
     The strips summarise every study's result for every gene -- PMID:34324492
-    sits in a family on all of them, and "enriched, and survives that study's
-    own correction" is a stronger summary than any count -- so the caveat the
+    sits in a family on all of them, and a hover reading "PMID:34324492:
+    enriched, and survives this study's own correction" is a stronger summary
+    than any count -- so the caveat the
     gene page's card prints beside that study's counts is printed here too,
     under the legend, in study-id order. The page has no study blocks to link
     to, so each note names its study by label and PMID.
@@ -2443,19 +2662,30 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
     **Fill encodes the correction**, so a single glyph carries two facts a
     reader would otherwise need two columns for: that a dataset showed
     enrichment, and whether that survived the study's own correction. TAB2 is
-    the case it was designed against -- three families all pointing the same
-    way, of which only one survives correction.
+    the case it was designed against -- every family pointing the same way,
+    and fewer surviving correction: it read "3 of 3 tested · 1 corrected"
+    over three families until owner decision 2026-10-27 (I3) made two of its
+    three studies one family, and reads "2 of 2 tested · 1 corrected" since.
 
     The tally counts *tested* families and says both numbers, because either
-    alone misleads. `3 of 3` hides that two do not survive correction;
+    alone misleads. `2 of 2` hides that one does not survive correction;
     `1 corrected` hides that PMID:42230622 publishes no correction on any row
     and so can never earn one.
 
     A family that did not test the gene gets its own glyph and is excluded from
     the denominator. That is not presentation: KDM6A is ClinGen definitive and
-    shows nothing in either dataset that tested it, and "0 of 3" beside a green
-    chip reads as the data contradicting the classification, where "0 of 2
-    tested" reads as what it is.
+    shows nothing in either dataset that tested it, and a denominator that also
+    counted a family which never looked would add one more dataset to those
+    finding nothing, beside a green chip. KLF13, which one of the two families
+    tested, reads "1 of 1 tested" (measured on a build of 5f7161b).
+
+    **The hover names each study with its own state** (`members`, review
+    2026-10-27). The glyph and the tally are the family's; the `title` is
+    where a reader asks which study said what, and it built "<studies>:
+    <family state>" until then, which attributed a family's state to every
+    study in it -- "enriched, and survives this study's own correction" of a
+    study that publishes no corrected p, and a state at all of a study with no
+    row for the gene. A family of two or more says it is one, counted once.
     """
     families = concordance.get("families") or ()
     if not isinstance(families, Sequence):
@@ -2465,9 +2695,16 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
         if not isinstance(entry, Mapping):
             continue
         state = str(entry.get("state", ""))
-        studies = entry.get("studies") or ()
-        names = ", ".join(str(study) for study in studies) if isinstance(studies, Sequence) else ""
-        title = f"{names}: {_STATE_TITLE.get(state, state)}"
+        members = entry.get("members") or ()
+        said = [
+            f"{member.get('study', '')}: "
+            f"{_STATE_TITLE.get(str(member.get('state', '')), str(member.get('state', '')))}"
+            for member in (members if isinstance(members, Sequence) else ())
+            if isinstance(member, Mapping)
+        ]
+        # ". " between studies, not "; ": the `nominal` state's own sentence
+        # carries a semicolon.
+        title = ". ".join(said) + (". One cohort family, counted once." if len(said) > 1 else "")
         glyph = _STATE_GLYPH.get(state, "untested")
         body = "&ndash;" if glyph == "untested" else ""
         glyphs.append(f'<span class="dot {glyph}" title="{html.escape(title)}">{body}</span>')
@@ -2517,6 +2754,15 @@ def _evidence_matrix(
     its state is not true of. Where a cell holds more than one row the count is
     stated, so a reader knows the cell summarises and the table below is the
     record.
+
+    **In a family of two or more studies, a study with no row for this gene is
+    marked in the row's label** ("(no row for this gene)"), because the
+    family's cells cannot say which of its studies they come from. Until
+    review (2026-10-27) the label joined every member's name, so 46 of the 118
+    pages with a matrix (measured on a build of 5f7161b) named a study as part
+    of the row whose cells it contributes nothing to, and which has no block
+    on the page. A one-study family is not marked: its cells already say
+    `not tested` in every column.
     """
     if not rows or not families or not axes:
         return ""
@@ -2535,7 +2781,11 @@ def _evidence_matrix(
     body: list[str] = []
     for family in families:
         members = [row for study in sorted(family) for row in by_study.get(study, ())]
-        label = " + ".join(_study_label(study, publications) for study in sorted(family))
+        label = " + ".join(
+            _study_label(study, publications)
+            + (" (no row for this gene)" if len(family) > 1 and study not in by_study else "")
+            for study in sorted(family)
+        )
         cells: list[str] = []
         for variant, comparator in axes:
             in_cell = [
@@ -3620,6 +3870,48 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
         "recorded for them</summary><ul>"
         + "".join(items)
         + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
+    )
+
+
+def _overlap_notice(
+    left: str,
+    right: str,
+    overlap: Overlap,
+    publications: Mapping[str, Publication],
+    cohorts: Mapping[str, Cohort],
+) -> str:
+    """Why two studies on one page are not independent, the way the page names a shared one.
+
+    A shared collection reads as it always has: both "draw on" it, so their
+    results "describe partly the same people". A declared overlap (owner
+    decision 2026-10-27, I3; `Cohort.overlaps_with`) is two collections, one
+    per study, so it says which each draws on, that this atlas records them as
+    overlapping, and "may describe", because the registry records a likely
+    overlap, not a counted one: PMID:34324492's author answered that its case
+    set does or likely does include DDD participants. Measured on a real build
+    the day it was written: 72 pages carry both PMID:34324492 and PMID:42230622,
+    and each now carries this notice once.
+    """
+    first = html.escape(_study_label(left, publications))
+    second = html.escape(_study_label(right, publications))
+    clauses = []
+    if overlap.shared:
+        clauses.append(
+            f"{first} and {second} both draw on {html.escape(_names(overlap.shared, cohorts))}"
+        )
+    if overlap.declared:
+        mine = sorted({collection for collection, _ in overlap.declared})
+        theirs = sorted({collection for _, collection in overlap.declared})
+        clauses.append(
+            f"{first} draws on {html.escape(_names(mine, cohorts))} and {second} on "
+            f"{html.escape(_names(theirs, cohorts))}, collections this atlas records as "
+            "overlapping"
+        )
+    verb = "describe" if overlap.shared else "may describe"
+    return (
+        '<p class="notice-inline"><strong>These two studies are not independent.</strong> '
+        f"{', and '.join(clauses)}, so their results {verb} partly the same people and "
+        "must not be combined.</p>"
     )
 
 
@@ -5266,6 +5558,7 @@ def build_gene_pages(
     scope_warrants: Mapping[str, Warrant] | None = None,
     scope_labels: Mapping[str, str] | None = None,
     identities: Mapping[str, GeneIdentity] | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -5278,7 +5571,7 @@ def build_gene_pages(
     `build_landing` take; a gene absent from it reads as its own HGNC id, the
     same registry fallback those two apply.
 
-    `identities` is `runner._gene_identities`' return (D52). Given a mapping,
+    `identities` is `identity.read_gene_identities`' return (D52). Given a mapping,
     every gene must carry the ids its required links are keyed on: a gene
     absent from it gets `EMPTY_IDENTITY`, which `external_links` refuses. `None`
     renders no identity block at all -- the unit suites that do not exercise
@@ -5319,6 +5612,7 @@ def build_gene_pages(
     combined_by_gene = combined or {}
     warrants = scope_warrants or {}
     labels = scope_labels or {}
+    graders = _panel_graders(validity, symbols)
     for gene in sorted(facts):
         fact = facts[gene]
         symbol = symbols.get(gene, gene)
@@ -5337,6 +5631,8 @@ def build_gene_pages(
                 publications=publications,
                 warrants=warrants,
                 identity=identity,
+                scope_terms=scope_terms,
+                panel_graders=graders,
             )
             + "<div>"
             + _SCOPE_SHORT
@@ -5346,7 +5642,9 @@ def build_gene_pages(
             # pages' notes the disease has no GenCC row), and a note placed
             # under one group read as qualifying only that group's rows.
             + _validity_section(
-                gene_validity, notes=_orphanet_notes(gene_validity, warrants, labels)
+                gene_validity,
+                notes=_orphanet_notes(gene_validity, warrants, labels),
+                symbol=symbols.get(gene),
             )
             # The atlas's own curated evidence, for a curated gene. An uncurated
             # gene's page says so on the card (`_card_curation`, D55), not here:

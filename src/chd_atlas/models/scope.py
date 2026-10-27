@@ -53,7 +53,7 @@ from chd_atlas.identifiers import DiseaseId, OrphaId
 
 # Non-blank after stripping: a value of all whitespace passes a bare
 # `min_length` and renders as nothing, which is worse than an absent field
-# because it looks answered. Mirrors the defect `_cell` in `build/runner.py`
+# because it looks answered. Mirrors the defect `cell_text` in `tables.py`
 # exists to catch on the mirror side.
 _NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -126,6 +126,17 @@ class ScopeEntry(BaseModel):
     # or its parent syndrome's for a numbered subtype. Required for, and only
     # for, `ORPHANET_PHENOTYPE_FREQUENCY`.
     orphanet: OrphaId | None = None
+    # The term names a syndrome -- a disease with a heart malformation among
+    # its features -- rather than heart disease itself (owner decision
+    # 2026-10-26, R5). Curated, because nothing in a term's id, label or
+    # authority says so: "Holt-Oram syndrome" and "congenital heart disease
+    # with heterotaxy syndrome" both carry the word, and only the first is a
+    # syndrome a heart grade must be qualified for. A gene page's card reads
+    # it: a gene graded at its headline only for marked, ClinGen-scoped
+    # syndromes says the grade is for the syndrome as a whole. Set on exactly
+    # the nine terms the ten genes graded that way are graded for; an
+    # Orphanet-scoped term needs no mark, its warrant already says it.
+    syndrome: bool = False
     admitted_on: date
 
     @model_validator(mode="after")

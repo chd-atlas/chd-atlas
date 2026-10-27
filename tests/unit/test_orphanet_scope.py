@@ -295,7 +295,7 @@ def test_an_hpo_release_that_cannot_be_read_is_none_never_an_empty_set(
 
 
 def test_the_structural_set_the_build_applies_is_the_one_methods_html_states() -> None:
-    """264 terms over the pinned HPO release, alt ids included (measured 2026-10-25).
+    """291 terms over the pinned HPO release, alt ids included (measured 2026-10-26).
 
     An HPO upgrade that moves this changes which syndromes the rule admits
     without any line of this repository changing, so it must fail here and be
@@ -307,33 +307,54 @@ def test_the_structural_set_the_build_applies_is_the_one_methods_html_states() -
 
     **`methods.html#scope` defines a structural heart malformation in words**
     (`methods.SCOPE_RULE`, pinned as a literal in `test_build_methods.py`), and
-    every term below is a clause of that sentence, measured 2026-10-26 against
-    this release: coarctation of the aorta and a patent ductus arteriosus are
-    counted though HPO files them under vascular morphology; cardiomyopathy,
-    tumours and the pericardium are excluded; the branches kept "still hold
-    some findings that are not malformations, such as a calcified or prolapsing
-    valve"; and pulmonic stenosis, truncus arteriosus and an interrupted aortic
-    arch are not counted -- nor is any subtype this release files under them,
-    which a reader of "pulmonic stenosis is not counted" is entitled to assume
-    (valvular pulmonary stenosis among them; tetralogy of Fallot with pulmonary
-    stenosis *is* counted, as a tetralogy). So widening or narrowing the rule
-    where the sentence names it fails here, and the sentence is reworded on
-    purpose rather than left describing a rule the build no longer applies.
+    every term below is a clause of that sentence, measured against this
+    release: eight lesions are counted though HPO files them outside Abnormal
+    heart morphology, each with every subtype filed under it; cardiomyopathy,
+    tumours and the pericardium are excluded; the findings counted "still
+    include some that are not malformations, such as a calcified or prolapsing
+    valve"; and peripheral pulmonary artery stenosis and an aortopulmonary
+    window are not counted. So widening or narrowing the rule where the
+    sentence names it fails here, and the sentence is reworded on purpose rather
+    than left describing a rule the build no longer applies.
+
+    **Widened by owner decision 2026-10-26 (R1)** from 264 terms: six of the
+    eight lesions were named "not counted" (three of them) or not named at all
+    until then. Measured that day over the committed mirrors, the widening makes
+    11 more Orphanet disorders qualify (Noonan syndrome-like disorder with loose
+    anagen hair, ORPHA:2701, among them) and takes SCP007's digest from 239
+    unnominated terms to 248; it admits no term, because nomination stays a
+    curator's. Each lesion's subtypes are listed so that dropping any one of the
+    eight from `ADDED_BRANCHES` fails here naming it.
     """
     repo = Path(__file__).resolve().parents[2]
     registry, _ = load_sources(repo)
     structural = pinned_structural_phenotypes(repo, registry.ontology_files())
     assert structural is not None, "the pinned HPO release did not load"
-    assert len(structural) == 264
+    assert len(structural) == 291
     assert "HP:0001631" in structural  # atrial septal defect
-    # Counted, though HPO files them outside Abnormal heart morphology.
-    assert {"HP:0001680", "HP:0001643"} <= structural
+    # Counted, though HPO files them outside Abnormal heart morphology, each with
+    # every subtype (and alt id) this release files under it.
+    added = {
+        "coarctation": {"HP:0001680", "HP:0004974", "HP:0005151", "HP:0011646", "HP:0011647"},
+        "patent ductus": {"HP:0001643", "HP:0011648", "HP:0011649", "HP:0011650"},
+        "pulmonic stenosis": {"HP:0001642", "HP:0034348", "HP:0034349", "HP:0034350"},
+        "aortic valve stenosis": {"HP:0001650", "HP:0005140"},
+        "supravalvular aortic stenosis": {"HP:0004381"},
+        "truncus": {"HP:0001660", "HP:0004384", "HP:0011608", "HP:0011609", "HP:0011610"},
+        "interrupted arch": {"HP:0011611", "HP:0006680", "HP:0011612", "HP:0011613", "HP:0011614"},
+        "anomalous pulmonary venous return": {
+            "HP:0010772",
+            "HP:0005160",  # total
+            "HP:0010773",  # partial
+            "HP:0011626",  # scimitar anomaly, a partial return
+            "HP:0011719",
+        },
+    }
+    for lesion, terms in added.items():
+        assert terms <= structural, f"{lesion} is no longer counted: {sorted(terms - structural)}"
     # Excluded: cardiomyopathy, a neoplasm of the heart, the pericardium.
     assert not {"HP:0001638", "HP:0100544", "HP:0001697"} & structural
     # Kept, and not malformations: aortic valve calcification, mitral valve prolapse.
     assert {"HP:0004380", "HP:0001634"} <= structural
-    # Not counted, with every subtype this release files under each.
-    pulmonic_stenosis = {"HP:0001642", "HP:0034348", "HP:0034349", "HP:0034350"}
-    truncus = {"HP:0001660", "HP:0004384", "HP:0011608", "HP:0011609", "HP:0011610"}
-    interrupted_arch = {"HP:0011611", "HP:0011612", "HP:0011613", "HP:0011614"}
-    assert not (pulmonic_stenosis | truncus | interrupted_arch) & structural
+    # Not counted: peripheral pulmonary artery stenosis, an aortopulmonary window.
+    assert not {"HP:0004969", "HP:0011604"} & structural

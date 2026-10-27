@@ -9,6 +9,7 @@ from pathlib import Path
 from chd_atlas.build.burden import (
     BurdenRow,
     CombinedRow,
+    Overlap,
     build_cohorts,
     burden_census,
     burden_payload,
@@ -19,6 +20,7 @@ from chd_atlas.build.burden import (
     load_combined,
     shared_cohorts,
 )
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.emit import Emitter
 from chd_atlas.models.cohort import Cohort
 from chd_atlas.tables import BURDEN, BURDEN_COMBINED
@@ -155,7 +157,7 @@ def test_two_studies_drawing_on_one_collection_are_named_as_not_independent() ->
         _row(study="PMID:3", case_cohorts=("gel",), control_cohorts=()),
     ]
 
-    assert shared_cohorts(rows) == {("PMID:1", "PMID:2"): ("ddd",)}
+    assert shared_cohorts(rows, {}) == {("PMID:1", "PMID:2"): Overlap(("ddd",), ())}
 
 
 def _row(**overrides: object) -> BurdenRow:
@@ -211,10 +213,12 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
 
     - **Families are not studies.** The two published genes' rows name *eight*
       studies, and the fixture puts them in **one** family, so `len({row.study})`
-      gives 8 where the answer is 1. They are equal over the committed corpus --
-      three studies on disjoint collections -- which is exactly why a fixture has
-      to separate them: the day a fourth study reuses DDD or PCGC, a study count
-      would tell a reader that a reused cohort is independent evidence.
+      gives 8 where the answer is 1. They were equal over the committed corpus --
+      three studies, three families -- until owner decision 2026-10-27 (I3)
+      declared DDD and DECIPHER overlapping and made two of the three studies one
+      family: 2 families for 3 studies since. A fixture separates them by more
+      than one, so a study count cannot pass for a family count, which would
+      tell a reader that a reused cohort is independent evidence.
 
     - **Genes are those with rows, not the published population.** `HGNC:3` is
       published and has none, so `len(published)` gives 3 where the answer is 2.
@@ -234,28 +238,42 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
       `burden_census` does in a fresh interpreter per seed (CLAUDE.md section
       4.42): measured safe, not proven.
 
+    - **Surviving genes are published genes whose card lists a row** (owner
+      decision 2026-10-26, R9), by `concordance.survives_own_correction`, the
+      card's predicate, handed in. `HGNC:1` carries one surviving row and
+      `HGNC:2` none, so counting genes with any row gives 2 where the answer
+      is 1; unpublished `HGNC:9` carries one too, so dropping the
+      `published` restriction also gives 2.
+
     One test rather than four because they share a fixture and a single call,
     which is what makes the numbers checkable against each other; a
     per-figure split would multiply the setup and weaken nothing that matters.
     """
     first = ("PMID:1", "PMID:1", "PMID:28991257", "PMID:3155", "PMID:52")
     second = ("PMID:2", "PMID:40127276", "PMID:687", "PMID:9314")
+    # A study-published corrected p below 0.05 on an upward row: it survives.
+    surviving = {"pvalue_adjusted": 0.01, "pvalue_adjustment": "benjamini_hochberg"}
     burden = {
-        "HGNC:1": [_row(study=study) for study in first],
+        "HGNC:1": [_row(study=first[0], **surviving), *(_row(study=s) for s in first[1:])],
         "HGNC:2": [_row(study=study) for study in second],
         # Mirrored, never published: the 127-gene asymmetry, in miniature.
-        "HGNC:9": [*(_row(study="PMID:1") for _ in range(3)), _row(study="PMID:9")],
+        "HGNC:9": [
+            _row(study="PMID:1", **surviving),
+            *(_row(study="PMID:1") for _ in range(2)),
+            _row(study="PMID:9"),
+        ],
     }
     # Published and untested, so `genes` cannot be read off `published`.
     published = {"HGNC:1", "HGNC:2", "HGNC:3"}
     # The eight studies share sample collections, so they are one dataset.
     families = (frozenset({*first, *second}),)
 
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
 
     assert census.rows == 9
     assert census.families == 1
     assert census.genes == 2
+    assert census.surviving_genes == 1
     assert census.studies == (
         "PMID:1",
         "PMID:2",
@@ -378,12 +396,22 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     - **`url` is `null`, never absent**, where a collection has no public page.
       An object whose shape varies is a trap for a consumer reading a field off
       one record and expecting it on the next.
+    - **`overlaps_with` is published, sorted, `[]` where none** (owner decision
+      2026-10-27, I3): the declared overlaps that make two studies one cohort
+      family, so a consumer can see why `independent_datasets` merged them.
+      Listed out of order in the fixture so the sort is observed.
     """
     emitter = Emitter(root=tmp_path)
     build_cohorts(
         (
             Cohort(id="zebra", name="Zebra", description="Cited by nothing here.", url=None),
-            Cohort(id="ukbb", name="UK Biobank", description="Adults 40-69.", url="https://u"),
+            Cohort(
+                id="ukbb",
+                name="UK Biobank",
+                description="Adults 40-69.",
+                url="https://u",
+                overlaps_with=["zebra", "unused"],
+            ),
             Cohort(id="unused", name="Unused", description="No row names this.", url=None),
         ),
         emitter,
@@ -397,7 +425,9 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
         "name": "UK Biobank",
         "description": "Adults 40-69.",
         "url": "https://u",
+        "overlaps_with": ["unused", "zebra"],
     }
+    assert published[2]["overlaps_with"] == []
     # `url` present and null rather than omitted -- `"url" in ...` fails on an
     # omitted key where `.get("url") is None` would pass on both.
     assert "url" in published[1] and published[1]["url"] is None

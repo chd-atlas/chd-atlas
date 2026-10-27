@@ -60,10 +60,22 @@ EXCLUDED_BRANCHES: Final[dict[str, str]] = {
     "HP:4000001": "Abnormal cardiac MRI finding: an imaging result, not a lesion",
 }
 
-# Malformations HPO files outside the heart branch, under vascular morphology.
+# Malformations HPO files outside the heart branch, each taken with every
+# subclass the pinned release files under it. Coarctation and a patent ductus
+# since 2026-10-24; the other six by owner decision 2026-10-26 (R1), because the
+# rule left classic lesions uncounted only for where HPO happens to file them.
+# Measured on hp-2026-06-23 that day: none of the six was in the closure.
+# Aortic valve stenosis can also be degenerative, as the kept valve branch's
+# findings can (module docstring); it is counted for the same reason they are.
 ADDED_BRANCHES: Final[dict[str, str]] = {
     "HP:0001680": "Coarctation of aorta: classic CHD, filed under vascular morphology",
     "HP:0001643": "Patent ductus arteriosus: likewise",
+    "HP:0001642": "Pulmonic stenosis: filed under pulmonary valve physiology",
+    "HP:0001650": "Aortic valve stenosis: filed under aortic valve physiology",
+    "HP:0004381": "Supravalvular aortic stenosis: filed under aortic valve physiology",
+    "HP:0001660": "Truncus arteriosus: filed under the great arteries",
+    "HP:0011611": "Interrupted aortic arch: filed under aortic arch morphology",
+    "HP:0010772": "Anomalous pulmonary venous return, total and partial: under the pulmonary veins",
 }
 
 FREQUENCY_RANK: Final[dict[str, int]] = {

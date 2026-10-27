@@ -15,7 +15,7 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow
-from chd_atlas.build.concordance import cohort_families, evidence_axes
+from chd_atlas.build.concordance import cohort_families, evidence_axes, gene_concordance
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.identity import GeneIdentity
@@ -48,6 +48,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset, Stage
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile, EndBasis
+from chd_atlas.models.scope import ScopeEntry
 from chd_atlas.orphanet_scope import Annotation, Warrant
 from chd_atlas.vocab import (
     AtlasCuration,
@@ -425,6 +426,54 @@ def test_a_non_http_report_url_never_becomes_a_link(
     assert "<a href=" not in groups
     assert "<td>SOP11</td>" in groups
     assert report_url.strip() not in page
+
+
+def test_panelapp_australias_homepage_link_opens_the_genes_own_page_and_nothing_else_moves(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """R8 (owner decision 2026-10-26): the one report URL the atlas builds.
+
+    GenCC gives `https://panelapp-aus.org`, the bare homepage, as the report URL
+    of every PanelApp Australia submission (5,478 of 5,478 in the mirror), so
+    the row's link opened a page naming no gene. Exactly that URL from exactly
+    that submitter links `/panels/entities/<symbol>` instead, the symbol
+    percent-encoded (`@`, which HGNC's older group symbols carry, is the
+    character that shows it). A PanelApp Australia URL that is not the bare
+    homepage, and another submitter carrying that same homepage string, keep
+    the URL GenCC gave. Rows are in the GenCC group, in mirror order.
+    """
+    homepage = "https://panelapp-aus.org"
+    records = tuple(
+        replace(_gencc(submitter, Classification.DEFINITIVE), report_url=url)
+        for submitter, url in (
+            ("PanelApp Australia", homepage),
+            ("PanelApp Australia", "https://panelapp-aus.org/panels/250/"),
+            ("G2P", homepage),
+        )
+    )
+    build_gene_pages(
+        facts_uncurated,
+        Emitter(root=tmp_path),
+        symbols={GATA4: "GATA4@"},
+        validity={
+            GATA4: GeneValidity(
+                records=records,
+                state=ValidityState.EXPERT_CURATED,
+                has_source_discordance=False,
+            )
+        },
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    groups = _validity_table(_page(tmp_path, "HGNC_4173.html"))
+    assert re.findall(r'<a href="(https://panelapp-aus[^"]*)">', groups) == [
+        "https://panelapp-aus.org/panels/entities/GATA4%40",
+        "https://panelapp-aus.org/panels/250/",
+        "https://panelapp-aus.org",
+    ]
 
 
 def test_an_uncurated_notice_never_denies_functional_records_the_rail_counts(
@@ -1370,13 +1419,17 @@ def _burden_page(
     publications: dict[str, Publication] | None = None,
     families: tuple[frozenset[str], ...] | None = None,
     axes: tuple[tuple[str, str], ...] | None = None,
+    cohorts: dict[str, Cohort] | None = None,
 ) -> str:
     """Render one gene page.
 
     `families` and `axes` default to the derivation the runner performs, so a
     test that does not care about the matrix still renders a real one rather
-    than an empty section -- and a test that does care can pin them.
+    than an empty section -- and a test that does care can pin them. `cohorts`
+    defaults to `_COHORTS`, and the families are derived over the same registry
+    the page is handed, as the runner derives them (I3).
     """
+    registry = _COHORTS if cohorts is None else cohorts
     emitter = Emitter(root=tmp_path)
     build_gene_pages(
         facts,
@@ -1386,8 +1439,8 @@ def _burden_page(
         assertions={},
         publications=publications or {_PUBLICATION.id: _PUBLICATION},
         burden={GATA4: rows},
-        cohorts=_COHORTS,
-        families=families if families is not None else cohort_families(rows),
+        cohorts=registry,
+        families=families if families is not None else cohort_families(rows, registry),
         axes=axes if axes is not None else evidence_axes(rows),
     )
     return _page(tmp_path, name)
@@ -1498,6 +1551,84 @@ def test_two_studies_sharing_a_cohort_are_declared_not_independent(
 
     assert "These two studies are not independent." in page
     assert "Deciphering Developmental Disorders (DDD)" in page
+
+
+def test_two_studies_on_collections_declared_overlapping_are_named_and_counted_once(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """Owner decision 2026-10-27 (I3): the declaration is the only link here.
+
+    PMID:34324492 cites DECIPHER and PMID:42230622 cites DDD; no collection is
+    shared. With the registry declaring the two overlapping, the page names
+    the overlap the way it names a shared collection -- "may describe", for a
+    likely overlap the registry records rather than one a shared id proves --
+    and the matrix shows the two studies as one family row. The same rows over
+    a registry without the declaration show neither, which is what every page
+    carrying both studies showed until the declaration.
+    """
+    rows = [
+        _burden_row(case_cohorts=("ddd",)),
+        _audain2021(case_cohorts=("decipher",), control_cohorts=("gnomad",)),
+    ]
+    declared = {
+        **_COHORTS,
+        "ddd": _COHORTS["ddd"].model_copy(update={"overlaps_with": ["decipher"]}),
+        "decipher": Cohort(
+            id="decipher", name="DECIPHER", description="Submitted cases.", overlaps_with=["ddd"]
+        ),
+    }
+    page = _burden_page(
+        tmp_path, facts_uncurated, rows, publications=_ALL_STUDIES, cohorts=declared
+    )
+
+    notices = re.findall(r'<p class="notice-inline"><strong>These two studies.*?</p>', page)
+    assert notices == [
+        '<p class="notice-inline"><strong>These two studies are not independent.</strong> '
+        "Audain E et al. 2021 draws on DECIPHER and Audain E et al. 2026 on Deciphering "
+        "Developmental Disorders (DDD), collections this atlas records as overlapping, so "
+        "their results may describe partly the same people and must not be combined.</p>"
+    ]
+    assert re.findall(r'<th scope="row">([^<]*)</th>', page) == [
+        "Audain E et al. 2021 + Audain E et al. 2026"
+    ]
+
+    undeclared = _burden_page(
+        tmp_path / "undeclared",
+        facts_uncurated,
+        rows,
+        publications=_ALL_STUDIES,
+        cohorts={
+            **declared,
+            "ddd": _COHORTS["ddd"],
+            "decipher": declared["decipher"].model_copy(update={"overlaps_with": []}),
+        },
+    )
+    assert "These two studies" not in undeclared
+    assert re.findall(r'<th scope="row">([^<]*)</th>', undeclared) == [
+        "Audain E et al. 2021",
+        "Audain E et al. 2026",
+    ]
+
+    # **A study of the family with no row for this gene is marked** (review,
+    # 2026-10-27): the row is still the family's, its cells come from the other
+    # study alone, and an unmarked label named PMID:34324492 as reporting on a
+    # gene it has no block for -- 46 of 118 matrix pages on a build of 5f7161b.
+    # The families are the corpus's, as the runner derives them, not this
+    # gene's: the gene carries PMID:42230622's row only. A one-study family
+    # with no row is not marked: every cell of its row says `not tested`.
+    lone = _burden_page(
+        tmp_path / "lone",
+        facts_uncurated,
+        rows[:1],
+        publications=_ALL_STUDIES,
+        cohorts=declared,
+        families=(*cohort_families(rows, declared), frozenset({"PMID:40127276"})),
+    )
+    assert "These two studies" not in lone
+    assert re.findall(r'<th scope="row">([^<]*)</th>', lone) == [
+        "Audain E et al. 2021 (no row for this gene) + Audain E et al. 2026",
+        "Sierant MC et al. 2025",
+    ]
 
 
 # `test_the_section_says_what_a_missing_row_means_without_asserting_why` and
@@ -1758,7 +1889,7 @@ def test_a_study_heading_never_renders_a_nameless_author(
     "    et al. 2026" -- a study heading naming nobody. `authors[0]` was read
     only by `search.py` before this section existed, so the page is where the
     pre-existing model weakness first became visible. Same shape as the blank
-    `symbol` defect `runner.py::_cell` exists to catch.
+    `symbol` defect `tables.cell_text` exists to catch.
     """
     nameless = _PUBLICATION.model_copy(update={"authors": ["   "]})
     page = _burden_page(
@@ -1803,7 +1934,8 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
     section = _burden_section_text(one)
     assert (
         "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-        "two that share a sample collection would count the same people twice.</p>" in section
+        "two that share a sample collection would count the same people twice, and pooling "
+        "two that draw on collections this atlas records as overlapping could.</p>" in section
     )
     assert "children" not in section
     # Immediately after the matrix, not four paragraphs above it.
@@ -2034,9 +2166,11 @@ def test_the_method_line_tells_a_corrected_study_apart_from_an_uncorrected_one(
     a forest and on one without, so it cannot come to depend on either layout.
 
     **And it states no count (2026-10-26).** It opened "This study reported N
-    comparisons in all", and for PMID:40127276 N is `tests_reported: 248` --
+    comparisons in all", and for PMID:40127276 N was `tests_reported: 248` --
     the study's panel *genes*, each tested in two arms over three consequence
-    classes -- so the sentence was false on all 36 pages carrying that study. A
+    classes -- so the sentence was false on all 36 pages carrying that study.
+    (That `tests_reported` is null since owner decision W1, 2026-10-26; the 248
+    is its `correction_genes`.) A
     study that corrected every row needs no denominator from the reader; the
     count is shown only where the reader must apply it, beside the Bonferroni
     arithmetic, which is true of PMID:42230622 (138,609 is one Fisher test per
@@ -2596,7 +2730,7 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
     legend = page[page.index("</table>") :]
 
     for css, caption in (
-        ("dot full", "enriched, and survives that study&#x27;s own correction"),
+        ("dot full", "enriched, and a result survives its own study&#x27;s correction"),
         ("dot half", "enriched nominally, or no correction published"),
         ("dot none", "tested, no enrichment detected"),
         ("dot untested", "not tested by that dataset"),
@@ -2606,6 +2740,63 @@ def test_the_browse_strips_four_glyphs_are_all_named_in_its_legend(
         assert pair.group(1).strip() == caption, (
             f"{css!r} is captioned {pair.group(1).strip()!r}, expected {caption!r}"
         )
+
+
+def test_the_strip_hover_names_each_study_of_a_family_with_its_own_state(
+    tmp_path: Path,
+    facts_two: dict[str, GeneFacts],
+    validity_two: dict[str, GeneValidity],
+) -> None:
+    """A glyph is a family's; its hover says what each study in it says (review, 2026-10-27).
+
+    Since I3 one family holds PMID:34324492 and PMID:42230622, and the hover
+    read "<both ids>: <family state>". Measured on a build of 5f7161b: 10
+    browse rows said both survive their own correction where only
+    PMID:34324492's rows do -- PMID:42230622 publishes no corrected p -- and 46
+    gave a state to a study with no row for the gene. Here TBX5's family is
+    `corrected` on PMID:34324492's row alone and PMID:42230622's is `nominal`;
+    GATA4's family is PMID:42230622's `no_enrichment`, and PMID:34324492 has no
+    row for it, so it keeps the `not_tested` sentence. Rendered from the
+    concordance the runner derives, so the payload's `members` and the hover
+    are tested as one.
+    """
+    families = (
+        frozenset({"PMID:34324492", "PMID:42230622"}),
+        frozenset({"PMID:40127276"}),
+    )
+    rows = {
+        TBX5: [_audain2021(gene=TBX5), _burden_row(gene=TBX5)],
+        GATA4: [_burden_row(pvalue=0.6)],
+    }
+    emitter = Emitter(root=tmp_path)
+    build_gene_index_page(
+        facts_two,
+        emitter,
+        symbols={GATA4: "GATA4", TBX5: "TBX5"},
+        validity=validity_two,
+        burden_counts={},
+        concordance={gene: gene_concordance(rows[gene], families) for gene in facts_two},
+        publications=_ALL_STUDIES,
+    )
+    page = _page(tmp_path, "index.html")
+    strips = re.findall(r'<span class="strip">(.*?)<span class="strip-tally">', page)
+
+    one_family = "One cohort family, counted once."
+    assert [re.findall(r'title="([^"]*)"', strip) for strip in strips] == [
+        [
+            "PMID:34324492: enriched, and survives this study&#x27;s own correction. "
+            "PMID:42230622: enriched nominally; not after correction, or no correction "
+            f"published. {one_family}",
+            "PMID:40127276: this dataset did not test this gene",
+        ],
+        [
+            "PMID:34324492: this dataset did not test this gene. PMID:42230622: tested, no "
+            f"enrichment detected. {one_family}",
+            "PMID:40127276: this dataset did not test this gene",
+        ],
+    ]
+    # The glyph and the tally stay the family's: TBX5's family is full.
+    assert re.findall(r'<span class="dot (\w+)"', strips[0]) == ["full", "untested"]
 
 
 # One matrix cell's state, `title`, visible effect and statistic, in order.
@@ -6417,7 +6608,7 @@ def test_a_study_s_own_combination_is_stated_in_its_block_and_labelled_for_what_
         publications={_PUBLICATION.id: _PUBLICATION, **_SIERANT_PUBLICATION},
         burden={GATA4: rows},
         cohorts=_COHORTS,
-        families=cohort_families(rows),
+        families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         combined={GATA4: [_combined()]},
     )
@@ -7371,6 +7562,47 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     assert 'class="card-note"' not in _card_variants(_rail_of(failing))
 
 
+def test_the_card_says_how_wide_a_survival_is_where_its_study_records_it(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The panel a q was corrected over, and the study's own genome-wide line (R3).
+
+    Owner decision 2026-10-26: "surviving its own study's correction" read as
+    genome-wide, and PMID:40127276's q is a Benjamini-Hochberg over its 248
+    panel genes. Where a publication records `correction_genes`, the line's
+    row carries its q and that scope; where it records `genome_wide_threshold`,
+    every surviving row on the line strictly below it is marked, the named ones
+    too. **The boundary is strict**, as the paper's "P-value < 2.6 x 10^-6"
+    reads: the line's row here sits exactly on the threshold and is not
+    marked, while the named row just below it is. Real rows (TBX5's card) are
+    pinned in `test_built_site_is_consumable.py`; this is the fixture that can
+    put a row on the line, which no real row is.
+
+    A study recording neither field renders exactly as before, which the
+    fixture literals in `test_the_card_names_each_study_and_test_by_its_first_
+    surviving_row` hold: its PMID:40127276 publication records neither, and its
+    de novo rows sit far below 2.6e-6.
+    """
+    publications = {
+        "PMID:40127276": _SIERANT_PUBLICATION["PMID:40127276"].model_copy(
+            update={"correction_genes": 248, "genome_wide_threshold": 2.6e-6}
+        ),
+    }
+    rows = [
+        _sierant_de_novo(pvalue=2.6e-6, pvalue_adjusted=1.2e-4),
+        _sierant_de_novo(
+            consequence_class="lof", n_case_carriers=21, pvalue=2.59e-6, pvalue_adjusted=1.1e-4
+        ),
+    ]
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=publications)
+
+    assert re.findall(r"<li>(.*?) · <a ", _card_variants(_rail_of(page))) == [
+        "Sierant MC et al. 2025 · de novo enrichment (trios vs mutation model) — damaging "
+        "(LOF + missense): 27 de novo / 3,887 trios vs 0.607 expected · q 0.00012 within its "
+        "248-gene panel · also surviving: loss-of-function (genome-wide, p 2.59e-06)"
+    ]
+
+
 def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:
@@ -7672,7 +7904,11 @@ def test_a_card_with_no_rare_variant_row_says_so_and_claims_no_test(
 
 
 def _clingen(
-    classification: Classification, disease: str, label: str, moi: str = "AD"
+    classification: Classification,
+    disease: str,
+    label: str,
+    moi: str = "AD",
+    gcep: str = "Congenital Heart Disease Gene Curation Expert Panel",
 ) -> ValidityRecord:
     return ValidityRecord(
         source=ValiditySource.CLINGEN,
@@ -7683,7 +7919,7 @@ def _clingen(
         moi=moi,
         report_url=None,
         sop="SOP11",
-        gcep="Congenital Heart Disease Gene Curation Expert Panel",
+        gcep=gcep,
     )
 
 
@@ -7712,18 +7948,25 @@ def _card_page(
     fact: GeneFacts,
     validity: GeneValidity,
     warrants: dict[str, Warrant] | None = None,
+    scope_terms: dict[str, ScopeEntry] | None = None,
 ) -> str:
-    """One gene page, rendered with no burden rows; returns its rail."""
+    """One gene page, rendered with no burden rows; returns its rail.
+
+    `validity` also holds EVC, graded by the panel that scopes Ellis-van Creveld
+    syndrome and never rendered: the gene a card names when that panel did not
+    grade the page's own gene (`_card_scope`).
+    """
     build_gene_pages(
         {GATA4: fact},
         Emitter(root=tmp_path),
-        symbols={GATA4: "GATA4"},
-        validity={GATA4: validity},
+        symbols={GATA4: "GATA4", _EVC_GENE: "EVC"},
+        validity={GATA4: validity, _EVC_GENE: _EVC_VALIDITY},
         assertions={},
         publications={},
         burden={},
         cohorts={},
         scope_warrants=warrants,
+        scope_terms=scope_terms,
     )
     return _rail_of(_page(tmp_path, "HGNC_4173.html"))
 
@@ -8209,6 +8452,96 @@ _ORPHANET_WARRANTS: Final = {
 _IN_SCOPE_BY_ORPHANET: Final = (
     "in scope because Orphanet records a structural heart malformation in at least 30% of cases"
 )
+_HETEROTAXY: Final = "MONDO:1060197"
+_TARP: Final = "MONDO:0010711"
+_CHD: Final = "MONDO:0005453"
+_SIBLING: Final = "MONDO:0009341"
+_ELLIS_VAN_CREVELD: Final = "MONDO:0009162"
+_SYNDROMIC_PANEL: Final = "Syndromic Disorders Gene Curation Expert Panel"
+_CILIOPATHY_PANEL: Final = "Kidney Cystic and Ciliopathy Disorders Gene Curation Expert Panel"
+_SKELETAL_PANEL: Final = "Skeletal Disorders Gene Curation Expert Panel"
+
+
+def _term(
+    mondo: str, label: str, admitted_by: str, attributed_to: str, *, syndrome: bool
+) -> ScopeEntry:
+    return ScopeEntry.model_validate(
+        {
+            "id": mondo,
+            "label": label,
+            "reason": "A fixture term.",
+            "admitted_by": admitted_by,
+            "attributed_to": attributed_to,
+            "syndrome": syndrome,
+            "admitted_on": "2026-10-26",
+        }
+    )
+
+
+# R5's registry: two marked syndromes two ClinGen panels scoped, one the CHD
+# panel's; the CHD-itself heterotaxy term, unmarked; the root CHD term; and a
+# marked syndrome a GenCC submitter scoped, which names no ClinGen panel.
+_SCOPE_TERMS: Final = {
+    _HOLT_ORAM: _term(
+        _HOLT_ORAM,
+        "Holt-Oram syndrome",
+        "clingen_expert_panel",
+        "Syndromic Disorders Gene Curation Expert Panel",
+        syndrome=True,
+    ),
+    _TARP: _term(
+        _TARP,
+        "TARP syndrome",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=True,
+    ),
+    _HETEROTAXY: _term(
+        _HETEROTAXY,
+        "congenital heart disease with heterotaxy syndrome",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=False,
+    ),
+    _CHD: _term(
+        _CHD,
+        "congenital heart disease",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=False,
+    ),
+    _SIBLING: _term(
+        _SIBLING, "Mowat-Wilson syndrome", "gencc_submitter", "Ambry Genetics", syndrome=True
+    ),
+    # Scoped on the ciliopathy panel's curation, which graded EVC; EVC2's grade
+    # for it is the skeletal panel's (the real mirror, 2026-10-27).
+    _ELLIS_VAN_CREVELD: _term(
+        _ELLIS_VAN_CREVELD,
+        "Ellis-van Creveld syndrome",
+        "clingen_expert_panel",
+        _CILIOPATHY_PANEL,
+        syndrome=True,
+    ),
+}
+_ON_SYNDROMIC_CURATION: Final = (
+    "in scope on its curation by ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel"
+)
+# EVC: the gene the ciliopathy panel graded for Ellis-van Creveld syndrome.
+# `_card_page` puts it in the validity mapping every card is rendered against.
+_EVC_GENE: Final = "HGNC:3497"
+_EVC_VALIDITY: Final = GeneValidity(
+    records=(
+        _clingen(
+            Classification.DEFINITIVE,
+            _ELLIS_VAN_CREVELD,
+            "Ellis-van Creveld syndrome",
+            "AR",
+            gcep=_CILIOPATHY_PANEL,
+        ),
+    ),
+    state=ValidityState.EXPERT_CURATED,
+    has_source_discordance=False,
+)
 
 
 @pytest.mark.parametrize(
@@ -8265,7 +8598,7 @@ _IN_SCOPE_BY_ORPHANET: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
-                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _CHD, "congenital heart disease"),
                 _clingen(Classification.LIMITED, _NOONAN, "Noonan syndrome"),
             ),
             None,
@@ -8278,6 +8611,105 @@ _IN_SCOPE_BY_ORPHANET: Final = (
             ),
             None,
             id="no panel graded it, so nothing was graded for anything",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
+            ),
+            f"Graded for Holt-Oram syndrome as a whole syndrome; {_ON_SYNDROMIC_CURATION}.",
+            id="TBX5: a marked syndrome a ClinGen panel scoped",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _ELLIS_VAN_CREVELD,
+                    "Ellis-van Creveld syndrome",
+                    "AR",
+                    gcep=_SKELETAL_PANEL,
+                ),
+            ),
+            "Graded for Ellis-van Creveld syndrome as a whole syndrome; in scope on "
+            "ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+            "Panel&#x27;s curation of it for EVC.",
+            id="EVC2: the panel scoping the term graded another gene for it",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
+                _clingen(Classification.DEFINITIVE, _TARP, "TARP syndrome"),
+            ),
+            "Graded for Holt-Oram syndrome and TARP syndrome as whole syndromes; in scope on "
+            "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel&#x27;s curation of "
+            "Holt-Oram syndrome and ClinGen&#x27;s Congenital Heart Disease Gene Curation "
+            "Expert Panel&#x27;s curation of TARP syndrome.",
+            id="two marked syndromes, each named with its own panel",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _ELLIS_VAN_CREVELD,
+                    "Ellis-van Creveld syndrome",
+                    "AR",
+                    gcep=_SKELETAL_PANEL,
+                ),
+            ),
+            "Graded for Ellis-van Creveld syndrome and Holt-Oram syndrome as whole syndromes; "
+            "in scope on ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation "
+            "Expert Panel&#x27;s curation of Ellis-van Creveld syndrome for EVC and "
+            "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel&#x27;s curation of "
+            "Holt-Oram syndrome.",
+            id="two marked syndromes, one scoped on another gene's grade",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HETEROTAXY,
+                    "congenital heart disease with heterotaxy syndrome",
+                ),
+            ),
+            None,
+            id="ZIC3: CHD itself, unmarked, though its name says syndrome",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _CHD, "congenital heart disease"),
+            ),
+            None,
+            id="a marked syndrome beside an unmarked CHD term at the headline",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _SIBLING, "Mowat-Wilson syndrome"),
+            ),
+            None,
+            id="a marked syndrome no ClinGen panel scoped names no panel",
         ),
     ],
 )
@@ -8314,15 +8746,46 @@ def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_di
     measured 2026-10-26), and pinned so it stays a sentence nobody can publish.
     PTPN11 is graded Definitive for two Orphanet-scoped syndromes, and a line
     naming one would state half of what the warrant row above it names.
+
+    **A syndrome a ClinGen panel scoped gets the line too** (owner decision
+    2026-10-26, R5), read off the curated `syndrome` mark: Holt-Oram is marked,
+    and "congenital heart disease with heterotaxy syndrome" (ZIC3, NODAL) is not
+    -- it is CHD itself, whatever its name says. Every headline disease must be
+    marked and ClinGen-scoped, as every one must be Orphanet-scoped above: a
+    marked syndrome beside an unmarked CHD term gets nothing, and a marked
+    term a GenCC submitter scoped has no panel to name. It says the syndrome is
+    in scope *on* the panel's curation, not *because* the panel curates it: the
+    Syndromic Disorders panel curates 176 disease terms, 3 of them in scope.
     """
     fact, validity = gene
-    rail = _card_page(tmp_path, fact, validity, warrants=_ORPHANET_WARRANTS)
+    rail = _card_page(
+        tmp_path, fact, validity, warrants=_ORPHANET_WARRANTS, scope_terms=_SCOPE_TERMS
+    )
     if line is None:
         assert "card-scope" not in rail
         assert "in scope because Orphanet" not in rail
+        assert "in scope on" not in rail
         assert "not for heart disease" not in rail
     else:
         assert f'<p class="card-scope">{line}</p>' in rail
+
+
+def test_a_syndrome_scoped_on_a_panel_that_graded_no_gene_for_it_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Names no gene rather than an empty one, and never "for another gene".
+
+    A term attributed to a panel the mirror holds no record of for it is what
+    SCP005 refuses, so the build cannot reach this; if it does, the gate was
+    bypassed, and a card naming nobody, or a panel that graded nothing, is a
+    provenance claim nothing supports.
+    """
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _clingen(Classification.DEFINITIVE, _TARP, "TARP syndrome", gcep=_SKELETAL_PANEL),
+    )
+    with pytest.raises(ValueError, match="graded no gene for it"):
+        _card_page(tmp_path, fact, validity, scope_terms=_SCOPE_TERMS)
 
 
 _NOT_CURATED_BY_PANEL: Final = (
@@ -8548,7 +9011,7 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
         publications=publications,
         burden={GATA4: rows},
         cohorts=_COHORTS,
-        families=cohort_families(rows),
+        families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         scope_warrants=_ORPHANET_WARRANTS,
     )

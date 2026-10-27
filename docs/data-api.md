@@ -49,7 +49,8 @@ What the build produced, and a checksum for every file in it.
 ```json
 {
   "counts": {
-    "assertions": 1, "burden_combined": 108, "burden_rows": 1210, "cohort_families": 3,
+    "assertions": 1, "burden_combined": 108, "burden_rows": 1210,
+    "burden_surviving_genes": 32, "cohort_families": 2,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
@@ -58,7 +59,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.18",
+  "schema_version": "2.19",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -90,7 +91,7 @@ wrong by the next one.
   classification rather than on curation done here. Read `atlas_curation` on the
   browse row to tell the two apart.
 
-  The other six keys are computed by the build, and the first three below were
+  The other seven keys are computed by the build, and the first three below were
   added because the object read as a census of the atlas while describing only
   its curation: through `2.6` it published `assertions: 1, datasets: 0,
   functional: 0` for a site serving 23 genes and 290 burden statistics — the
@@ -108,6 +109,13 @@ wrong by the next one.
     gene by construction. It is deliberately not named `independent_datasets`,
     because `datasets` above already means omics datasets and two adjacent keys
     reading `datasets: 0` and `independent_datasets: 3` invite a misreading.
+  - `burden_surviving_genes` (since `2.19`) is the number of published genes
+    with at least one rare-variant row that survives its own study's
+    correction — the genes whose gene-page card lists a rare-variant result,
+    by the card's own rule (`methods.html#rare-variants`). A survival is only
+    as wide as its study's correction, which for PMID:40127276 is within its
+    248-gene panel ([`publications.json`](#publicationsjson)'s
+    `correction_genes`).
   - `burden_combined` is the number of a study's own combined results reaching a
     published bundle — the total of every bundle's
     [`burden_combined`](#the-bundles-burden_combined-array-one-studys-own-combination-of-its-arms)
@@ -119,7 +127,7 @@ wrong by the next one.
     not `datasets`, which counts every curated omics dataset, published gene or
     not.
 
-  Each of the six counts only what the published genes' bundles carry, except
+  Each of the seven counts only what the published genes' bundles carry, except
   `cohort_families`, which groups the whole burden mirror's cohorts: restricting
   it to the published genes could split one family into what then reads as two
   independent ones. `index.html` states these figures in prose too. They are
@@ -240,6 +248,21 @@ wrong by the next one.
   [`publications.json`](#publicationsjson) and so to `featured.json`'s
   embedded publications, `null` where none is curated, and added
   [`methods.html`](#methodshtml), the site's reading notes. Additive.
+  `2.19` widened the structural heart phenotypes [`scope.json`](#scopejson)'s
+  Orphanet warrants are read against by six lesions; ten warrants gained
+  pulmonic stenosis, and no term or gene entered or left scope. It added
+  `correction_genes` and `genome_wide_threshold` to every record of
+  [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
+  ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
+  `null`: its 248 counted panel genes, not comparisons. It declared DDD and
+  DECIPHER overlapping (`overlaps_with` on every [`cohorts.json`](#cohortsjson)
+  record, `[]` where none), which merged PMID:34324492 and PMID:42230622 into
+  one cohort family: `counts.cohort_families` went from 3 to 2, and every
+  `independent_datasets` array from three families to two, each family gaining
+  `members`, every study's own state. It added `file_version`
+  and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
+  every [`scope.json`](#scopejson) term, `false` unless curated, and
+  `burden_surviving_genes` to `counts`. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -255,7 +278,8 @@ point to the other 121. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
-carrying rare-variant evidence, and the genes this atlas has itself curated. All are
+with a reported rare-variant result (any row at all; the label read "Genes with
+rare-variant evidence" until `2.19`), and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
 than written by hand. Its *Where this data comes from* names every source
 [`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
@@ -428,9 +452,11 @@ assumptions are now false — see the next section.
         "enriched": 2,
         "corrected": 1,
         "families": [
-          { "studies": ["PMID:34324492"], "state": "not_tested" },
-          { "studies": ["PMID:40127276"], "state": "corrected" },
-          { "studies": ["PMID:42230622"], "state": "nominal" }
+          { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal",
+            "members": [ { "study": "PMID:34324492", "state": "not_tested" },
+                         { "study": "PMID:42230622", "state": "nominal" } ] },
+          { "studies": ["PMID:40127276"], "state": "corrected",
+            "members": [ { "study": "PMID:40127276", "state": "corrected" } ] }
         ]
       }
     }
@@ -576,7 +602,9 @@ assumptions are now false — see the next section.
 The browse page: the same 119 rows `genes/index.json` publishes, rendered as a
 table a person can read and filter. Each row carries the HGNC id and the
 symbol — both linked to that gene's page — `headline_confidence`, the disease
-it is graded for, the gene's `independent_datasets` as a strip,
+it is graded for, the gene's `independent_datasets` as a strip (one glyph
+per cohort family, whose hover names each of the family's studies with that
+study's own state, from `members`),
 `validity_state`, `atlas_curation`, `burden_row_count` and the gene's lesion
 groups. Above the table sit a text box
 matching id or symbol and five menus (lesion group, confidence, validity state,
@@ -649,9 +677,8 @@ abridged, and each is documented in full further down.
   "independent_datasets": {
     "tested": 2, "enriched": 2, "corrected": 1,
     "families": [
-      { "studies": ["PMID:34324492"], "state": "not_tested" },
-      { "studies": ["PMID:40127276"], "state": "corrected" },
-      { "studies": ["PMID:42230622"], "state": "nominal" }
+      { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal", "members": [ … ] },
+      { "studies": ["PMID:40127276"], "state": "corrected", "members": [ … ] }
     ]
   },
   "expression_profile": { "datasets": [ { "dataset": "E-MTAB-6814", … } ] }
@@ -664,8 +691,11 @@ abridged, and each is documented in full further down.
   Every key is present on every gene and `null` only where the registry holds no
   value; `ncbi_gene` is an integer. The gene page links gnomAD by
   `ensembl_gene` and ClinVar by `ncbi_gene`, and the build fails rather than
-  publish a gene missing either, so a build that completes never publishes
-  either as `null`. The bundle carries the ids, not the URLs.
+  publish a gene missing either, or carrying an `ensembl_gene` that is not
+  `ENSG` and 11 digits or an `ncbi_gene` below 1, so a build that completes
+  never publishes either as `null` or malformed. Since `2.19` `chd-atlas
+  validate` reports the same rule as `GEN004`, so the gate refuses such a
+  registry before the build begins. The bundle carries the ids, not the URLs.
 - `assertions` carry their full `evidence` array, including each item's
   `locator`, `strength` and `summary` — the record a curator is judged on.
   Assertion fields: `curated_on`, `curator`, `evidence`, `extracardiac_features`,
@@ -766,7 +796,14 @@ behind those fields live:
     the record behind the classification (measured 2026-10-25; 157 of 266 on
     2026-08-06, before the population widened). Attribute these to their
     `submitter` and present them as classifications this atlas mirrors; do not
-    render them as though every one resolves to a citable report.
+    render them as though every one resolves to a citable report. The bundle
+    publishes PanelApp Australia's homepage as GenCC gave it. Since `2.19` the
+    site's gene pages link such a row to
+    `https://panelapp-aus.org/panels/entities/<symbol>` instead, the gene's own
+    page on that site (built from the HGNC symbol, percent-encoded) — the one
+    report URL this atlas constructs rather than republishes; a client may do
+    the same. It leads to the gene's PanelApp Australia panels, not to the one
+    submission, which the URL GenCC gave does not identify.
   - `sop` is published because ClinGen's committed mirror spans SOP4 through
     SOP12 with no crosswalk between framework versions published anywhere. A
     classification attributed to ClinGen without its SOP version is an
@@ -1123,23 +1160,38 @@ is computed here; see the previous section for why.
   "enriched": 2,
   "corrected": 1,
   "families": [
-    { "studies": ["PMID:34324492"], "state": "not_tested" },
-    { "studies": ["PMID:40127276"], "state": "corrected" },
-    { "studies": ["PMID:42230622"], "state": "nominal" }
+    { "studies": ["PMID:34324492", "PMID:42230622"], "state": "nominal",
+      "members": [ { "study": "PMID:34324492", "state": "not_tested" },
+                   { "study": "PMID:42230622", "state": "nominal" } ] },
+    { "studies": ["PMID:40127276"], "state": "corrected",
+      "members": [ { "study": "PMID:40127276", "state": "corrected" } ] }
   ]
 }
 ```
 
 **A family is not a study.** It is a set of studies that share at least one
-sample collection, walked transitively — so two papers drawing on the same
-cohort describe the same people and count **once**. Today the three curated
-studies draw on disjoint collections, so there are three singleton families; the
-grouping exists so that the day a fourth study reuses DDD or PCGC, nobody is
-told a reused cohort is independent evidence.
+sample collection, or draw on collections [`cohorts.json`](#cohortsjson) records
+as overlapping (`overlaps_with`), walked transitively — so two papers that can
+describe the same people count **once**. The three curated studies cite
+disjoint collection ids, but since `2.19` DECIPHER (cited by PMID:34324492) and
+DDD (cited by PMID:42230622) are declared overlapping — DDD links its
+participants into DECIPHER, and an author of PMID:34324492 confirms its case set
+does or likely does include DDD participants — so there are two families, one of
+them those two studies. A family's `state` reads all of its studies' rows; a
+gene page names the overlap above the two studies' blocks.
+
+**`members` says what each study in the family says on its own** (since
+`2.19`): one entry per study, sorted by study id, on every family, a one-study
+family included, each with that study's `state` by the same rule over its rows
+alone. A family's `state` is the strongest of its members'. It is there because
+a family's state is not every member's: in the example above, TBX5's, the
+family is `nominal` on PMID:42230622's rows, and PMID:34324492 has no row for
+the gene at all. Attribute a state to a study from `members`, never from the
+family; the glyph and the tally are the family's.
 
 | `state` | meaning |
 | --- | --- |
-| `corrected` | enriched, and survives that study's own published correction |
+| `corrected` | enriched, and a row survives its own study's published correction |
 | `nominal` | enriched, but nominal only — or the study published no correction at all |
 | `no_enrichment` | that dataset tested the gene and detected nothing |
 | `not_tested` | that dataset did not test this gene |
@@ -1167,8 +1219,8 @@ agreement, and a synonymous row is never support: it is the negative control.
    them is what turns "nobody looked" into "somebody looked and found nothing".
 
 `families` is always present, ordered deterministically, and **always carries one
-entry per cohort family in the whole corpus** — three today. A gene no study
-reported gets three `not_tested` entries, not an empty array; `[]` occurs only if
+entry per cohort family in the whole corpus** — two today. A gene no study
+reported gets two `not_tested` entries, not an empty array; `[]` occurs only if
 the corpus has no burden data at all. That is deliberate: every gene shows the
 same slots, so a dataset that did not test this gene is visible as an absence
 rather than as a shorter list.
@@ -1456,7 +1508,16 @@ Top to bottom:
    in at least 30% of cases." ("… as whole syndromes" where the grade is for
    more than one.) For a subtype, whose warrant is its syndrome's, the clause
    names the syndrome the frequency was recorded for ("… of cases of
-   Adams-Oliver syndrome").
+   Adams-Oliver syndrome"). Where instead every such disease is a term
+   `scope.json` marks `syndrome` and a ClinGen expert panel scoped, the line
+   names the panel: "Graded for Holt-Oram syndrome as a whole syndrome; in
+   scope on its curation by ClinGen's Syndromic Disorders Gene Curation Expert
+   Panel." (since `2.19`; ten cards). The panel is the term's `attributed_to`,
+   the one whose curation scopes the term; where it is not a panel that graded
+   this gene for the disease, the line names the genes it did grade for it —
+   EVC2's: "… in scope on ClinGen's Kidney Cystic and Ciliopathy Disorders Gene
+   Curation Expert Panel's curation of it for EVC." Several diseases each name
+   their own panel.
 6. **Rare variants**: one line per study and analysis with a result that
    survives its own study's correction — the rule the evidence matrix's
    `corrected` state uses, so the two cannot disagree — naming the first such
@@ -1471,7 +1532,14 @@ Top to bottom:
    `details` otherwise, with an accessible name naming the study. Not the
    most significant row: a line keeps its study table's reading order, while
    a matrix cell names the most significant of the rows behind its state (see
-   the rare-variant section below). Beneath the lines, once
+   the rare-variant section below). Where the study's publication records
+   `correction_genes`, the line's row also carries its corrected p and what it
+   was corrected over ("q 0.00369 within its 248-gene panel"), because a q over
+   a panel is not genome-wide; where it records `genome_wide_threshold`, every
+   surviving row on the line whose raw p is below it is marked, the line's own
+   row as "genome-wide (p 1.07e-08)" and a named one as "loss-of-function
+   (genome-wide, p 1.35e-09)" (TBX5's de novo line). Today only PMID:40127276
+   records either. Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
    study's block.
@@ -1535,7 +1603,10 @@ atlas computes none of them." — and a link to
 [`methods.html#rare-variants`](#methodshtml), *How to read these results*. The
 line is scoped to the study
 tables because the evidence matrix beneath it shows tallies the atlas derives
-(how many rows a cell summarises). A `corrected` or `nominal` matrix cell also
+(how many rows a cell summarises). A matrix row is a cohort family and names its
+studies; in a family of two or more, a study with no row for the gene is
+marked "(no row for this gene)", since the family's cells cannot say which
+study they come from. A `corrected` or `nominal` matrix cell also
 names one row: the most significant of the rows that give the cell that state —
 the surviving rows under `corrected`, the supporting rows under `nominal` — with
 its effect and one p-value. An unbounded odds ratio keeps its lower bound there,
@@ -1550,13 +1621,21 @@ every fold:
   enrichment at these cohort sizes is not evidence against a gene — and that
   no statistic is pooled across studies: "The atlas computes no pooled
   statistic across studies: pooling two that share a sample collection would
-  count the same people twice." — and, where the card lists a surviving row,
+  count the same people twice, and pooling two that draw on collections this
+  atlas records as overlapping could." — and, where the card lists a surviving row,
   that a cell and the card can lead with different rows: "A cell names the
   most significant of the rows behind its state; the card lists a study's
   surviving rows with a damaging union before its parts, so the two can lead
   with different rows.";
-- any sample collection the gene's studies share, as this atlas has recorded
-  them;
+- for two of the gene's studies that are not independent, a notice naming why,
+  as this atlas has recorded it: a sample collection both draw on ("… so their
+  results describe partly the same people and must not be combined"), or
+  collections [`cohorts.json`](#cohortsjson) records as overlapping
+  (`overlaps_with`), one per study ("… collections this atlas records as
+  overlapping, so their results may describe partly the same people and must
+  not be combined"). On today's corpus no two studies share a collection, and
+  every such notice is the second kind: PMID:34324492's DECIPHER beside
+  PMID:42230622's DDD, on every page carrying both;
 - on a block from a study by an author of this atlas, a one-line declaration:
   "Declaration: this study is by an author of this atlas; its results are
   republished as published and read by the same rule as every other
@@ -1883,6 +1962,8 @@ The committed corpus curates no variants, so the real index is empty:
       "cohort_size": null,
       "ancestry": [],
       "tests_reported": null,
+      "correction_genes": null,
+      "genome_wide_threshold": null,
       "summary_caveat": null
     }
   ]
@@ -1898,6 +1979,23 @@ recorded one, which does not mean the study's results need no qualification:
 its rows' `method_note` and the [`cohorts.json`](#cohortsjson) descriptions
 remain the full caveat. A consumer showing the study's counts or results away
 from those should show this sentence too.
+
+`tests_reported` is the number of comparisons a study ran, where it states
+one; it is `null` for PMID:40127276 since `2.19`, which recorded 248 until then:
+that is the number of its panel *genes*, each tested in two arms over several
+consequence classes, not a count of comparisons. That study corrects every row,
+so no page needs a scan size for it.
+
+`correction_genes` (since `2.19`) is the number of genes a study's own
+multiple-testing correction ran over, recorded for a study whose correction was
+over a prespecified gene panel rather than the genome: 248 for PMID:40127276,
+whose per-arm Benjamini-Hochberg q reproduces over exactly its 248 panel genes.
+`genome_wide_threshold` (since `2.19`) is the p-value the study itself states
+for genome-wide significance, transcribed: `2.6e-06` for PMID:40127276, from its
+Fig. 1 legend. Both are `null` where not recorded. A row of such a study with
+`pvalue_adjusted` below 0.05 survives a correction **within its panel**; whether
+its raw `pvalue` also clears the study's genome-wide line is a separate, stronger
+claim, and a consumer showing "surviving" should say which.
 
 Ordered by PMID lexically, not numerically — so `PMID:10` precedes `PMID:9`. A
 PMID is issued at indexing time, so numeric order ranks by nothing a reader
@@ -2053,7 +2151,8 @@ them. Added in schema `2.9`.
       "id": "taa_cases",
       "name": "Sporadic thoracic aortic aneurysm case series (PMID 21092924)",
       "description": "777 individuals with sporadic thoracic aortic aneurysm, included in the CNV case set of PMID:34324492 alongside the CHD cases; the study's abstract describes its probands as \"probands with CHD including cases with sporadic thoracic aortic aneurysm\". Thoracic aortic aneurysm is outside this atlas's scope …",
-      "url": null
+      "url": null,
+      "overlaps_with": []
     }
   ]
 }
@@ -2079,6 +2178,11 @@ working with numbers stripped of the sentences that say what they count.
   congenital heart disease. None of these is expressible as a column.
 - `url` is the collection's public page, or **`null`** where it has none (4 of
   the 13 today). Always present, never omitted.
+- `overlaps_with` (since `2.19`) lists, sorted, the collections this one is
+  declared to share people with although no row names both — `ddd` and
+  `decipher` list each other — and is `[]` elsewhere. Declared on both entries,
+  checked when the registry loads. `cohort_families` merges studies across these
+  as across a shared id, so it is part of what makes two studies one dataset.
 
 The array is sorted by `id`. There is no `role` field: a collection is cases in
 one study and could be controls in another, so which it was is a property of the
@@ -2086,7 +2190,8 @@ burden row that cites it — the column it appears in — not of the collection.
 
 `counts.cohorts` in `manifest.json` is the length of this array. It is **not**
 `counts.cohort_families`, which counts how many independent collections the
-rare-variant evidence groups into (3 today) and is what
+rare-variant evidence groups into (2 today, 3 before `2.19` declared DDD and
+DECIPHER overlapping) and is what
 [`independent_datasets`](#independent_datasets-a-count-of-datasets-never-a-verdict)
 is derived from.
 
@@ -2122,10 +2227,22 @@ structural CHD is frequent but not part of the diagnosis.
         "frequency": "Frequent (79-30%)"
       }
     ]
-  }
+  },
+  "syndrome": false
 }
 ```
 
+- `syndrome` (since `2.19`) is a curated mark, always a boolean: `true` where
+  the term names a syndrome — a disease with a heart malformation among its
+  features — rather than heart disease itself, so a grade for it is a grade
+  for the syndrome as a whole. Set on the nine ClinGen-scoped syndrome terms
+  that published genes are graded for at their headline (Holt-Oram, CHARGE,
+  Alagille, Ellis-van Creveld, Kabuki 1 and 2, Mowat-Wilson, TARP, and
+  NR2F2-related multiple congenital anomalies/dysmorphic syndrome). `false`
+  says no curator has marked the term, which is not a finding that it is not
+  a syndrome: the Orphanet-path terms are syndromes by their warrant and are
+  not marked, and "congenital heart disease with heterotaxy syndrome" is CHD
+  itself whatever its name says.
 - `admitted_by` is a string token naming the kind of authority that puts the
   term in scope, one of four:
 
@@ -2156,8 +2273,14 @@ structural CHD is frequent but not part of the diagnosis.
   rule the validator `SCP006` refuses a nomination on, so it cannot drift from
   what Orphanet records. "Structural" is HPO's `Abnormal heart morphology`
   branch minus its cardiomyopathy, cardiomegaly, tumour, pericardium,
-  endocardium and imaging-finding branches, plus coarctation and patent ductus
-  arteriosus, over the pinned HPO release.
+  endocardium and imaging-finding branches, plus eight lesions HPO files
+  elsewhere, with any subtypes: coarctation of the aorta, patent ductus
+  arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic
+  stenosis, truncus arteriosus, interrupted aortic arch and anomalous pulmonary
+  venous return, over the pinned HPO release. The last six were added in `2.19`,
+  which added pulmonic stenosis to the published phenotypes of ten terms (the
+  cardiofaciocutaneous, Costello and Noonan-with-multiple-lentigines families)
+  and admitted no term by itself: a curator still nominates.
 - **A grade for one of these syndromes is a grade for the syndrome, not for
   heart disease.** A client showing PTPN11's `Definitive` for Noonan syndrome
   should say why Noonan syndrome counts here, which is what this object is
@@ -2180,7 +2303,9 @@ What the atlas mirrors, and on whose terms.
       "licence": "https://hpo.jax.org/app/license",
       "redistribution": "permitted_with_attribution",
       "ontology_prefix": "HP",
-      "ontology_file": "ontologies/hp-2026-06-23.obo"
+      "ontology_file": "ontologies/hp-2026-06-23.obo",
+      "file_version": null,
+      "file_date": null
     }
   ]
 }
@@ -2197,6 +2322,14 @@ mirrored third-party content, whose terms are the ones recorded here.
 
 `version` is the upstream release identifier and `retrieved_on` the date it was
 taken, so a claim can be traced to the exact release it rests on.
+
+`file_version` and `file_date` (since `2.19`) are what a mirrored file states
+about itself, verbatim, where `version` is a checksum that identifies the file
+but cites as nothing. Both Orphadata products carry them, from their `<JDBOR>`
+header — `"1.3.42 / 4.1.8 [2025-03-03]"`, dated `2026-06-23` — written beside
+the sha256 by the converter on every run; `null` elsewhere. Orphadata's
+requested citation ends "Data version [date]", and the site's front page prints
+both there.
 
 The registry also carries `clingen` and `gencc` — the two sources every
 mirrored record in a gene bundle's `validity.records` is attributed to.

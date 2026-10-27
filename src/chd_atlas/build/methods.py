@@ -137,6 +137,18 @@ from chd_atlas.models.cohort import Cohort
 #   methods_html_states` (`test_orphanet_scope.py`) ties every term named here
 #   to the set the build computes, so changing the rule where this names it
 #   fails there until this is reworded.
+#
+# Widened by owner decision 2026-10-26 (R1): pulmonic stenosis, aortic valve
+# stenosis, supravalvular aortic stenosis, truncus arteriosus, an interrupted
+# aortic arch and anomalous pulmonary venous return joined coarctation and the
+# ductus (`orphanet_scope.ADDED_BRANCHES`), so the clause that named three of
+# them "not counted" now lists all eight. Two clauses are narrower than the
+# owner's preview, each measured that day on the pinned release: the set still
+# leaves lesions out -- peripheral pulmonary artery stenosis (HP:0004969) and an
+# aortopulmonary window (HP:0011604) are filed elsewhere and not added -- so the
+# sentence names two rather than implying every lesion now counts; and aortic
+# valve stenosis is not always a malformation, which the sentence says beside
+# the calcified valve.
 SCOPE_RULE: Final = (
     '<p class="scope-rule">A gene is published here when an external authority already '
     "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
@@ -150,11 +162,14 @@ SCOPE_RULE: Final = (
     "qualify is not in scope until it is listed. Here a structural heart malformation is a "
     "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
     "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
-    "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
-    "ductus arteriosus. The branches kept still hold some findings that are not "
-    "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
-    "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
-    "arch, are not counted. "
+    "tumours, the pericardium and the like), plus eight lesions the ontology files "
+    "elsewhere, with any subtypes: coarctation of the aorta, a patent ductus "
+    "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
+    "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
+    "The findings counted still include some that are not malformations, such as a "
+    "calcified or prolapsing valve, and aortic valve stenosis can be acquired; other "
+    "lesions the ontology files elsewhere, among them peripheral pulmonary artery "
+    "stenosis and an aortopulmonary window, are not counted. "
     "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
     "is any gene: every scope term names the authority it came from "
     "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
@@ -300,9 +315,9 @@ _CURATED_EVIDENCE: Final = (
 # may be adults (UK Biobank's note: "~500,000 UK adults recruited at ages
 # 40-69"); the overlap clause says what the page can know -- collections shared
 # *as this atlas has recorded them* -- since `shared_cohorts` sees only shared
-# registry ids, and two studies may share individuals no entry names (review
-# raised DDD and DECIPHER; the registry records no link between them); the
-# synonymous paragraph
+# registry ids and declared overlaps, and two studies may share individuals no
+# entry names (review raised DDD and DECIPHER, which the registry has declared
+# overlapping since owner decision 2026-10-27, I3); the synonymous paragraph
 # lost "the same uncorrected scale" (true of the one study that publishes a
 # synonymous row, stated in general) and "a scan of that size" (no antecedent
 # here).
@@ -326,21 +341,40 @@ _RARE_VARIANTS: Final = (
     # use" until review (2026-10-27): no study here treats a raw p below 0.05 as
     # significant -- PMID:42230622's block tells a reader to judge raw p against
     # its whole scan -- so the number is stated as the atlas's, unattributed.
+    #
+    # The sentence after "survives none" (owner decision 2026-10-26, R3): a
+    # survival is only as wide as the correction, and PMID:40127276's is a
+    # Benjamini-Hochberg over its 248 panel genes (`Publication.
+    # correction_genes`, reproduced from Dataset S6 to 7e-15), which the card
+    # now names beside the q (`pages._correction_scope`), marking every
+    # surviving row below the study's own genome-wide line
+    # (`pages._genome_wide`). Stated in general; true today of the one study
+    # whose correction ran over a panel, the only one curated with either field.
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
     "republished as published. The atlas computes none of them. It applies one rule of its "
     f"own, at {_ALPHA}: a row that is not synonymous "
     "<strong>supports</strong> the gene when its result points to enrichment in cases and "
     f"its p is below {_ALPHA}, and <strong>survives</strong> its study's correction when the "
     f"corrected p its study published is below {_ALPHA} as well; a row whose study published "
-    "no corrected p survives none. A gene page's card lists the rows that survive, the "
+    "no corrected p survives none. A study's correction covers only the genes it was run "
+    "over: where those were a gene panel rather than the genome, the card says so beside "
+    "the corrected p, and marks any surviving row whose raw p is also below the threshold "
+    "the study itself states for genome-wide significance. A gene page's card lists the "
+    "rows that survive, the "
     "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
     "support, and a forest plot draws a surviving row filled. Where a study is by an "
     "author of this atlas, its block says so.</p>"
-    # was pages._POOLING_NOTICE in full
+    # was pages._POOLING_NOTICE in full. The overlap clauses since owner
+    # decision 2026-10-27 (I3): DECIPHER and DDD are declared overlapping
+    # (`Cohort.overlaps_with`), and the page's notice names such a pair.
+    # "could count", not "would" (review, 2026-10-27): the people are counted
+    # twice only if the overlap the clause before calls a "may" is real.
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-    "studies draw on the same sample collection they describe partly the same people, "
-    "so combining their results would count those people twice; a gene page names any "
-    "sample collection its studies share, as this atlas has recorded them.</p>"
+    "studies draw on the same sample collection they describe partly the same people, and "
+    "where they draw on collections this atlas records as overlapping they may, so "
+    "combining their results could count those people twice; a gene page names any "
+    "sample collection its studies share, and any overlap between theirs, as this atlas "
+    "has recorded them.</p>"
     # was pages._BURDEN_PREAMBLE; "In each study's table," anchors what it describes
     "<p>In each study's table, <code>cases</code> and <code>controls</code> each show "
     "<em>observed / total</em> (for a row tested against a mutation model, "
@@ -460,14 +494,19 @@ _RARE_VARIANTS: Final = (
 # source has no record to resolve against. The 4 is pinned against the mirror,
 # 4,242 against the four descriptions' own counts and 7,958 against
 # `taa_cases`'s; 189 is the supplement's alone and nothing here can check it.
+# The declared-overlap clause since review (2026-10-27): "two that name none in
+# common may still share people this registry does not record" stopped being
+# the whole truth when the registry recorded one such pair (`ddd` and
+# `decipher`, owner decision I3).
 _COHORTS_INTRO: Final = (
     '<h2 id="cohorts">Cohorts</h2>'
     "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
     "its curator recorded. A row may not name every collection its study drew on: the "
     "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
     "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
-    "partly the same people, and two that name none in common may still share people "
-    "this registry does not record. The same records are published as "
+    "partly the same people; two that name collections this registry records as "
+    "overlapping may; and two that name neither may still share people this registry "
+    "does not record. The same records are published as "
     f'<a href="{COHORTS}"><code>{COHORTS}</code></a>.</p>'
 )
 

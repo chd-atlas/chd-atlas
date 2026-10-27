@@ -21,6 +21,16 @@ asking to be cited as "Orphadata Science: Free access data from Orphanet.
 atlas is a static data site and publishes no such tool. MONDO is CC-BY-4.0.
 Each file's sha256 is recorded in `mirrors/sources.yaml`.
 
+THE DATA VERSION IS WRITTEN, NOT PRINTED
+----------------------------------------
+Both Orphanet files open on `<JDBOR date="..." version="...">`, the data
+version Orphadata's citation asks for. Since owner decision 2026-10-26 (R11)
+this converter reads that header and writes it into the file's own entry in
+`mirrors/sources.yaml` -- `version` (the sha256), `file_version` and
+`file_date` -- every time it runs, so the checksum, the version and the date
+cannot come from three different downloads. The landing page's Orphadata
+citation prints them from there. MONDO's sha256 is still printed only.
+
 WHAT IS KEPT, AND WHY IT IS WIDER THAN THE RULE
 -----------------------------------------------
 * **Product 4: every annotation under HP:0001626 (cardiovascular).** The rule
@@ -50,6 +60,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import sys
 import xml.etree.ElementTree as ET
 from collections import defaultdict
@@ -175,6 +186,46 @@ def _mirrored_terms(root: Path) -> set[str]:
     return terms
 
 
+def jdbor_release(path: Path) -> tuple[str, str]:
+    """The `version` and `date` an Orphadata file states on its root `<JDBOR>` element.
+
+    Read from the first start event only, so a 50 MB file costs one chunk.
+    Refuses a file whose root is not `JDBOR` or that states either one blank:
+    a release recorded as nothing would cite as nothing.
+    """
+    for _, element in ET.iterparse(path, events=("start",)):
+        if element.tag != "JDBOR":
+            raise ValueError(f"{path}: root element is <{element.tag}>, not <JDBOR>")
+        version, date = element.get("version", "").strip(), element.get("date", "").strip()
+        if not version or not date:
+            raise ValueError(f"{path}: <JDBOR> states no version or no date")
+        return version, date
+    raise ValueError(f"{path}: no XML element")
+
+
+def record_release(sources: Path, source_id: str, digest: str, version: str, date: str) -> None:
+    """Write one file's sha256 and header version and date into its `sources.yaml` entry.
+
+    A line edit of the three keys inside `- id: <source_id>`'s block, so every
+    comment in the file survives, as no YAML round-trip here would guarantee.
+    Each key must already be there exactly once: the converter keeps the
+    curated entry current, it does not create one, and a missing key is a
+    malformed entry a human must look at. Values are written double-quoted
+    (JSON string syntax is valid YAML), as the file writes `version`.
+    """
+    lines = sources.read_text(encoding="utf-8").splitlines(keepends=True)
+    start = lines.index(f"  - id: {source_id}\n")
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].startswith("  - id: ")), len(lines)
+    )
+    for key, value in (("version", digest), ("file_version", version), ("file_date", date)):
+        found = [i for i in range(start, end) if lines[i].startswith(f"    {key}: ")]
+        if len(found) != 1:
+            raise ValueError(f"{source_id}: expected one `{key}:` line, found {len(found)}")
+        lines[found[0]] = f"    {key}: {json.dumps(value)}\n"
+    sources.write_text("".join(lines), encoding="utf-8")
+
+
 def _write(path: Path, order: tuple[str, ...], rows: list[dict[str, str]]) -> None:
     lines = ["\t".join(order), *("\t".join(row[column] for column in order) for row in rows)]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -230,8 +281,13 @@ def main(argv: list[str]) -> int:
         )
     print(f"orphanet_omim: {len(omim)} row(s)")
     print(f"mondo_xrefs: {len(xrefs)} row(s)")
-    for path in (product4, product1, sssom):
-        print(f"sha256 of {path.name}: {hashlib.sha256(path.read_bytes()).hexdigest()}")
+    sources = root / "mirrors" / "sources.yaml"
+    for source_id, path in ((SOURCE_PRODUCT4, product4), (SOURCE_PRODUCT1, product1)):
+        version, date = jdbor_release(path)
+        digest = f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
+        record_release(sources, source_id, digest, version, date)
+        print(f"{source_id}: {digest}, version {version!r}, date {date!r} -> {sources}")
+    print(f"sha256 of {sssom.name}: {hashlib.sha256(sssom.read_bytes()).hexdigest()}")
     return 0
 
 

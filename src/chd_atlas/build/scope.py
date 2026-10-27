@@ -84,7 +84,7 @@ def build_scope(
 
     Sorted by id because `encode_json`'s `sort_keys` orders dict keys and never
     list elements. `orphanet` is `null`, not absent, on a term an authority
-    curated, so every object has one shape.
+    curated, so every object has one shape; `syndrome` is always a boolean.
     """
     emitter.write_json(
         SCOPE,
@@ -96,6 +96,9 @@ def build_scope(
                     "admitted_by": entry.admitted_by.value,
                     "attributed_to": entry.attributed_to,
                     "orphanet": _orphanet_payload(warrants.get(str(entry.id))),
+                    # A curated mark, `false` unless set (R5): the term names a
+                    # syndrome, so a grade for it is a grade for the syndrome.
+                    "syndrome": entry.syndrome,
                 }
                 for entry in sorted(entries, key=lambda entry: entry.id)
             ]

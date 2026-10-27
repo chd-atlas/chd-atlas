@@ -3,9 +3,16 @@
 
 from __future__ import annotations
 
+import pytest
+
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.genes import GeneRegistry, Resolution
 from chd_atlas.issues import Severity
-from chd_atlas.validate.genes import validate_mirror_symbols, validate_symbol_resolution
+from chd_atlas.validate.genes import (
+    validate_identity_ids,
+    validate_mirror_symbols,
+    validate_symbol_resolution,
+)
 
 # Three genes, and no two of them carry the same combination of columns, so a
 # lookup cannot pass by accident: `POPDC1` has both aliases and a retired name,
@@ -358,3 +365,58 @@ def test_gen001_and_gen002_report_an_unmapped_and_an_ambiguous_symbol() -> None:
     assert "would be dropped" in unmapped.message
     assert "HGNC:1, HGNC:2" in ambiguous.message
     assert "refusing to guess" in ambiguous.message
+
+
+@pytest.mark.parametrize(
+    ("identity", "problem"),
+    [
+        pytest.param(
+            GeneIdentity(ensembl_gene="ENSG0089225", ncbi_gene=6910),
+            "'ENSG0089225' is not an Ensembl gene id (ENSG + 11 digits)",
+            id="malformed Ensembl",
+        ),
+        pytest.param(
+            GeneIdentity(ensembl_gene="ENSG00000089225", ncbi_gene=0),
+            "0 is not an NCBI Gene id (a positive integer)",
+            id="NCBI Gene id below 1",
+        ),
+        pytest.param(
+            GeneIdentity(ensembl_gene="ENSG00000089225"), "no NCBI Gene id", id="missing NCBI"
+        ),
+        pytest.param(None, "no Ensembl gene id or NCBI Gene id", id="no registry row"),
+        pytest.param(GeneIdentity(ensembl_gene="ENSG00000089225", ncbi_gene=6910), None, id="ok"),
+    ],
+)
+def test_a_published_genes_identity_ids_are_held_to_the_rule_the_build_refuses_on(
+    identity: GeneIdentity | None, problem: str | None
+) -> None:
+    """GEN004 (owner decision 2026-10-26, R13): validate and build read one rule.
+
+    `identity.identity_id_problems` is what `external_links` refuses a page
+    on, so a malformed or missing id on a published gene is one ERROR here
+    rather than a build that refuses after writing has begun. The same row on
+    a gene the gate does not publish reports nothing -- the build never links
+    it -- and an unreadable registry reports nothing, because TBL008 already
+    names that error. An empty one is reported once.
+    """
+    identities = {"HGNC:11604": identity} if identity is not None else {}
+    unpublished = {"HGNC:2": GeneIdentity(ensembl_gene="ENSG1", ncbi_gene=-3)}
+
+    issues = validate_identity_ids(
+        {**identities, **unpublished}, {"HGNC:11604"}, "mirrors/genes.tsv"
+    )
+
+    if problem is None:
+        assert issues == []
+    else:
+        assert [(issue.code, issue.severity) for issue in issues] == [("GEN004", Severity.ERROR)]
+        assert issues[0].message.startswith("HGNC:11604 is published")
+        assert f"these ids: {problem}; the build refuses" in issues[0].message
+    assert validate_identity_ids(None, {"HGNC:11604"}, "mirrors/genes.tsv") == []
+    # A registry that reads and holds no row is one GEN004 naming it -- never
+    # nothing, which is what `or None` at the call site made it until review
+    # (2026-10-27), and never one per published gene.
+    [empty] = validate_identity_ids({}, {"HGNC:11604", "HGNC:2"}, "mirrors/genes.tsv")
+    assert (empty.code, empty.severity) == ("GEN004", Severity.ERROR)
+    assert empty.message.startswith("the gene registry holds no gene rows, and 2 published")
+    assert validate_identity_ids({}, set(), "mirrors/genes.tsv") == []

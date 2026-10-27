@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+from chd_atlas.build.burden import BurdenRow
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.render import RESEARCH_USE_NOTICE
 from chd_atlas.build.runner import build_site
 from chd_atlas.corpus import load_curation
@@ -253,6 +255,146 @@ def test_tbx5_publishes_its_mirrored_validity_with_the_provenance_behind_it(
     for field in ("source", "classification_term", "disease", "sop", "report_url"):
         assert clingen[field], f"{field} is empty on TBX5's ClinGen record"
 
+    # R8 (owner decision 2026-10-26): the bundle keeps the URL GenCC gave,
+    # PanelApp Australia's bare homepage, and the page links TBX5's own entry
+    # there instead -- the one report URL the atlas builds.
+    panelapp = [r for r in validity["records"] if r["submitter"] == "PanelApp Australia"]
+    assert [r["report_url"] for r in panelapp] == ["https://panelapp-aus.org"]
+    page = (site / "genes" / "HGNC_11604.html").read_text(encoding="utf-8")
+    assert re.findall(r'href="(https://panelapp-aus\.org[^"]*)"', page) == [
+        "https://panelapp-aus.org/panels/entities/TBX5"
+    ]
+
+
+def _burden_rows(gene: str, bundle: dict[str, Any]) -> list[BurdenRow]:
+    """A bundle's published burden rows as the `BurdenRow`s the renderers read."""
+    return [
+        BurdenRow(
+            **{
+                **row,
+                "gene": gene,
+                "case_cohorts": tuple(row["case_cohorts"]),
+                "control_cohorts": tuple(row["control_cohorts"]),
+            }
+        )
+        for row in bundle["burden"]
+    ]
+
+
+def test_tbx5s_card_says_how_wide_each_surviving_result_is(site: Path) -> None:
+    """R3 (owner decision 2026-10-26) on the real corpus, pinned on TBX5.
+
+    PMID:40127276's q is a Benjamini-Hochberg correction over its 248 panel
+    genes, and the study states its own genome-wide line at p < 2.6e-6. TBX5
+    carries both kinds of survivor: its case-control damaging row (p 1.34e-4,
+    q 0.00369) survives within the panel only, and its de novo damaging row (p
+    1.07e-8) and loss-of-function row (p 1.35e-9) clear the genome-wide line
+    too. Literals, never the constants that render them.
+
+    **Every** surviving row below the line is marked on its card, the named
+    ones as well as each line's own: derived from every bundle with the
+    predicate the card reads, never pinned. Marking only each line's row left
+    15 of the 25 such rows unmarked when measured (2026-10-26), and 6 of the 13
+    genes carrying one, FLT4's case-control loss-of-function row (p 1.75e-15)
+    among them. Both sides of that count must be non-zero for it to measure
+    anything (CLAUDE.md section 4.30), so the line's own and the named marks are
+    each required to occur.
+
+    W1 is checked here too: PMID:40127276's `tests_reported` is null, because
+    the 248 it held counted panel genes, not comparisons.
+    """
+    publications = {
+        publication["id"]: publication
+        for publication in _read(site, "publications.json")["publications"]
+    }
+    sierant = publications["PMID:40127276"]
+    assert sierant["correction_genes"] == 248
+    assert sierant["genome_wide_threshold"] == 2.6e-06
+    assert sierant["tests_reported"] is None
+
+    page = (site / "genes" / "HGNC_11604.html").read_text(encoding="utf-8")
+    card = page[page.index('<div class="card-variants">') :]
+    card = card[: card.index("</div>")]
+    assert re.findall(r"<li>(.*?) · <a ", card) == [
+        "Sierant MC et al. 2025 · case-control burden test — damaging (LOF + missense): "
+        "22 alleles / 21,750 vs 103 alleles / 270,733 · q 0.00369 within its 248-gene panel "
+        "· also surviving: loss-of-function",
+        "Sierant MC et al. 2025 · de novo enrichment (trios vs mutation model) — damaging "
+        "(LOF + missense): 5 de novo / 3,887 trios vs 0.0671 expected · q 5.31e-07 within its "
+        "248-gene panel · genome-wide (p 1.07e-08) · also surviving: loss-of-function "
+        "(genome-wide, p 1.35e-09)",
+    ]
+
+    thresholds = {
+        study: publication["genome_wide_threshold"]
+        for study, publication in publications.items()
+        if publication["genome_wide_threshold"] is not None
+    }
+    expected = own = named = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        rows = _burden_rows(entry["gene"], _read(site, entry["bundle"]))
+        expected += sum(
+            1
+            for row in rows
+            if row.study in thresholds
+            and survives_own_correction(row)
+            and row.pvalue is not None
+            and row.pvalue < thresholds[row.study]
+        )
+        html_page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        rail = html_page[html_page.index('<aside class="rail">') : html_page.index("</aside>")]
+        own += rail.count(" · genome-wide (p ")
+        named += rail.count(" (genome-wide, p ")
+    assert own > 0 and named > 0, (own, named)
+    assert own + named == expected
+
+
+def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_counted(
+    site: Path,
+) -> None:
+    """Owner decision 2026-10-27 (I3), on the real corpus, read from the payloads.
+
+    `cohorts.json` declares DDD and DECIPHER overlapping, so PMID:42230622
+    (`ddd`) and PMID:34324492 (`decipher`) are one cohort family. Every
+    consumer of families must agree (CLAUDE.md section 4.28): the manifest's
+    and the front page's dataset count, every bundle's `families`, and the
+    notice on every page whose rows cite both -- derived here from the rows
+    and the declarations, never pinned per page. Measured on the build it was
+    written against: 3 families became 2, and 72 pages gained the notice.
+    """
+    cohorts = _read(site, "cohorts.json")["cohorts"]
+    declared = {(cohort["id"], other) for cohort in cohorts for other in cohort["overlaps_with"]}
+    assert declared == {("ddd", "decipher"), ("decipher", "ddd")}
+    families = _read(site, "manifest.json")["counts"]["cohort_families"]
+    assert families == 2
+    landing = (site / "index.html").read_text(encoding="utf-8")
+    assert re.search(rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>", landing)
+
+    noticed = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        cited: dict[str, set[str]] = {}
+        for row in bundle["burden"]:
+            cited.setdefault(row["study"], set()).update(
+                row["case_cohorts"], row["control_cohorts"]
+            )
+        studies = sorted(cited)
+        linked = [
+            (left, right)
+            for i, left in enumerate(studies)
+            for right in studies[i + 1 :]
+            if cited[left] & cited[right]
+            or any((a, b) in declared for a in cited[left] for b in cited[right])
+        ]
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        assert page.count("These two studies are not independent.") == len(linked), entry["gene"]
+        noticed += bool(linked)
+        assert len(bundle["independent_datasets"]["families"]) == families, entry["gene"]
+        grouped = [set(family["studies"]) for family in bundle["independent_datasets"]["families"]]
+        for left, right in linked:
+            assert any({left, right} <= group for group in grouped), (entry["gene"], left, right)
+    assert noticed == 72
+
 
 def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
     """D52 on the committed corpus. A runner that stops passing `identities` to
@@ -261,7 +403,7 @@ def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site
     pass `identities` themselves. This compares every published bundle against
     `mirrors/genes.tsv`. The count is derived, never pinned.
 
-    Compared after stripping, as `runner._cell` strips: HGNC's own name for
+    Compared after stripping, as `tables.cell_text` strips: HGNC's own name for
     HGNC:2348 ends in a space ("CREB binding lysine acetyltransferase "), the one
     cell of 1,850 in the mirror with surrounding whitespace (measured 2026-10-25).
     """
@@ -1012,6 +1154,11 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
 
     Counts derived, never pinned. Both sides of each "iff" must be exercised,
     or the test is measuring one population twice (CLAUDE.md section 4.30).
+
+    **`counts.burden_surviving_genes` is the number of cards listing a
+    result** (owner decision 2026-10-26, R9): the census counts by the
+    card's own predicate, and this is where the two would disagree on real
+    data. 32 on the build it was written against, of 118 genes with a row.
     """
     entries = _read(site, "genes/index.json")["genes"]
     assert len(entries) > 1, "the build published no genes; the fixture is broken"
@@ -1087,6 +1234,9 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
         assert disputed == int(bundle["has_conflicting_evidence"]), entry["gene"]
         flagged += disputed
     assert 0 < listed < len(entries), f"{listed} of {len(entries)} cards list a result"
+    # R9: the census the front page and `manifest.json` state is these cards.
+    surviving = _read(site, "manifest.json")["counts"]["burden_surviving_genes"]
+    assert surviving == listed, (surviving, listed)
     assert 0 < flagged < len(entries), f"{flagged} of {len(entries)} cards flag a dispute"
     assert 0 < uncorrected_cards < len(entries), (
         f"{uncorrected_cards} of {len(entries)} cards name a study with no correction"
@@ -1133,6 +1283,113 @@ def test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is(site:
         cell = re.findall(r"<td>(.*?)</td>", rows[0], re.S)[2]
         bare = confidence or "—"
         assert cell == (f"{bare} {chip}" if entry["gene"] in flagged else bare), entry["gene"]
+
+
+def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_card(
+    site: Path,
+) -> None:
+    """R5 (owner decision 2026-10-26) on the real corpus.
+
+    Ten genes are graded at their headline for a syndrome a ClinGen expert
+    panel scoped, and their cards said nothing of it while the 21 Orphanet-
+    scoped ones did. `scope.json` now publishes the curated `syndrome` mark,
+    on exactly the nine terms those ten are graded for; ZIC3 and NODAL, graded
+    for "congenital heart disease with heterotaxy syndrome", are CHD itself and
+    stay unmarked. Two ways, both required to agree: the genes whose card
+    carries the line are the literal ten, and they are the genes whose every
+    headline disease `scope.json` marks and attributes to a ClinGen class --
+    derived from the payloads, so a runner that stopped threading the registry
+    to the pages fails here while every unit test passes. TBX5's line is pinned
+    as a literal.
+
+    So is EVC2's, the one line whose panel did not grade its gene (review,
+    2026-10-27): it names the gene that panel graded for the term instead.
+    Every line is held to that rule from the bundles' own `gcep`, and the
+    lines it applies to must be exactly EVC2's, so a page that dropped the
+    distinction, or drew it on another gene, fails here.
+    """
+    scope = {term["id"]: term for term in _read(site, "scope.json")["terms"]}
+    assert sorted(mondo for mondo, term in scope.items() if term["syndrome"] is True) == [
+        "MONDO:0007318",  # Alagille syndrome
+        "MONDO:0007732",  # Holt-Oram syndrome
+        "MONDO:0007843",  # Kabuki syndrome 1
+        "MONDO:0008965",  # CHARGE syndrome
+        "MONDO:0009162",  # Ellis-van Creveld syndrome
+        "MONDO:0009341",  # Mowat-Wilson syndrome
+        "MONDO:0010465",  # Kabuki syndrome 2
+        "MONDO:0010711",  # TARP syndrome
+        "MONDO:0800458",  # NR2F2-related multiple congenital anomalies/dysmorphic syndrome
+    ]
+    assert all(type(term["syndrome"]) is bool for term in scope.values())
+
+    lined: set[str] = set()
+    lined_by_another: set[str] = set()
+    expected: set[str] = set()
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        lines = re.findall(r'<p class="card-scope">([^<]*in scope on [^<]*)</p>', rail)
+        if lines:
+            lined.add(entry["symbol"])
+        if entry["symbol"] == "TBX5":
+            assert lines == [
+                "Graded for Holt-Oram syndrome as a whole syndrome; in scope on its curation by "
+                "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel."
+            ]
+        if entry["symbol"] == "EVC2":
+            assert lines == [
+                "Graded for Ellis-van Creveld syndrome as a whole syndrome; in scope on "
+                "ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+                "Panel&#x27;s curation of it for EVC."
+            ]
+        headline = bundle["headline_confidence"]
+        graded = {
+            record["disease"]
+            for record in bundle["validity"]["records"]
+            if record["source"] == "clingen" and record["classification"] == headline
+        }
+        # "its curation by <panel>" only where that panel graded this gene for
+        # the term (review, 2026-10-27): the term's `attributed_to` is the panel
+        # that scopes the term, and EVC2's grader is another. Read off the
+        # bundle's own ClinGen records and `scope.json`, on every lined gene.
+        for line in lines:
+            [disease] = graded
+            own = {
+                record["gcep"]
+                for record in bundle["validity"]["records"]
+                if record["source"] == "clingen" and record["disease"] == disease
+            }
+            panel = scope[disease]["attributed_to"]
+            if panel in own:
+                assert line.endswith(f"in scope on its curation by ClinGen&#x27;s {panel}.")
+            else:
+                assert f"in scope on ClinGen&#x27;s {panel}&#x27;s curation of it for " in line
+                lined_by_another.add(entry["symbol"])
+        if (
+            headline is not None
+            and graded
+            and all(
+                scope[disease]["syndrome"]
+                and scope[disease]["admitted_by"] in {"clingen_chd_panel", "clingen_expert_panel"}
+                for disease in graded
+            )
+        ):
+            expected.add(entry["symbol"])
+    assert lined == expected
+    assert lined_by_another == {"EVC2"}
+    assert sorted(lined) == [
+        "CHD7",
+        "EVC",
+        "EVC2",
+        "KDM6A",
+        "KMT2D",
+        "NOTCH2",
+        "NR2F2",
+        "RBM10",
+        "TBX5",
+        "ZEB2",
+    ]
 
 
 def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list_its_disease(
@@ -1218,8 +1475,10 @@ def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list
         ]
         scoped = bool(graded) and all(record["disease"] in orphanet for record in graded)
         rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
-        lines = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
-        assert page.count('class="card-scope"') == len(lines), entry["gene"]
+        every_line = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
+        assert page.count('class="card-scope"') == len(every_line), entry["gene"]
+        # The Orphanet lines; a syndrome a ClinGen panel scoped has its own (R5).
+        lines = [line for line in every_line if "in scope because Orphanet records" in line]
         assert len(lines) == int(scoped), (entry["gene"], lines)
         if scoped:
             carded += 1
@@ -1391,6 +1650,18 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
         assert licence in _LICENCE_WORDS, f"{source}: the front page states no {licence!r}"
         assert _LICENCE_WORDS[licence] in phrase, f"{source}: {licence} is not what it states"
 
+    # R11 (owner decision 2026-10-26): the Orphadata citation's "Data version"
+    # is the release `sources.json` publishes for both products, read from the
+    # files' own headers -- one release, one day, so stated once.
+    releases = {
+        (source["file_version"], source["file_date"].split(" ")[0])
+        for source in sources
+        if source["id"] in {"orphanet_product4", "orphanet_product1"}
+    }
+    assert releases == {("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23")}
+    (version, day) = releases.pop()
+    assert f"http://sciences.orphadata.com/. Data version {version}, {day}. Mondo" in where
+
 
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
     """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".
@@ -1462,12 +1733,11 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured after the review fixes of 2026-10-27, with the headroom owner decision
-# E4 keeps: (a) 882 x 1.03 rounded up, (b) 21 + 1 -- both lowered from 922 and
-# 23, so the ratchet stays tight. See the test for the series and the rule.
-# Lower each when a page sheds prose; raising one is a decision, and its commit
-# says why.
-_MEDIAN_VISIBLE_WORDS = 909
+# Measured after the review fixes to the second batch of owner decisions
+# (2026-10-27), with the headroom owner decision E4 keeps: (a) 957 x 1.03
+# rounded up, (b) 21 + 1. See the test for the series and the rule. Lower each
+# when a page sheds prose; raising one is a decision, and its commit says why.
+_MEDIAN_VISIBLE_WORDS = 986
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -1583,6 +1853,8 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     802d694, the gene card's link to methods     841    957  21 sentences, 395 words
     2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
     9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
+    owner decisions 2026-10-26, batch 2 (R1-I3)  942  1,051  21 sentences, 415 words
+    review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1607,6 +1879,34 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     smaller moves elsewhere; the median fell by 13. Both constants were lowered
     to the new measurement, not left at their old headroom.
 
+    The last row is the second batch of owner decisions (R1, R3, R5, R8, R9,
+    R11, R13, I3; 2026-10-26/27), measured on fresh builds of the clean tree
+    after each item against one of e0393f4 (882, 1,001, 21 / 404, as at
+    9a8f14d). Two items moved the figures, both owner-decided sentences (E4):
+    R5's card line naming the ClinGen panel that scoped a syndrome, on 10
+    cards (+4, to 886); and I3, which merged PMID:34324492 and PMID:42230622
+    into one cohort family -- both legends gained the clause saying a family
+    also merges across collections recorded as overlapping, 11 words on the
+    118 matrix legends (+11, to 897; boilerplate words 404 to 415, still 21
+    sentences), and its notice naming the declared DDD-DECIPHER overlap is 45
+    words on the 72 pages carrying both studies (+45, to 942; 897 is the
+    median of the same build with that notice's words subtracted). R1, R3,
+    R8, R9, R11 and R13 moved neither figure: R3's 35 card lines sit on 25
+    pages, below the median's reach, and R8 changes only hrefs. The notice is
+    particular to the page's data, so the fold rule keeps it visible; (a) was
+    raised to 971, 942 x 1.03 rounded up, and (b) stays 22, one over 21.
+
+    The last row is the review of that batch (2026-10-27), measured on a fresh
+    build of the fixed tree against one of 5f7161b (942, 1,051, 21 / 415, as
+    the row above). Two boilerplate sentences grew, both to stay true since
+    I3: the pooling caption names the declared-overlap reason beside the
+    shared-collection one (+13 words), and the matrix key's `corrected`
+    caption no longer says "that study" of a family that may hold two (+2).
+    So +15 on 117 of the 118 pages with a matrix, +17 on the 118th, EVC2's
+    (its card's scope line now names the gene its panel graded, +2), and none
+    on CRIPTO's, which has no matrix; the median rose by 15. (a) was
+    reset to 986, 957 x 1.03 rounded up, and (b) stays 22, one over 21.
+
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
     the review's fixes to methods.html left every gene page's bytes as at
@@ -1618,9 +1918,10 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 909, the last row's 882 x 1.03 rounded up, and (b) at 22,
-    one more than 21 (owner decision E4 keeps both margins; they were 922 and
-    23 over 2f6300a's row, and 867 and 22 over 802d694's). **When this fails,
+    (a) is held at 986, the last row's 957 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 971 and
+    22 over the batch-2 row, 909 and 22 over 9a8f14d's, 922 and 23 over
+    2f6300a's, and 867 and 22 over 802d694's). **When this fails,
     re-measure before anything else.** If the growth is a new study's or
     dataset's own data-driven prose, raise the budget and put the measurement
     here. Never fold a caveat the fold rule

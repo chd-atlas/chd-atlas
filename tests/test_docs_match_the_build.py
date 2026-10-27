@@ -611,6 +611,26 @@ def test_the_independent_datasets_section_states_the_shape_the_build_publishes(
     assert "never `len(families)`" in section
     assert "KDM6A causes Kabuki syndrome" in section
 
+    # **How many families, read off the build** (review, 2026-10-27). The
+    # section said "three today" and "three `not_tested` entries" for a release
+    # after I3 made them two: nothing here read the count, only the states, the
+    # denominator and the obligations, so a sentence stating a number passed
+    # beside a build publishing another.
+    [count] = {len(gene["families"]) for gene in published}
+    assert f"one entry per cohort family in the whole corpus** — {_WORDS[count]} today" in section
+    assert f"A gene no study reported gets {_WORDS[count]} `not_tested` entries" in section
+
+    # `members` (2.19): every study of the family, in its order, and the family's
+    # state the strongest of theirs -- the claim the section makes, on what ships.
+    rank = ["not_tested", "no_enrichment", "nominal", "corrected"]
+    for gene in published:
+        for family in gene["families"]:
+            assert [member["study"] for member in family["members"]] == family["studies"]
+            assert family["state"] == max(
+                (member["state"] for member in family["members"]), key=rank.index
+            )
+    assert "Attribute a state to a study from `members`, never from the family" in section
+
 
 def test_the_omics_section_documents_profiles_stratified_top_not_ranked_by_significance() -> None:
     """16a: `top` was documented as "ranked by significance" with no
@@ -1354,6 +1374,16 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "About these cohorts, and the caveats recorded for them",
         "row is a union, and this study published no non-syndromic · loss-of-function row "
         "for this gene.",
+        # The matrix label's mark for a family's study with no row for the
+        # gene, and EVC2's card scope line, whose panel graded EVC rather than
+        # EVC2 (both review, 2026-10-27).
+        "(no row for this gene)",
+        "in scope on ClinGen's Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+        "Panel's curation of it for EVC.",
+        # The overlap notice the doc says a declared overlap renders (review,
+        # 2026-10-27: the doc named only a shared collection as its trigger).
+        "collections this atlas records as overlapping, so their results may describe partly "
+        "the same people and must not be combined",
     ):
         assert literal in doc.replace("*", ""), literal
         assert literal in html.unescape(every_page), f"no page renders {literal!r}"
@@ -1365,7 +1395,8 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "Every count and statistic in the study tables below is an upstream study's, "
         "republished as published; the atlas computes none of them.",
         "The atlas computes no pooled statistic across studies: pooling two that share a "
-        "sample collection would count the same people twice.",
+        "sample collection would count the same people twice, and pooling two that draw on "
+        "collections this atlas records as overlapping could.",
         "A cell names the most significant of the rows behind its state; the card lists a "
         "study's surviving rows with a damaging union before its parts, so the two can lead "
         "with different rows.",

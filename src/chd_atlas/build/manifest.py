@@ -418,7 +418,34 @@ from chd_atlas.corpus import Corpus
 #
 # It also publishes `methods.html`, the site's reading notes: an HTML page,
 # additive in the sense 2.2 records, so no bump of its own.
-SCHEMA_VERSION: Final = "2.18"
+#
+# 2.19 (owner decisions of 2026-10-26, one bump for the batch). MINOR, every
+# change additive or a population change in an existing field:
+#
+# * The structural set Orphanet scoping reads gains six lesions HPO files
+#   outside Abnormal heart morphology (`orphanet_scope.ADDED_BRANCHES`). No
+#   field changes; ten `scope.json` warrants gain pulmonic stenosis among their
+#   `phenotypes`, and no term or gene enters or leaves scope.
+# * Every record of `publications.json` (and `featured.json`'s embedded ones)
+#   gains `correction_genes` and `genome_wide_threshold`, `null` where not
+#   curated: the gene count a study's own correction ran over, and the p it
+#   states for genome-wide significance. PMID:40127276's `tests_reported` goes
+#   from 248 to `null`, because 248 counted its panel genes, not comparisons.
+# * Every `scope.json` term gains `syndrome`, a curated boolean, `true` on the
+#   nine ClinGen-scoped syndromes published genes are graded for.
+# * `counts` gains `burden_surviving_genes`: the published genes with a row
+#   surviving its own study's correction, the genes whose card lists one.
+# * Every `sources.json` entry gains `file_version` and `file_date`, what the
+#   file states about itself, `null` but for the two Orphadata products.
+# * Every `cohorts.json` record gains `overlaps_with`, the declared overlaps
+#   (`ddd` and `decipher`), `[]` elsewhere. A population change too: the two
+#   studies citing them become one cohort family, so `counts.cohort_families`
+#   and every bundle's `independent_datasets.families` go from 3 to 2.
+# * Every `independent_datasets.families` entry (bundle and `genes/index.json`
+#   row) gains `members`: one `{study, state}` per study in the family, sorted
+#   by study, each study's own state by the family rule over its rows alone. A
+#   family of two studies made the family's state no longer every member's.
+SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is

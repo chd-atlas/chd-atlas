@@ -44,8 +44,8 @@ def test_a_blank_reason_is_rejected() -> None:
     """An empty reason is worse than no field: it looks answered.
 
     `min_length` on a stripped value, because a reason of one space passes a
-    bare `min_length` and renders as nothing -- the same defect `_cell` in
-    `build/runner.py` exists to catch on the mirror side.
+    bare `min_length` and renders as nothing -- the same defect `cell_text` in
+    `tables.py` exists to catch on the mirror side.
     """
     with pytest.raises(ValidationError):
         ChdScopeFile.model_validate({"diseases": [{**ENTRY, "reason": "   "}]})

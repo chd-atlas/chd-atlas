@@ -43,7 +43,26 @@ class Publication(BaseModel):
     #
     # Optional: a family-based linkage study reports no such count, and
     # `pages._method_line` simply omits the sentence when it is absent.
+    #
+    # **A count of comparisons, never of genes** (owner decision 2026-10-26,
+    # W1). PMID:40127276 recorded 248 here, its panel genes, each tested in two
+    # arms over several consequence classes; that is `correction_genes` below.
     tests_reported: int | None = Field(default=None, ge=1)
+    # How many genes the study's own multiple-testing correction ran over, for
+    # a study whose correction ran over a prespecified gene panel rather than
+    # the genome (owner decision 2026-10-26, R3). A gene page's card prints it
+    # beside a surviving row's corrected p -- "q 0.00369 within its 248-gene
+    # panel" -- because "survives its study's correction" otherwise reads as
+    # genome-wide, and a q over 248 panel genes is not. The card says "panel",
+    # so record it only for a study whose correction was over one; a study
+    # correcting over its whole scan names that scan in `tests_reported`.
+    correction_genes: int | None = Field(default=None, ge=1)
+    # The p-value threshold the study itself states for genome-wide
+    # significance, transcribed, never derived here (D12). Where a surviving
+    # row's raw p is below it, the card says so: within a panel, a q below 0.05
+    # and a genome-wide result are different strengths of finding, and the
+    # study draws that line itself. Strictly between 0 and 1.
+    genome_wide_threshold: float | None = Field(default=None, gt=0, lt=1)
     # What a reader must know to read this study's counts, in one sentence the
     # gene page's card prints beneath its results (`pages._card_rare_variants`).
     # The card shows a study's carrier counts in a 15rem column, and the

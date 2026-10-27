@@ -425,8 +425,14 @@ RESEARCH_USE_NOTICE: Final = (
 # The apostrophe is `&#x27;` rather than a literal, because these strings are
 # interpolated into HTML by three call sites and one of them may one day put one
 # inside an attribute. `render` is where escaping decisions live.
+#
+# `corrected` read "survives that study's own correction" until review
+# (2026-10-27): a glyph is a cohort family's, and since owner decision
+# 2026-10-27 (I3) one family holds two studies, so "that study" had no single
+# referent. A family is `corrected` when a row of one of its studies survives
+# that row's own study's correction (`concordance.family_state`).
 EVIDENCE_STATE_LABELS: Final[dict[str, str]] = {
-    "corrected": "enriched, and survives that study&#x27;s own correction",
+    "corrected": "enriched, and a result survives its own study&#x27;s correction",
     "nominal": "enriched nominally, or no correction published",
     "no_enrichment": "tested, no enrichment detected",
     "not_tested": "not tested by that dataset",

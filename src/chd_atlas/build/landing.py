@@ -90,6 +90,7 @@ from chd_atlas.build.profiles import ProfileCensus
 from chd_atlas.build.render import EVIDENCE_POWER_CAVEAT, document, evidence_legend
 from chd_atlas.build.validity import GeneValidity, admitting_grade
 from chd_atlas.corpus import Corpus
+from chd_atlas.validate.sources import SourceRegistry
 
 # Read-only, and not a claim this build can verify — unlike every count on the
 # page, which is derived from the corpus this module was handed. Kept as a
@@ -233,6 +234,97 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     )
 
 
+def _panel_correction_note(studies: Sequence[str], corpus: Corpus) -> str:
+    """Whose correction a "surviving" result survived ran over a panel (review, 2026-10-27).
+
+    The census card "Genes with a rare-variant result surviving its study's
+    correction" counts by each study's own correction, and owner decision R3
+    exists because "surviving" reads as genome-wide: PMID:40127276's
+    Benjamini-Hochberg ran over its 248 panel genes (`Publication.
+    correction_genes`). Measured on a build of 5f7161b: 22 of the 32 genes
+    that card counts survive only that study's correction. The card's label is
+    the owner's and stays; this says, beside it, which studies' corrections
+    were over a panel, read from the studies whose rows reach a published
+    bundle (`BurdenCensus.studies`) and their curated `correction_genes`.
+    Empty where no such study is published, since nothing then needs saying.
+    """
+    curated = {str(publication.id): publication for publication in corpus.publications}
+    panels = [
+        (study, size)
+        for study in studies
+        if (publication := curated.get(study)) is not None
+        and (size := publication.correction_genes) is not None
+    ]
+    if not panels:
+        return ""
+    if len(panels) == 1:
+        [(study, size)] = panels
+        scope = (
+            f"For {study}, the correction a result must survive ran over its "
+            f"{_number(size)}-gene panel"
+        )
+    else:
+        scope = (
+            f"For {_and([study for study, _ in panels])}, the correction a result must survive "
+            "ran over each study's gene panel ("
+            + ", ".join(f"{_number(size)} genes for {study}" for study, size in panels)
+            + ")"
+        )
+    return (
+        f"<p>{scope}, not the genome. "
+        '<a href="methods.html#rare-variants">How to read rare-variant results</a>.</p>'
+    )
+
+
+def _and(items: Sequence[str]) -> str:
+    """`a`, `a and b`, `a, b and c`."""
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+# The two Orphadata products, in the order the citation names them.
+_ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
+
+
+def _orphadata_version(sources: SourceRegistry) -> str:
+    """The citation's "Data version", from the files' own headers (owner decision 2026-10-26, R11).
+
+    Orphadata asks to be cited "... Data version [date]", and the page pointed
+    to `sources.json`, which identified both files by sha256 alone. Each
+    product's `file_version` and `file_date` are its `<JDBOR>` header,
+    transcribed into `mirrors/sources.yaml` by the converter beside the
+    sha256, so this prints the release actually mirrored and moves when it
+    does. The date is the header's day; its time of day differs between the
+    two products of one release (07:57:18 and 07:53:50 on 2026-06-23), so one
+    release with one day prints once, and products that differ print each.
+    `""` where neither product records one: there is then nothing to cite,
+    and the sentence ends where it did before. Version and day are both
+    escaped, being transcribed text; the day reached the page unescaped until
+    review (2026-10-27).
+    """
+    by_id = sources.by_id
+    stated = [
+        (label, source.file_version, source.file_date.split(" ", 1)[0])
+        for source_id, label in _ORPHADATA
+        if (source := by_id.get(source_id)) is not None
+        and source.file_version is not None
+        and source.file_date is not None
+    ]
+    releases = sorted({(version, day) for _, version, day in stated})
+    if not releases:
+        return ""
+    if len(releases) == 1 and len(stated) == len(_ORPHADATA):
+        version, day = releases[0]
+        return f" Data version {html.escape(version)}, {html.escape(day)}."
+    return (
+        " Data version "
+        + "; ".join(
+            f"{html.escape(version)}, {html.escape(day)} ({label})"
+            for label, version, day in stated
+        )
+        + "."
+    )
+
+
 def _stat(label: str, value: str) -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
@@ -256,6 +348,7 @@ def _render(
     census: BurdenCensus,
     profile_census: ProfileCensus,
     combined_results: int,
+    sources: SourceRegistry,
 ) -> str:
     assertion_count = len(corpus.assertions)
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
@@ -314,7 +407,23 @@ def _render(
             # sample collections those group. Both are published, and
             # `cohorts.json` is where the caveats on each live.
             _stat("Sample collections", _number(len(corpus.cohorts))),
-            _stat("Genes with rare-variant evidence", _number(census.genes)),
+            # Renamed, and joined by the surviving count, by owner decision
+            # 2026-10-26 (R9): "evidence" read as support, for every gene with
+            # any row. Not the owner's "Genes tested in rare-variant studies":
+            # the census counts genes a study *reports* a result for, and a
+            # supplement that omits a gene does not say the study never tested
+            # it -- CRIPTO, the one published gene with no row, is such a gene,
+            # and its card says only that no study here reports a result
+            # (`pages._card_rare_variants`). "Tested" would say of it what the
+            # card refuses to.
+            _stat("Genes with a reported rare-variant result", _number(census.genes)),
+            # The genes whose card lists a result (`census.surviving_genes`,
+            # by the card's own predicate), and therefore never more than the
+            # line above.
+            _stat(
+                "Genes with a rare-variant result surviving its study's correction",
+                _number(census.surviving_genes),
+            ),
             # Immediately after the burden figures, for the reason this pair
             # exists at all: a whole developmental-expression layer landed
             # across Tasks 1-14 with nothing on this page naming it, which is
@@ -357,10 +466,13 @@ def _render(
     # for some published genes (26 of 119 drop when those terms are removed,
     # measured that day) and `sources.json` records both Orphadata products as
     # CC-BY-4.0, attribution required. The
-    # citation is Orphadata's own requested form (`mirrors/sources.yaml`); its
-    # "Data version" is the release `sources.json` pins by sha256, which this
-    # page points to rather than restating a date that would go stale on the
-    # next refresh.
+    # citation is Orphadata's own requested form (`mirrors/sources.yaml`). Its
+    # "Data version" pointed to `sources.json`'s sha256 until owner decision
+    # 2026-10-26 (R11), on the ground that a stated date would go stale; it is
+    # now each file's own header version and date, read from the registry the
+    # converter writes them into, so it moves with the mirror (`_orphadata_
+    # version`).
+    orphadata = _orphadata_version(sources)
     body = f"""  <h1>CHD Atlas</h1>
   <p class="tagline">Curated evidence linking genes, variants and proteins to congenital
     heart disease.</p>
@@ -378,8 +490,8 @@ def _render(
       assessment, never one this atlas authored: {_number(panel_graded_count)} on a ClinGen
       expert panel's classification, {_number(published_gene_count - panel_graded_count)} on
       two or more Gene Curation Coalition submitters agreeing where no panel disputes it.
-      Rare-variant statistics are reported per independent cohort family, and none is
-      pooled across them.</p>
+      Rare-variant statistics are reported per study, and none is pooled across
+      studies.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
 
@@ -398,9 +510,11 @@ def _render(
     variants, or a de novo enrichment test, which are different analyses and are named as
     such on each gene's page. An
     <strong>independent dataset</strong> is a cohort family rather than a
-    paper: two studies drawing on the same sample collection describe the same people and
-    count once. How many datasets agree about a gene is shown on every row of the browse
-    page, and it is a count of evidence — never a verdict on the gene.</p>
+    paper: two studies drawing on the same sample collection, or on collections this atlas
+    records as overlapping, can describe the same people and count once. How many
+    datasets agree about a gene is shown on every row of the browse page, and it is a
+    count of evidence — never a verdict on the gene.</p>
+  {_panel_correction_note(census.studies, corpus)}
   {_own_lab_sentence(census.studies, corpus)}
   {_GLYPH_KEY}
 
@@ -414,7 +528,7 @@ def _render(
     carries a structural heart malformation; its cardiovascular annotations and its mappings
     to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
     Free access data from Orphanet. &copy; INSERM 1999. Available on
-    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>.{orphadata}</em>
     Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY 4.0;
     developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
     (experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results are
@@ -460,6 +574,7 @@ def build_landing(
     profile_census: ProfileCensus,
     combined_results: int,
     emitter: Emitter,
+    sources: SourceRegistry,
 ) -> None:
     """Emit `index.html`.
 
@@ -501,5 +616,14 @@ def build_landing(
     """
     emitter.write_text(
         LANDING,
-        _render(corpus, symbols, validity, published, census, profile_census, combined_results),
+        _render(
+            corpus,
+            symbols,
+            validity,
+            published,
+            census,
+            profile_census,
+            combined_results,
+            sources,
+        ),
     )

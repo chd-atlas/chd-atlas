@@ -311,7 +311,7 @@ def build_genes(
     caller that predates it publishes an empty `burden_combined` array rather
     than failing.
 
-    `identities` is `runner._gene_identities`' return: `mirrors/genes.tsv`'s
+    `identities` is `identity.read_gene_identities`' return: `mirrors/genes.tsv`'s
     identity columns (D52). A gene absent from it publishes an `identity`
     object of six nulls, the shape every bundle carries -- the same "keep the
     record, mark what is missing" fallback `symbols` applies. Defaulted, so a

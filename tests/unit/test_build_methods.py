@@ -197,7 +197,7 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     (2026-10-26). It read "for a disease that an external authority treats as
     congenital heart disease (or in which Orphanet records a structural heart
     malformation in at least 30% of cases)", which reads as a sufficient
-    condition the build does not apply: SCP007 lists 239 unnominated terms
+    condition the build does not apply: SCP007 listed 239 unnominated terms
     that would qualify on Orphanet's frequencies, FLNA's periventricular
     nodular heterotopia among them, and Orphanet's own GenCC submissions name
     Ebstein anomaly, which is not a scope term. So the fragments now include
@@ -224,11 +224,14 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
         "qualify is not in scope until it is listed. Here a structural heart malformation is a "
         "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
         "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
-        "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
-        "ductus arteriosus. The branches kept still hold some findings that are not "
-        "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
-        "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
-        "arch, are not counted. "
+        "tumours, the pericardium and the like), plus eight lesions the ontology files "
+        "elsewhere, with any subtypes: coarctation of the aorta, a patent ductus "
+        "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
+        "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
+        "The findings counted still include some that are not malformations, such as a "
+        "calcified or prolapsing valve, and aortic valve stenosis can be acquired; other "
+        "lesions the ontology files elsewhere, among them peripheral pulmonary artery "
+        "stenosis and an aortopulmonary window, are not counted. "
         "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
         "is any gene: every scope term names the authority it came from "
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
@@ -577,6 +580,12 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     raw p against its whole scan. The literal below pins the published number
     and the assertion beside it pins the rule's, so a change to either fails
     here until the other is reconsidered.
+
+    **It names how wide a survival is** (owner decision 2026-10-26, R3): a
+    correction over a gene panel is not a genome-wide one, and the card says
+    which, beside the q. PMID:40127276's per-arm q is Benjamini-Hochberg over
+    its 248 panel genes, reproduced from Dataset S6 on every arm; the card
+    pins on TBX5 are in `test_built_site_is_consumable.py`.
     """
     assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
     expected = [
@@ -586,14 +595,20 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "<strong>supports</strong> the gene when its result points to enrichment in cases and "
         "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
         "corrected p its study published is below 0.05 as well; a row whose study published "
-        "no corrected p survives none. A gene page's card lists the rows that survive, the "
+        "no corrected p survives none. A study's correction covers only the genes it was run "
+        "over: where those were a gene panel rather than the genome, the card says so beside "
+        "the corrected p, and marks any surviving row whose raw p is also below the threshold "
+        "the study itself states for genome-wide significance. A gene page's card lists the "
+        "rows that survive, the "
         "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
         "support, and a forest plot draws a surviving row filled. Where a study is by an "
         "author of this atlas, its block says so.",
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-        "studies draw on the same sample collection they describe partly the same people, "
-        "so combining their results would count those people twice; a gene page names any "
-        "sample collection its studies share, as this atlas has recorded them.",
+        "studies draw on the same sample collection they describe partly the same people, and "
+        "where they draw on collections this atlas records as overlapping they may, so "
+        "combining their results could count those people twice; a gene page names any "
+        "sample collection its studies share, and any overlap between theirs, as this atlas "
+        "has recorded them.",
         "In each study's table, <code>cases</code> and <code>controls</code> each show "
         "<em>observed / total</em> (for a row tested against a mutation model, "
         "<code>controls</code> is instead the count that model expected), and <strong>every "
@@ -715,8 +730,9 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         "its curator recorded. A row may not name every collection its study drew on: the "
         "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
         "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
-        "partly the same people, and two that name none in common may still share people "
-        "this registry does not record. The same records are published as "
+        "partly the same people; two that name collections this registry records as "
+        "overlapping may; and two that name neither may still share people this registry "
+        "does not record. The same records are published as "
         '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
         '<dl class="cohort-list">'
         "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"

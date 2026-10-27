@@ -46,9 +46,22 @@ cohorts:
   # records in DECIPHER", publicly with HPO terms once the family has been
   # told. So DECIPHER's patient records include DDD participants, and a case
   # set drawn from DECIPHER may too. The registry holds them as two ids, which
-  # `shared_cohorts` never links -- the same test holds that. "this atlas's
-  # cohort registry", not "this registry" (review, 2026-10-27): the sentence
-  # renders in a gene page's cohort notes too, where no registry is in sight.
+  # `shared_cohorts` never linked until owner decision 2026-10-27 (I3).
+  # "this atlas's cohort registry", not "this registry" (review, 2026-10-27):
+  # the sentence renders in a gene page's cohort notes too, where no registry
+  # is in sight.
+  #
+  # `overlaps_with` (I3, 2026-10-27). An author of PMID:34324492 -- a study by
+  # an atlas author (`own_lab`), which names `decipher` -- answered that its
+  # case set does, or likely does, include DDD participants: through DECIPHER,
+  # as above, and through a collection in its S2 Table that is not a
+  # registered cohort. PMID:42230622 names `ddd`. The two studies were two independent datasets
+  # on every page; declared here, `shared_cohorts` links them and
+  # `cohort_families` makes them one. The descriptions' last clause read "this atlas's cohort registry
+  # records the two as separate collections and cannot see that overlap"
+  # until the declaration made it false; it is dropped rather than reworded,
+  # because a page carrying both studies now states the overlap in its own
+  # notice (`pages._overlap_notice`), and the descriptions keep the reason.
   - id: ddd
     name: Deciphering Developmental Disorders (DDD)
     description: >-
@@ -60,9 +73,9 @@ cohorts:
       contributed to more than one CHD exome study, which is the sample reuse the
       cohort columns exist to make visible; only one study cited today names it.
       DDD links its participants' likely diagnostic variants to their own patient
-      records in DECIPHER, so DECIPHER's cases may include DDD participants; this
-      atlas's cohort registry records the two as separate collections and cannot
-      see that overlap.
+      records in DECIPHER, so DECIPHER's cases may include DDD participants.
+    overlaps_with:
+      - decipher
     url: https://www.ddduk.org/
   - id: nottingham
     name: University of Nottingham congenital heart disease collection
@@ -87,9 +100,10 @@ cohorts:
       ascertained on a diagnostic question rather than on heart disease. The
       Deciphering Developmental Disorders study links its participants' likely
       diagnostic variants to their own patient records in DECIPHER, so these
-      cases may include DDD participants; this atlas's cohort registry records
-      the two as separate collections and cannot see that overlap.
+      cases may include DDD participants.
     url: https://www.deciphergenomics.org/
+    overlaps_with:
+      - ddd
   - id: isca
     name: International Standards for Cytogenomic Arrays (ISCA)
     description: >-
