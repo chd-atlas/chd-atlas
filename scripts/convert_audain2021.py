@@ -95,25 +95,34 @@ representation, and their cohorts will name the overlap between them properly.
 CHD-ONLY CARRIERS (owner decision R2, 2026-10-27)
 -------------------------------------------------
 S8 Table repeats S6's test for the 528 genes that reached significance and
-splits its case carriers by the case series they came from. Its two header
-rows, quoted (`S8_GROUPS`, `S8_HEADER`): columns 4-7 sit under "CHD+TAA",
-8-11 under "only CHD" and 12-15 under "only TAA", and each band reads `case`,
-`control`, `p_value`, `p_value_adj`. The sheet's "Info" tab defines `case` as
-"number of CNV cases", and its caption says the bands are the 528 genes
-"combining both CHD and TAA cases (CHD+TAA), the contribution of only CHD
-cases (only CHD) and the contribution of only TAA cases (only TAA)". It is a
-gene-level table, one row per gene, like S6's Sheet A.
+splits its case carriers by the case series they came from. Its first header
+row names three bands, "CHD+TAA", "only CHD" and "only TAA" (columns 4, 8 and
+12 of the workbook read on 2026-10-27), and its second reads `case`,
+`control`, `p_value`, `p_value_adj` under each. The sheet's "Info" tab
+defines `case` as "number of CNV cases", and its caption says the bands are
+the 528 genes "combining both CHD and TAA cases (CHD+TAA), the contribution of
+only CHD cases (only CHD) and the contribution of only TAA cases (only TAA)".
+It is a gene-level table, one row per gene, like S6's Sheet A.
 
-`n_chd_case_carriers` is the "only CHD" band's `case` (column 8): of the
-row's case carriers, how many are CHD cases rather than aneurysm probands. It
-is transcribed only where S8 lists the gene and is empty elsewhere; S8 is
-not a source of rows. Before it is written, S8's "CHD+TAA" `case` (column 4)
-must equal S6's `case` for every gene S8 lists, or the two tables are not
-the same analysis and the converter stops. Measured 2026-10-27: equal for all
-528, and so are the controls and the corrected p. S8 leaves the CHD-only
-`case` blank for 7 genes, none registered, and a blank is left blank rather
-than read as 0. The workbook's sha256 is recorded as `audain2021_s8` in
-`mirrors/sources.yaml`.
+`n_chd_case_carriers` is the "only CHD" band's `case`: of the row's case
+carriers, how many are CHD cases rather than aneurysm probands. It is
+transcribed only where S8 lists the gene and is empty elsewhere; S8 is not a
+source of rows. Before it is written, S8's "CHD+TAA" `case` must equal S6's
+`case` for every gene S8 lists, or the two tables are not the same analysis
+and the converter stops. Measured 2026-10-27: equal for all 528, and so are
+the controls and the corrected p. S8 leaves the CHD-only `case` blank for 7
+genes, none registered, and a blank is left blank rather than read as 0. The
+workbook's sha256 is recorded as `audain2021_s8` in `mirrors/sources.yaml`.
+
+**Both columns are located from the header rows, never from a fixed index**
+(`_band_case`): the band's label once on the first row, then `case` once on
+the second, between that label and the next. A sheet where either is not
+found exactly once is refused. Nothing downstream could catch a misread band:
+BUR003 holds `n_chd_case_carriers` to at most `n_case_carriers`, and every
+band's `case` is within that bound -- measured 2026-10-27, "only CHD" plus
+"only TAA" equals "CHD+TAA" for all 528 genes, a blank read as none -- so the
+TAA-only or the combined count read in its place validated clean and
+published as the CHD-only one.
 
 DENOMINATORS
 ------------
@@ -147,29 +156,13 @@ from convert_burden import gene_symbols, read_sheet, read_sheet_rows
 STUDY: Final = "PMID:34324492"
 SOURCE: Final = "audain2021_s6"
 
-# S8 Table's two header rows, quoted, as far as the bands this reads. Checked
-# before a cell is read, because the column read is chosen by position: a
-# reordered band would otherwise put the TAA-only count under the CHD-only name
-# on a green build.
-S8_GROUPS: Final = (
-    *("",) * 4,
-    "CHD+TAA",
-    *("",) * 3,
-    "only CHD",
-    *("",) * 3,
-    "only TAA",
-    *("",) * 3,
-)
-S8_HEADER: Final = (
-    "symbol",
-    "chr",
-    "start",
-    "end",
-    *("case", "control", "p_value", "p_value_adj") * 3,
-)
-_S8_SYMBOL: Final = 0
-_S8_COMBINED_CASE: Final = 4
-_S8_CHD_ONLY_CASE: Final = 8
+# S8 Table's header cells, quoted: two band labels from its first header row,
+# and the two column names this reads from its second. The columns are found
+# from these and never from a fixed index; see CHD-ONLY CARRIERS above.
+S8_COMBINED: Final = "CHD+TAA"
+S8_CHD_ONLY: Final = "only CHD"
+S8_CASE: Final = "case"
+S8_SYMBOL: Final = "symbol"
 
 # S2/S3 Tables. 11 of S2's 189 case sources are registered, and they hold 6,211
 # of its 7,958 cases (78%). This comment called the rest "~190 single-case PMID
@@ -221,35 +214,52 @@ METHOD_NOTE: Final = (
 )
 
 
+def _only(path: Path, cells: list[str], value: str, start: int, end: int, where: str) -> int:
+    """The index of the one cell in `cells[start:end]` reading `value`; refuses none or several."""
+    found = [index for index in range(start, min(end, len(cells))) if cells[index] == value]
+    if len(found) != 1:
+        raise ValueError(
+            f"{path}: S8 Table's {where} reads {value!r} {len(found)} times, not once, so "
+            f"the column it names cannot be located"
+        )
+    return found[0]
+
+
+def _band_case(path: Path, groups: list[str], header: list[str], band: str) -> int:
+    """The index of `case` under `band`: its label once on the first header row,
+    then `case` once on the second, from that label up to the next one.
+
+    A band label sits in the first cell of the band it heads and the cells
+    after it are blank, so the band ends where the next label begins, or with
+    the row.
+    """
+    start = _only(path, groups, band, 0, len(groups), "first header row")
+    end = next((index for index in range(start + 1, len(groups)) if groups[index]), len(header))
+    return _only(path, header, S8_CASE, start, end, f"second header row under {band!r}")
+
+
 def read_chd_only(path: Path) -> dict[str, tuple[str, str]]:
     """S8 Table as symbol -> (its "CHD+TAA" `case`, its "only CHD" `case`).
 
-    Refuses a sheet whose header rows are not `S8_GROUPS` and `S8_HEADER`, and
-    a gene listed twice.
+    Every column is located from the two header rows (`_band_case`); refuses
+    a sheet where one cannot be, and a gene listed twice.
     """
     rows = read_sheet_rows(path, "S8 Table")
-
-    def first(index: int, width: int) -> tuple[str, ...]:
-        # Padded: a row read from the sheet ends at its last cell, which may
-        # fall short of the bands this reads.
-        cells = rows[index] if index < len(rows) else []
-        return tuple(cell.strip() for cell in (cells + [""] * width)[:width])
-
-    groups, header = first(0, len(S8_GROUPS)), first(1, len(S8_HEADER))
-    if groups != S8_GROUPS or header != S8_HEADER:
-        raise ValueError(
-            f"{path}: S8 Table's header rows are not the ones this converter reads by "
-            f"position: {groups!r} / {header!r}"
-        )
+    groups, header = ([cell.strip() for cell in row] for row in [*rows, [], []][:2])
+    symbol_at = _only(path, header, S8_SYMBOL, 0, len(header), "second header row")
+    combined_at = _band_case(path, groups, header, S8_COMBINED)
+    chd_only_at = _band_case(path, groups, header, S8_CHD_ONLY)
     split: dict[str, tuple[str, str]] = {}
     for row in rows[2:]:
-        cells = row + [""] * (len(S8_HEADER) - len(row))
-        symbol = cells[_S8_SYMBOL].strip()
+        # Padded: a row read from the sheet ends at its last cell, which may
+        # fall short of the columns this reads.
+        cells = row + [""] * (len(header) - len(row))
+        symbol = cells[symbol_at].strip()
         if not symbol:
             continue
         if symbol in split:
             raise ValueError(f"{path}: S8 Table lists {symbol} twice")
-        split[symbol] = (cells[_S8_COMBINED_CASE].strip(), cells[_S8_CHD_ONLY_CASE].strip())
+        split[symbol] = (cells[combined_at].strip(), cells[chd_only_at].strip())
     return split
 
 

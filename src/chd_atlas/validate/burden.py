@@ -159,9 +159,13 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
         # a per-column range check cannot see, because both numbers are
         # individually valid non-negative integers. The third pair is the same
         # rule one level in (owner decision R2, 2026-10-27): the CHD cases
-        # among a row's case carriers are a subset of them, and more is the
-        # signature of the wrong band of S8 Table -- its "CHD+TAA" and "only
-        # CHD" `case` columns sit four apart under one header word.
+        # among a row's case carriers are a subset of them, so more is
+        # impossible. It is a subset invariant and nothing more. It cannot see
+        # the wrong band of S8 Table read in place of "only CHD": every band's
+        # `case` is within it (measured 2026-10-27, "only CHD" plus "only TAA"
+        # is "CHD+TAA", which is S6's `case`, for all 528 genes). What catches
+        # a misread band is `scripts/convert_audain2021.py`, which locates the
+        # column from S8's header rows and refuses a sheet where it cannot.
         for carriers, total in (
             ("n_case_carriers", "n_cases"),
             ("n_control_carriers", "n_controls"),

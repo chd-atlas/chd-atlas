@@ -12,10 +12,11 @@ say the permutation test was run on, after filtering. The rows carried S1
 Table's deletion column, 7,107 and 14,040, until 2026-10-26; each test below
 fails on that pair, one on the converter and one on a mirror not re-run.
 
-`n_chd_case_carriers` is read from S8 Table by position (owner decision R2,
-2026-10-27), so the fixture gives the three bands of its `case` column three
-different values and the controls a fourth: a converter reading the wrong band
-writes a number this fixture does not expect.
+`n_chd_case_carriers` is read from S8 Table (owner decision R2, 2026-10-27),
+from the column its header rows locate. No two cells of the fixture's split
+gene's S8 row are alike, so a converter reading any wrong column writes a
+number this fixture does not expect. The fixture's genes are synthetic, and so
+are their numbers: none is a fact about a real gene.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import convert_audain2021  # noqa: E402
+from burden_mirror import ORDER  # noqa: E402
 
 STUDY = "PMID:34324492"
 
@@ -48,10 +50,10 @@ _METHOD_NOTE = (
 )
 
 
-# S8 Table's two header rows as the workbook has them, quoted rather than taken
-# from `S8_GROUPS`/`S8_HEADER`, then one gene per line: symbol, chr, start, end,
-# and each band's case, control, p, corrected p. Note the trailing space in
-# "significant CHD ", as the sheet spells it.
+# S8 Table's two header rows as the workbook has them, written out rather than
+# built from the converter's constants, then one gene per line: symbol, chr,
+# start, end, and each band's case, control, p, corrected p. Note the trailing
+# space in "significant CHD ", as the sheet spells it.
 _S8_GROUPS = ["", "", "", "", "CHD+TAA", "", "", "", "only CHD", "", "", "", "only TAA"]
 _S8_HEADER = [
     "symbol", "chr", "start", "end",
@@ -60,21 +62,28 @@ _S8_HEADER = [
     "case", "control", "p_value", "p_value_adj",
     "significant CHD ", "significant TAA", "LOEUF", "DNM", "*Expression RNA-Seq", "Info",
 ]  # fmt: skip
-_S8_TBX1 = ["TBX1", "22", "1", "2", "120", "3", "1E-4", "1E-4", "117", "3", "1E-4", "1E-4", "3"]
-# S8 leaves a band's `case` blank where it reports nothing for it.
-_S8_GATA4 = ["GATA4", "8", "1", "2", "29", "0", "1E-4", "1E-4", "", "", "", "", "29"]
+# Synthetic genes, synthetic numbers. SPLIT's combined `case` is its S6 `case`
+# (120), split 117 CHD-only and 3 TAA-only, and no two of its cells are alike.
+_SPLIT_COMBINED = ["120", "21", "1E-4", "2E-4"]
+_SPLIT_CHD_ONLY = ["117", "17", "3E-4", "4E-4"]
+_SPLIT_TAA_ONLY = ["3", "13", "5E-4", "6E-4"]
+_S8_SPLIT = ["SPLIT", "22", "11", "12", *_SPLIT_COMBINED, *_SPLIT_CHD_ONLY, *_SPLIT_TAA_ONLY]
+# S8 leaves a band blank where it reports nothing for it.
+_S8_BLANK = ["BLANK", "8", "31", "32", "29", "25", "7E-4", "8E-4", "", "", "", "", "29"]
+_SYMBOLS = {"SPLIT": "HGNC:900001", "BLANK": "HGNC:900002", "UNLISTED": "HGNC:900003"}
 
 
 def _drive(
     monkeypatch: pytest.MonkeyPatch, s8: list[list[str]], symbols: dict[str, str]
 ) -> list[dict[str, str]]:
-    """`convert` on synthetic S6 records for TBX1, GATA4, ELN and one unregistered gene."""
-    record = {"symbol": "TBX1", "case": "120", "control": "3", "p_value": "1E-4"}
+    """`convert` on synthetic S6 records: SPLIT and BLANK, which S8 lists,
+    UNLISTED, which it does not, and one gene no registry holds."""
+    record = {"symbol": "SPLIT", "case": "120", "control": "21", "p_value": "1E-4"}
     records = [
         {**record, "p_value_adj": "2E-4"},
-        {**record, "symbol": "GATA4", "case": "29", "p_value_adj": "2E-4"},
-        {**record, "symbol": "ELN", "case": "30", "p_value_adj": "2E-4"},
-        {**record, "symbol": "NOT-REGISTERED", "p_value_adj": "2E-4"},
+        {**record, "symbol": "BLANK", "case": "29", "p_value_adj": "2E-4"},
+        {**record, "symbol": "UNLISTED", "case": "30", "p_value_adj": "2E-4"},
+        {**record, "symbol": "UNREGISTERED", "p_value_adj": "2E-4"},
     ]
     sheets: list[str] = []
 
@@ -98,25 +107,26 @@ def test_the_row_the_converter_builds_carries_the_current_note_and_denominators(
 ) -> None:
     """Driven through `convert` on synthetic S6 and S8 records.
 
-    `n_chd_case_carriers` is S8's "only CHD" `case` (117 for TBX1, not the
+    `n_chd_case_carriers` is S8's "only CHD" `case` (117 for SPLIT, not the
     combined 120 or the TAA-only 3), empty where S8 leaves that cell blank
-    (GATA4) and where S8 does not list the gene (ELN).
+    (BLANK) and where S8 does not list the gene (UNLISTED). Every row carries
+    exactly the mirror's columns, in the schema's order.
     """
-    s8 = [_S8_GROUPS, _S8_HEADER, _S8_TBX1, _S8_GATA4]
-    symbols = {"TBX1": "HGNC:11592", "GATA4": "HGNC:4173", "ELN": "HGNC:3327"}
-    rows = _drive(monkeypatch, s8, symbols)
+    rows = _drive(monkeypatch, [_S8_GROUPS, _S8_HEADER, _S8_SPLIT, _S8_BLANK], _SYMBOLS)
 
     assert [(row["gene"], row["n_chd_case_carriers"]) for row in rows] == [
-        ("HGNC:11592", "117"),
-        ("HGNC:4173", ""),
-        ("HGNC:3327", ""),
+        ("HGNC:900001", "117"),
+        ("HGNC:900002", ""),
+        ("HGNC:900003", ""),
     ]
+    assert all(tuple(row) == ORDER == BURDEN.column_names for row in rows)
     row = rows[0]
     assert row["method_note"] == _METHOD_NOTE
-    # Every case source registered for this study, as a literal: the four S2
-    # collections, then the seven S2 series identified by PMID with 50 or more
-    # cases (owner decision R12, 2026-10-27). The committed mirror reads the
-    # same, but cannot see a converter that dropped one and was not re-run.
+    # Every case source registered for this study, as a literal: the four
+    # registered with the study, then the seven CHD series S2 identifies by
+    # PMID with 50 or more cases (owner decision R12, 2026-10-26). The
+    # committed mirror reads the same, but cannot see a converter that dropped
+    # one and was not re-run.
     assert row["case_cohorts"].split(";") == [
         "decipher",
         "isca",
@@ -136,29 +146,97 @@ def test_the_row_the_converter_builds_carries_the_current_note_and_denominators(
 
 
 @pytest.mark.parametrize(
+    ("groups", "header", "split"),
+    [
+        # The TAA-only band before the CHD-only one: an index fixed at the
+        # workbook's column 8 would publish the TAA-only 3.
+        pytest.param(
+            [*_S8_GROUPS[:8], "only TAA", "", "", "", "only CHD"],
+            _S8_HEADER,
+            ["SPLIT", "22", "11", "12", *_SPLIT_COMBINED, *_SPLIT_TAA_ONLY, *_SPLIT_CHD_ONLY],
+            id="bands-reordered",
+        ),
+        # `case` second in every band: a column taken from the band's label
+        # alone, without reading the second header row, is each band's
+        # `control`.
+        pytest.param(
+            _S8_GROUPS,
+            ["symbol", "chr", "start", "end", *("control", "case", "p_value", "p_value_adj") * 3],
+            [
+                "SPLIT", "22", "11", "12",
+                "21", "120", "1E-4", "2E-4",
+                "17", "117", "3E-4", "4E-4",
+                "13", "3", "5E-4", "6E-4",
+            ],
+            id="case-second-in-each-band",
+        ),
+    ],
+)  # fmt: skip
+def test_the_chd_only_count_is_read_from_the_column_its_headers_name(
+    monkeypatch: pytest.MonkeyPatch, groups: list[str], header: list[str], split: list[str]
+) -> None:
+    """Located from S8's header rows, so a moved column is still the right one.
+
+    BUR003 cannot catch a misread band: every band's `case` is at most the
+    row's case carriers (see the converter's CHD-ONLY CARRIERS), so the wrong
+    one validates clean. The combined band is located the same way and still
+    checked against S6, which these layouts pass only if it is found too.
+    """
+    rows = _drive(monkeypatch, [groups, header, split], {"SPLIT": "HGNC:900001"})
+    assert [row["n_chd_case_carriers"] for row in rows] == ["117"]
+
+
+@pytest.mark.parametrize(
     ("s8", "match"),
     [
-        # The TAA-only and CHD-only bands swapped: read by position, the
-        # TAA-only count would publish under the CHD-only name.
         pytest.param(
-            [[*_S8_GROUPS[:8], "only TAA", "", "", "", "only CHD"], _S8_HEADER, _S8_TBX1],
-            "header rows",
-            id="bands-reordered",
+            [[*_S8_GROUPS[:8], "CHD only", "", "", "", "only TAA"], _S8_HEADER, _S8_SPLIT],
+            "first header row reads 'only CHD' 0 times",
+            id="band-unlabelled",
+        ),
+        pytest.param(
+            [[*_S8_GROUPS[:8], "only CHD", "", "", "", "only CHD"], _S8_HEADER, _S8_SPLIT],
+            "first header row reads 'only CHD' 2 times",
+            id="band-labelled-twice",
+        ),
+        # The band's columns renamed: nothing under it reads `case`.
+        pytest.param(
+            [_S8_GROUPS, [*_S8_HEADER[:8], "cases", *_S8_HEADER[9:]], _S8_SPLIT],
+            "second header row under 'only CHD' reads 'case' 0 times",
+            id="case-unnamed",
+        ),
+        # With the next band unlabelled, the CHD-only band runs to the end of
+        # the row and holds two `case` columns, and neither can be chosen.
+        pytest.param(
+            [_S8_GROUPS[:12], _S8_HEADER, _S8_SPLIT],
+            "second header row under 'only CHD' reads 'case' 2 times",
+            id="next-band-unlabelled",
         ),
         # S8's combined count is not S6's: the two tables are not one analysis.
         pytest.param(
-            [_S8_GROUPS, _S8_HEADER, ["TBX1", "22", "1", "2", "121", *_S8_TBX1[5:]]],
+            [_S8_GROUPS, _S8_HEADER, [*_S8_SPLIT[:4], "121", *_S8_SPLIT[5:]]],
             "differs from S6",
             id="combined-is-not-s6",
+        ),
+        # A gene S6 does not list cannot be checked against it.
+        pytest.param(
+            [_S8_GROUPS, _S8_HEADER, ["ELSEWHERE", *_S8_SPLIT[1:]]],
+            "S6 lists no such gene, for 1 gene\\(s\\): ELSEWHERE",
+            id="gene-not-in-s6",
+        ),
+        pytest.param(
+            [_S8_GROUPS, _S8_HEADER, _S8_SPLIT, _S8_SPLIT],
+            "S8 Table lists SPLIT twice",
+            id="gene-listed-twice",
         ),
     ],
 )
 def test_the_converter_stops_on_an_s8_table_it_cannot_read_as_s6s_split(
     monkeypatch: pytest.MonkeyPatch, s8: list[list[str]], match: str
 ) -> None:
-    """Both are refusals rather than reports: either would write a wrong count."""
+    """Refusals rather than reports: each would otherwise write a wrong count, or none."""
     with pytest.raises(ValueError, match=match):
-        _drive(monkeypatch, s8, {"TBX1": "HGNC:11592"})
+        _drive(monkeypatch, s8, {"SPLIT": "HGNC:900001"})
 
 
 def test_every_committed_row_carries_the_current_note_and_denominators() -> None:
