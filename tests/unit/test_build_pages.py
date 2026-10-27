@@ -9232,7 +9232,7 @@ def test_a_gene_with_cell_type_data_carries_the_combined_banner_and_not_the_bulk
     assert _COMBINED_BANNER in section
     assert "Every measurement below is from bulk tissue" not in section
     # The cell-type block opens the section, before the first bulk dataset block.
-    assert section.index("<h3>Cell types (Farah et al. 2024)</h3>") < section.index("E-MTAB-6814")
+    assert section.index("<h3>Cell types (Farah 2024)</h3>") < section.index("E-MTAB-6814")
     assert section.index(_COMBINED_BANNER) < section.index("<h3>Cell types")
 
 
@@ -9276,15 +9276,15 @@ def test_a_gene_with_cell_type_data_and_no_bulk_profile_claims_no_timeline(
     ) in section
     assert "timeline" not in section
     assert "not yet curated" not in section
-    assert "<h3>Cell types (Farah et al. 2024)</h3>" in section
+    assert "<h3>Cell types (Farah 2024)</h3>" in section
 
 
-def test_the_cell_type_block_adds_at_most_42_visible_words_to_a_gene_page(
+def test_the_cell_type_block_adds_at_most_40_visible_words_to_a_gene_page(
     tmp_path: Path,
 ) -> None:
     """Measured with the budget test's own counting (`_prose`, `_words`) on a fixture
     page (with its tau line) with and without the block. The spec's ceiling is 40;
-    the measured growth is 42 (block 37 + banner 5), pinned here so it cannot grow
+    the measured growth is 40 (block 35 + banner 5), pinned here so it cannot grow
     unseen. The excess is reported to the owner, not absorbed into the budget."""
     from tests.test_built_site_is_consumable import _prose, _words
 
@@ -9303,4 +9303,4 @@ def test_the_cell_type_block_adds_at_most_42_visible_words_to_a_gene_page(
     def words(page: str) -> int:
         return sum(_words(text) for text in _prose(page))
 
-    assert words(with_cells) - words(plain) <= 42
+    assert words(with_cells) - words(plain) <= 40

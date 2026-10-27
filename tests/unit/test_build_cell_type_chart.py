@@ -234,7 +234,7 @@ def test_the_tau_line_names_the_highest_cell_type_or_says_there_is_none() -> Non
 def test_the_heading_and_caption_are_the_pinned_copy() -> None:
     block = cell_type_block(payload(), dataset())
 
-    assert "<h3>Cell types (Farah et al. 2024)</h3>" in block
+    assert "<h3>Cell types (Farah 2024)</h3>" in block
     assert ("Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells.</p>") in block
     assert "<script" not in block
 

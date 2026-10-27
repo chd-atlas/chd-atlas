@@ -26,7 +26,7 @@ from typing import Final
 from chd_atlas.build.cell_types import CellTypeDataset, CellTypeEntry, CellTypeValues
 from chd_atlas.models.dataset import Dataset
 
-_HEADING: Final = "Cell types (Farah et al. 2024)"
+_HEADING: Final = "Cell types (Farah 2024)"
 _CAPTION: Final = "Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells."
 _READING_SUMMARY: Final = "How to read this chart"
 _READING_TEXT: Final = (
