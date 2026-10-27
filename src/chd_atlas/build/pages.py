@@ -67,7 +67,7 @@ from __future__ import annotations
 
 import html
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
@@ -215,13 +215,20 @@ _SCOPE_SHORT: Final = (
 #   `curation/chd_scope.yaml`; `methods.SCOPE_RULE` says how a term gets there.
 # * The opening names the lesion assertion as what is absent whenever the
 #   atlas has curated functional records for the gene; see `_card_curation`.
+# * **"the submitters it is admitted by", not "named above"** (review,
+#   2026-10-27). Above this sentence the card named only the `admitted by`
+#   row's submitters until R6 put a no-association line between them: on
+#   GDF1 it names Illumina, whose `No Known Disease Relationship` asserts
+#   nothing, so "the submitters named above independently assert it" took
+#   in the one submitter that dissents. The clause now names the admitting
+#   submitters by their role, wherever the card puts them.
 _CURATION_BY_PANEL: Final = (
     "every classification on this page is a ClinGen expert panel's or a named curator's."
 )
 
 _CURATION_BY_AGREEMENT: Final = (
     "and no ClinGen expert panel has graded this gene for any of the diseases in scope "
-    "here: it is published because the Gene Curation Coalition submitters named above "
+    "here: it is published because the Gene Curation Coalition submitters it is admitted by "
     "independently assert it."
 )
 
@@ -611,14 +618,24 @@ _POOLING_NOTICE: Final = (
 # card lines on 32 pages, 15 lead with a different row from their matrix cell,
 # on 13 pages. The owner's draft said "its strongest supporting row": the cell
 # names a surviving row in a `corrected` cell, ranked by p, not by effect --
-# "most significant", the word `docs/data-api.md` uses for it. "where the card
-# lists surviving rows", because 86 of the 118 pages with a matrix list none.
-# Rendered with every matrix, whatever this gene's rows: as worded it is true
-# on every page that shows one.
+# "most significant", the word `docs/data-api.md` uses for it.
+#
+# **Rendered only where the card lists a surviving row** (review,
+# 2026-10-27): with the matrix, and only if some row of this gene survives
+# its own study's correction (`concordance.survives_own_correction`, the
+# predicate the card's list reads). It rendered with every matrix, 118 pages,
+# and on the 86 whose card lists no row there is no lead for a cell to differ
+# from; on 55 of those no cell names a row at all (measured on a build of
+# ad03128). On the 32 where it renders, card and matrix can lead differently.
+# And it claims the card's order only as far as it holds: the card groups a
+# study's surviving rows into one line per analysis, ordered by analysis
+# label, so "it keeps each study table's order" was true within a line and
+# not across a study's lines; that a damaging union comes before its parts is
+# true on every line.
 _MATRIX_LEAD_NOTE: Final = (
-    "<p>A cell names the most significant of the rows behind its state; where the card "
-    "lists surviving rows, it keeps each study table's order, a damaging union before its "
-    "parts, so the two can lead with different rows.</p>"
+    "<p>A cell names the most significant of the rows behind its state; the card lists a "
+    "study's surviving rows with a damaging union before its parts, so the two can lead "
+    "with different rows.</p>"
 )
 
 # `_BURDEN_PREAMBLE` and `_SYNONYMOUS_NOTICE` sat here until 2026-10-26: the
@@ -953,9 +970,14 @@ def _card_rare_variants(
     missense (damaging)". It counted them ("2 more survive") until 2026-10-26,
     which beside the `damaging` union counted the union's own components as
     further findings; the union's label already says what it is the union of.
-    **Never the "most significant" row**: choosing one by p-value would be a
-    ranking, and the atlas authors none (D12). Groups in study-id order, then
-    analysis label, the order the section's own subtitles use.
+    **Not the "most significant" row**: a line keeps its study table's reading
+    order. The evidence matrix's cell is where a row is chosen by p
+    (`_matrix_cell`, among the rows behind its state), and its caption says
+    the two can lead with different rows (`_MATRIX_LEAD_NOTE`). This read
+    "choosing one by p-value would be a ranking, and the atlas authors none
+    (D12)" until review (2026-10-27), beside a matrix that chooses by p.
+    Groups in study-id order, then analysis label, the order the section's
+    own subtitles use.
 
     "Survives" is `concordance.survives_own_correction`, the predicate the
     evidence matrix's `corrected` tier reads, so the card and the matrix on the
@@ -1327,9 +1349,11 @@ def _card_no_association(fact: GeneFacts, gene_validity: GeneValidity) -> str:
     and `no_association_reported_by` since schema 2.10, and the validity table
     listed the record, but the card -- the summary a reader takes in first --
     said nothing. Measured on a build of 3b766ba: one published gene, GDF1,
-    whose card reads beside G2P's `Definitive` "Illumina reports no known
-    disease relationship for congenital heart defects, multiple types, 6
-    (2021); see the validity table."
+    admitted on GenCC agreement, so its card's chip reads `not classified`
+    and its `admitted by` row names four submitters, G2P (`Definitive`) among
+    them; the line beneath reads "Illumina reports no known disease
+    relationship for congenital heart defects, multiple types, 6 (2021); see
+    the validity table."
 
     Built from the records, never from a literal or from the bundle's name
     list: grouped by authority -- the expert panel for a ClinGen record, the
@@ -2008,11 +2032,16 @@ def _burden_section(
         # the reason every other loop here is sorted.
         placed = [row for row in study_rows if _plottable(row)]
         measures = sorted({row.effect_measure for row in placed if row.effect_measure is not None})
+        # Every (stratum, consequence) cell this study published for this gene,
+        # plotted or not: what a panel's unsplit-union line reads to say a
+        # missing component was never published rather than not drawn.
+        cells = frozenset((row.cohort_stratum, row.consequence_class) for row in study_rows)
         forests = "".join(
             _forest(
                 [row for row in placed if row.effect_measure == measure],
                 measure,
                 _study_label(study, publications),
+                cells,
             )
             for measure in measures
         )
@@ -2067,6 +2096,8 @@ def _burden_section(
     pooling = _POOLING_NOTICE if len({row.study for row in rows}) > 1 else ""
 
     matrix = _evidence_matrix(rows, families, axes, publications)
+    # The card lists a row exactly when one survives (`_card_rare_variants`).
+    lead_differs = any(survives_own_correction(row) for row in rows)
 
     # THE FOLD RULE. A caveat may fold if it is *general* -- true on every gene
     # page, teaching how to read the table. It must stay visible if it is
@@ -2099,8 +2130,9 @@ def _burden_section(
         # belongs directly beneath the matrix rather than four paragraphs above
         # it. Rendered whenever there is a matrix, because the matrix is what it
         # qualifies -- unlike its previous home, where it was conditional on
-        # there being more than one study to pool.
-        + (_POOLING_NOTICE + _MATRIX_LEAD_NOTE if matrix else pooling)
+        # there being more than one study to pool. The lead note beside it is
+        # conditional on the card listing a surviving row; see its constant.
+        + (_POOLING_NOTICE + (_MATRIX_LEAD_NOTE if lead_differs else "") if matrix else pooling)
         + shared
         + "".join(blocks)
         + _cohort_notes(rows, cohorts)
@@ -2147,15 +2179,24 @@ def _disclosure(study: str, publications: Mapping[str, Publication]) -> str:
     false where it sits: measured on a build of 4233eca, 113 of the 190 own-lab
     study blocks also carry the atlas's own Bonferroni arithmetic
     (`_method_line`'s `0.05 / tests_reported`) and a forest plot the atlas drew
-    from the study's rows. It keeps the hedge the sentence it replaced had: no
-    *assessment* added.
+    from the study's rows.
+
+    **"no assessment added" went too (review, 2026-10-27).** The same day,
+    `methods.html#rare-variants` began stating the one rule the atlas applies
+    to every study's rows (owner decision W2): which support the gene and
+    which survive their study's correction, the rule the card, the matrix and
+    the forest fill read. A block saying the atlas added no assessment
+    contradicted that page on all 190 own-lab blocks. The sentence says what
+    is true instead: the rule is applied, and it is the same rule
+    (`concordance.survives_own_correction` reads no `own_lab`).
     """
     publication = publications.get(study)
     if publication is None or not publication.own_lab:
         return ""
     return (
         '<p class="disclosure">Declaration: this study is by an author of this atlas; '
-        "republished as published, no assessment added.</p>"
+        "its results are republished as published and read by the same rule as every other "
+        "study's.</p>"
     )
 
 
@@ -2737,9 +2778,9 @@ def _union_kinds(rows: Sequence[BurdenRow]) -> tuple[bool, bool]:
 
     **This answers for the panel, and a tag is worn by a row.** A panel can
     turn a union on for one consequence and then hang the tag on a row whose
-    own components are not all drawn -- 10 panels do. `_fully_split` is what
-    asks the per-row question, and `_forest_caption` is where the answer
-    changes what the key promises.
+    own components are not all drawn -- 10 panels do. `_missing_components`
+    is what asks the per-row question, and `_unsplit_line` is where the answer
+    reaches the panel's visible line.
     """
     composite, parts = _CONSEQUENCE_UNION
     consequence = any(row.consequence_class == composite for row in rows) and any(
@@ -2760,8 +2801,17 @@ def _is_union(row: BurdenRow, kinds: tuple[bool, bool]) -> bool:
     )
 
 
-def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, bool]) -> bool:
-    """Whether **every** row this union contains is itself drawn on this panel.
+def _missing_components(
+    row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, bool]
+) -> list[tuple[str, str]]:
+    """The `(stratum, consequence)` cells this union contains and `rows` does not draw.
+
+    Empty when **every** row this union contains is itself drawn on this
+    panel, and for a row that is not a union on it. It was `_fully_split`, a
+    `bool`, until review (2026-10-27) asked the panel's visible line to name
+    what is missing (`_unsplit_line`). In reading order: the consequence
+    union's parts, then the stratum union's, each in its `_..._UNION` tuple's
+    order.
 
     `_union_kinds` asks its question of the panel; a tag is worn by a row, and
     the two are not the same question. A panel carrying `all cases · missense`
@@ -2781,25 +2831,87 @@ def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, b
     damaging-missense rows **for `all cases`**, not for any stratum.
     """
     consequence, stratum = kinds
+    missing: list[tuple[str, str]] = []
     if consequence and row.consequence_class == _CONSEQUENCE_UNION[0]:
-        drawn = {
-            other.consequence_class
-            for other in rows
-            if other.cohort_stratum == row.cohort_stratum
-            and other.consequence_class in _CONSEQUENCE_UNION[1]
-        }
-        if drawn != set(_CONSEQUENCE_UNION[1]):
-            return False
+        same_stratum = [other for other in rows if other.cohort_stratum == row.cohort_stratum]
+        drawn = {other.consequence_class for other in same_stratum}
+        parts = _CONSEQUENCE_UNION[1]
+        missing += [(row.cohort_stratum, part) for part in parts if part not in drawn]
     if stratum and row.cohort_stratum == _STRATUM_UNION[0]:
-        drawn = {
-            other.cohort_stratum
-            for other in rows
-            if other.consequence_class == row.consequence_class
-            and other.cohort_stratum in _STRATUM_UNION[1]
-        }
-        if drawn != set(_STRATUM_UNION[1]):
-            return False
-    return True
+        same_class = [other for other in rows if other.consequence_class == row.consequence_class]
+        drawn = {other.cohort_stratum for other in same_class}
+        strata = _STRATUM_UNION[1]
+        missing += [(part, row.consequence_class) for part in strata if part not in drawn]
+    return missing
+
+
+def _forest_label(stratum: str, consequence: str) -> str:
+    """A forest row's name, as its label and the panel's visible line both print it."""
+    stratum_label = _STRATUM_LABEL.get(stratum, stratum)
+    return f"{stratum_label} · {_CONSEQUENCE_LABEL.get(consequence, consequence)}"
+
+
+def _unsplit_line(
+    rows: Sequence[BurdenRow], kinds: tuple[bool, bool], published: Collection[tuple[str, str]]
+) -> str:
+    """One sentence naming each `union`-tagged row whose components are not all drawn.
+
+    On the panel's visible line, where it fires (owner decision 2026-10-26,
+    E1). It read "A row tagged union here is not fully split: at least one of
+    the rows it contains is not plotted; the table below carries every row
+    this study published for this gene" until review (2026-10-27), which
+    pointed a reader at the table for a row that is in no table: on all 10
+    panels it fires on (measured on a build of ad03128) the missing component
+    is a cell the study never published for the gene, and TBX5's panel tags
+    three rows of which only `all cases · loss-of-function` is unsplit. So it
+    names the row, and what is missing from it, and says which of two things
+    the absence is: `published` holds the cells of every row this study
+    published for this gene, plotted or not, so a component the study
+    published and this panel does not draw -- no effect to place, or another
+    effect measure -- is said to be "not plotted here", never unpublished.
+    Latent today: on none of the 10 panels is a missing component published.
+
+    Several such rows share one sentence, "The A and B rows are unions, and
+    this study published no C or D row for this gene", each component named
+    once, in panel order: the 10 published panels each have one, and the
+    forest key's fixture, with four, reads as a list rather than as four
+    repetitions of one sentence.
+    """
+    unions: list[str] = []
+    absent: list[str] = []
+    undrawn: list[str] = []
+    for row in rows:
+        if not _is_union(row, kinds):
+            continue
+        missing = _missing_components(row, rows, kinds)
+        if not missing:
+            continue
+        # Escaped: an unknown token renders as itself (`_STRATUM_LABEL.get`).
+        label = html.escape(_forest_label(row.cohort_stratum, row.consequence_class))
+        unions.append(f"<strong>{label}</strong>")
+        for cell in missing:
+            name = html.escape(_forest_label(*cell))
+            named = undrawn if cell in published else absent
+            if name not in named:
+                named.append(name)
+    if not unions:
+        return ""
+    several = len(unions) > 1
+    clauses: list[str] = []
+    if absent:
+        names = absent[0] if len(absent) == 1 else f"{', '.join(absent[:-1])} or {absent[-1]}"
+        clauses.append(f"this study published no {names} row for this gene")
+    if undrawn:
+        plural = len(undrawn) > 1
+        clauses.append(
+            f"the {_and_join(undrawn)} row{'s' if plural else ''} "
+            f"{'they contain' if several else 'it contains'} "
+            f"{'are' if plural else 'is'} not plotted here"
+        )
+    subject = (
+        f"The {_and_join(unions)} rows are unions" if several else f"The {unions[0]} row is a union"
+    )
+    return f" {subject}, and {', and '.join(clauses)}."
 
 
 def _survived_correction(row: BurdenRow) -> bool:
@@ -3090,10 +3202,7 @@ def _forest_estimate(row: BurdenRow, y: float, scale: LogScale) -> str:
 def _forest_row(row: BurdenRow, index: int, scale: LogScale, *, union: bool) -> str:
     """One burden row: its name, its interval, its estimate and its statistics."""
     y = _FOREST_TOP + index * _FOREST_ROW
-    label = (
-        f"{_STRATUM_LABEL.get(row.cohort_stratum, row.cohort_stratum)} · "
-        f"{_CONSEQUENCE_LABEL.get(row.consequence_class, row.consequence_class)}"
-    )
+    label = _forest_label(row.cohort_stratum, row.consequence_class)
     # A `<tspan>` rather than a second `<text>` at a computed x: the label's
     # width depends on the reader's font, which this build cannot measure, and
     # a tag positioned by arithmetic would land on top of the longest labels.
@@ -3109,7 +3218,11 @@ def _forest_row(row: BurdenRow, index: int, scale: LogScale, *, union: bool) -> 
 
 
 def _forest_caption(
-    rows: Sequence[BurdenRow], measure: str, bounds: tuple[float, float], kinds: tuple[bool, bool]
+    rows: Sequence[BurdenRow],
+    measure: str,
+    bounds: tuple[float, float],
+    kinds: tuple[bool, bool],
+    published: Collection[tuple[str, str]],
 ) -> str:
     """The key. Every clause names a mark that is actually on this panel.
 
@@ -3278,15 +3391,9 @@ def _forest_caption(
     # unconditional too, so `rest` is never empty.
     # Particular to this panel, so on the visible line beside the axis and only
     # where it fires (owner decision 2026-10-26, E1); the union clause it
-    # qualifies stays folded, and this names the tag itself so it reads
-    # without it.
-    split = (
-        " A row tagged <strong>union</strong> here is <strong>not fully split</strong>: at "
-        "least one of the rows it contains is not plotted; the table below carries every row "
-        "this study published for this gene."
-        if any(_is_union(row, kinds) and not _fully_split(row, rows, kinds) for row in rows)
-        else ""
-    )
+    # qualifies stays folded, and this names the row and the tag itself so it
+    # reads without it. See `_unsplit_line`.
+    split = _unsplit_line(rows, kinds, published)
     axis, rest = parts[0], "".join(parts[1:]).strip()
     return (
         f"<figcaption><p>{axis.strip()}{split}</p>"
@@ -3297,7 +3404,12 @@ def _forest_caption(
     )
 
 
-def _forest(rows: Sequence[BurdenRow], measure: str, study_label: str) -> str:
+def _forest(
+    rows: Sequence[BurdenRow],
+    measure: str,
+    study_label: str,
+    published: Collection[tuple[str, str]],
+) -> str:
     """One study's rows for one effect measure, as effect and interval.
 
     **One panel per (study, effect measure), never one per study.** 779 of the
@@ -3356,7 +3468,7 @@ def _forest(rows: Sequence[BurdenRow], measure: str, study_label: str) -> str:
     )
     return (
         f'<figure class="forest" data-effect-measure="{html.escape(measure)}">'
-        f"{figure}{_forest_caption(ordered, measure, bounds, kinds)}</figure>"
+        f"{figure}{_forest_caption(ordered, measure, bounds, kinds, published)}</figure>"
     )
 
 
@@ -4304,20 +4416,35 @@ def _band_caption(
     # Visible, on the line above the toggle, and only where it fires (E1). A
     # tick is a `marker` centred on the axis line, 8 px (`_FLOOR_GAP`) below
     # the foot of the value scale: "on the axis", never "under" it.
-    floor_clause = (
-        f" Ticks on the axis mark stages below this dataset's detection floor "
-        f"({_fmt(floor)} {unit}), beneath the foot of the scale rather than at a value on it."
-        if floor is not None and ProfileGap.BELOW_DETECTION_FLOOR.value in ticked
-        else ""
-    )
+    #
+    # **Where a tick also stands for another reason, the visible line names it
+    # too** (review, 2026-10-27). "Ticks on the axis mark stages below this
+    # dataset's detection floor" is universal, and beside a tick drawn because
+    # no percentile grid was published it is false of that tick, while the
+    # qualifier ("A tick can mean something else too") sat in the fold. So
+    # with both reasons present the sentence is a disjunction that is true of
+    # every tick, and the fold no longer repeats the other reason. Latent: all
+    # 2,830 unplaced cells in the published bundles are below the floor
+    # (measured 2026-10-27 on a build of this change), so no published page
+    # takes this form, and the fixture is its only measurement.
     other_clause = _other_gap_clause(ticked)
+    floor_clause = ""
     tick_clause = ""
-    if other_clause:
+    below_floor = ProfileGap.BELOW_DETECTION_FLOOR.value in ticked
+    if floor is not None and below_floor and other_clause:
+        floor_clause = (
+            " Ticks on the axis, beneath the foot of the scale rather than at a value on it, "
+            f"mark stages below this dataset's detection floor ({_fmt(floor)} {unit}) or "
+            f"where {other_clause}."
+        )
+    elif floor is not None and below_floor:
+        floor_clause = (
+            f" Ticks on the axis mark stages below this dataset's detection floor "
+            f"({_fmt(floor)} {unit}), beneath the foot of the scale rather than at a value on it."
+        )
+    elif other_clause:
         tick_clause = (
-            f" A tick can mean something else too: {other_clause}. The mark says only that "
-            "this atlas did not place the stage, never that the gene reads low there."
-            if floor_clause
-            else f" A ticked stage is one this atlas did not place: {other_clause}. The mark "
+            f" A ticked stage is one this atlas did not place: {other_clause}. The mark "
             "says nothing about how high the gene reads there."
         )
     _, no_row = _line_breaks(series)

@@ -14,8 +14,8 @@ page's job is to label them, not to choose between them.
 
 The one thing that is *not* published is anything this atlas computed. There is
 no pooled p-value across studies and no per-gene summary verdict, because the
-CHD literature reuses cohorts -- DDD contributed to several of the papers this
-atlas plans to curate, though only one cited today names it -- so a pooled
+CHD literature reuses cohorts -- DDD contributed to more than one CHD exome
+study, though only one cited today names it (`curation/cohorts.yaml`) -- so a pooled
 statistic would count the same children twice. `shared_cohorts` is the
 alternative: it names the overlap instead of pretending it away, and it
 derives nothing beyond a set intersection over what each study already declared.

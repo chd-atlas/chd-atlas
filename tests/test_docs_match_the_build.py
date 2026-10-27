@@ -1352,7 +1352,8 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "OR ∞ (CI 0.786–∞)",
         "OR ∞ (95% CI 28.1–∞)",
         "About these cohorts, and the caveats recorded for them",
-        "not fully split",
+        "row is a union, and this study published no non-syndromic · loss-of-function row "
+        "for this gene.",
     ):
         assert literal in doc.replace("*", ""), literal
         assert literal in html.unescape(every_page), f"no page renders {literal!r}"
@@ -1365,11 +1366,11 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "republished as published; the atlas computes none of them.",
         "The atlas computes no pooled statistic across studies: pooling two that share a "
         "sample collection would count the same people twice.",
-        "A cell names the most significant of the rows behind its state; where the card "
-        "lists surviving rows, it keeps each study table's order, a damaging union before its "
-        "parts, so the two can lead with different rows.",
-        "Declaration: this study is by an author of this atlas; republished as published, "
-        "no assessment added.",
+        "A cell names the most significant of the rows behind its state; the card lists a "
+        "study's surviving rows with a damaging union before its parts, so the two can lead "
+        "with different rows.",
+        "Declaration: this study is by an author of this atlas; its results are republished "
+        "as published and read by the same rule as every other study's.",
         "Illumina reports no known disease relationship for congenital heart defects, "
         "multiple types, 6 (2021); see the validity table.",
         "Every measurement below is from bulk tissue: a low or absent figure is not "

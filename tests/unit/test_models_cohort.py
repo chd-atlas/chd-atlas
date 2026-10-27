@@ -187,7 +187,10 @@ def test_ddd_and_decipher_state_what_the_registry_cannot_see(corpus: Corpus) -> 
     naming = {row.study for row in rows if "ddd" in (*row.case_cohorts, *row.control_cohorts)}
     assert len(naming) == 1, f"{sorted(naming)} name ddd; 'only one study' is false"
 
-    unseen = "this registry records the two as separate collections and cannot see that overlap"
+    unseen = (
+        "this atlas's cohort registry records the two as separate collections and cannot see "
+        "that overlap"
+    )
     assert unseen in described["ddd"]
     assert unseen in described["decipher"]
     ddd = next(row for row in rows if "ddd" in row.case_cohorts)

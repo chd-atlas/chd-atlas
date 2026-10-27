@@ -25,10 +25,13 @@ from typing import Final
 from chd_atlas.build.burden import BurdenRow, shared_cohorts
 from chd_atlas.build.emit import Json
 
-# The threshold both states are read against. 0.05 is the *studies'* convention
-# and not the atlas's: every p-value and corrected p-value here was published
-# against it, and this module chooses no threshold of its own. Named rather than
-# inlined so the two call sites below cannot drift apart.
+# The threshold both states are read against, and the one number in the rule
+# `methods.html#rare-variants` states as the atlas's own (owner decision
+# 2026-10-26, W2), which renders it from here. This said 0.05 was "the
+# studies' convention and not the atlas's" until review (2026-10-27), which is
+# not true of a raw p: PMID:42230622's block tells a reader to judge its raw p
+# against its whole scan of 138,609 tests. Named rather than inlined so the two
+# call sites below, and the page that states the rule, cannot drift apart.
 ALPHA: Final = 0.05
 
 

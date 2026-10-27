@@ -20,6 +20,7 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, cohort_registry, load_burden
+from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
@@ -460,9 +461,9 @@ def test_curated_evidence_says_what_an_assertion_is_and_that_it_changes_nothing_
         "shows.</p>"
         "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
         "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
-        "validity records alone, so no assertion admits a gene or moves its grade. The "
-        "<strong>Publications</strong> section that follows lists every publication the "
-        "evidence cites, with its title and year.</p>"
+        "validity records alone, so no assertion admits a gene or moves its grade. A curated "
+        "gene's page also has a <strong>Publications</strong> section, which lists every "
+        "publication its evidence cites, with its title and year.</p>"
     )
 
 
@@ -569,11 +570,19 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     owner's draft gave the rule as "a row whose study-published corrected p is
     below 0.05", which is the second half alone: a depleted row, or a
     synonymous one, clears that and survives nothing.
+
+    **0.05 is the atlas's, and the page renders it from `concordance.ALPHA`**
+    (review, 2026-10-27). It read "at the 0.05 the studies themselves use",
+    which is false of a raw p: PMID:42230622's block tells a reader to judge
+    raw p against its whole scan. The literal below pins the published number
+    and the assertion beside it pins the rule's, so a change to either fails
+    here until the other is reconsidered.
     """
+    assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
         "republished as published. The atlas computes none of them. It applies one rule of "
-        "its own, at the 0.05 the studies themselves use: a row that is not synonymous "
+        "its own, at 0.05: a row that is not synonymous "
         "<strong>supports</strong> the gene when its result points to enrichment in cases and "
         "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
         "corrected p its study published is below 0.05 as well; a row whose study published "
@@ -981,6 +990,9 @@ def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_r
         # The card, the matrix and the forest fill apply a rule of the atlas's
         # own, which `#rare-variants` states (owner decision 2026-10-26, W2).
         "adds no assessment",
+        # No study here treats a raw p below 0.05 as significant (review,
+        # 2026-10-27): the threshold is the atlas's.
+        "the studies themselves use",
         # `ddd`'s description published a plan a reader cannot check (owner
         # decision 2026-10-26, W4); `#cohorts` renders it on the real page.
         "plans to curate",

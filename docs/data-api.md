@@ -314,7 +314,9 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   to enrichment in cases with p below 0.05 supports the gene, and survives its
   study's correction when the corrected p its study published is below 0.05
   too, which decides the card's list, the matrix's states and a forest
-  marker's fill; that no
+  marker's fill for every row but a synonymous one (a synonymous row, never
+  support, is filled where its own corrected p is below 0.05, and drawn
+  muted); that no
   statistic is pooled across studies, what each count unit means and what an
   absent row does not mean, the synonymous negative control, what a
   damaging composite row is, that a study's `all cases` group is the union of
@@ -1466,8 +1468,10 @@ Top to bottom:
    the study's block does. Each line ends with a link to that study's block on
    the same page (`#study-<PMID digits>`, the `id` of the study's heading):
    `caveats` where any of the group's surviving rows carries a `method_note`,
-   `details` otherwise, with an accessible name naming the study. Never the
-   most significant row: the atlas ranks nothing. Beneath the lines, once
+   `details` otherwise, with an accessible name naming the study. Not the
+   most significant row: a line keeps its study table's reading order, while
+   a matrix cell names the most significant of the rows behind its state (see
+   the rare-variant section below). Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
    study's block.
@@ -1543,16 +1547,17 @@ every fold:
   enrichment at these cohort sizes is not evidence against a gene — and that
   no statistic is pooled across studies: "The atlas computes no pooled
   statistic across studies: pooling two that share a sample collection would
-  count the same people twice." — and that a cell and the card can lead with
-  different rows: "A cell names the most significant of the rows behind its
-  state; where the card lists surviving rows, it keeps each study table's
-  order, a damaging union before its parts, so the two can lead with
-  different rows.";
+  count the same people twice." — and, where the card lists a surviving row,
+  that a cell and the card can lead with different rows: "A cell names the
+  most significant of the rows behind its state; the card lists a study's
+  surviving rows with a damaging union before its parts, so the two can lead
+  with different rows.";
 - any sample collection the gene's studies share, as this atlas has recorded
   them;
 - on a block from a study by an author of this atlas, a one-line declaration:
-  "Declaration: this study is by an author of this atlas; republished as
-  published, no assessment added.";
+  "Declaration: this study is by an author of this atlas; its results are
+  republished as published and read by the same rule as every other
+  study's.";
 - the multiple-testing line. For a study with any row it published no
   corrected p for, the study's number of tests (`tests_reported` in
   `publications.json`, where one is recorded) and the Bonferroni threshold
@@ -1571,9 +1576,11 @@ every fold:
 Each forest plot — one per study and effect measure — shows one line of its
 caption: the axis, naming the effect measure, its range on a logarithmic scale
 and what the line at 1 means for that measure. Where a `union`-tagged row
-contains a row the panel does not plot, the same line says the row is *not
-fully split* and that the table below carries every row the study published
-for the gene. The rest of its key is folded under *How to read this chart*:
+contains a row the panel does not plot, the same line names that row and the
+one missing from it — "The **all cases · loss-of-function** row is a union,
+and this study published no non-syndromic · loss-of-function row for this
+gene." — or, for a row the study did publish and the panel does not draw,
+that it is not plotted here. The rest of its key is folded under *How to read this chart*:
 what each mark means — filled and hollow markers, hatched bars, arrows, muted
 and `union`-tagged rows — each only where the panel draws one, and why there
 is no summary diamond, ending with a link, *How to read rare-variant results*,
@@ -1593,12 +1600,13 @@ trajectory per cardiac organ where one can be drawn, and the organ small
 multiples — shows one line of its caption: its axes, in stage order rather than
 elapsed time, and the range of its abundance axis. Under a trajectory that ticks
 a stage below the dataset's detection floor, the same line says what the ticks
-mark, with the floor's value. The rest of its key is folded under *How to read
+mark, with the floor's value, and names any other reason a tick on it was
+drawn for. The rest of its key is folded under *How to read
 this chart*, ending with a link, *How to read expression figures*, to
 `methods.html#expression`. Under a trajectory the fold always names the shaded
 phases and their source; why the line breaks where this dataset has no row for
-the organ, and what a tick means for any reason other than the floor, it adds
-only where the figure shows one. Under the small multiples it always says why
+the organ, and what a tick means on a figure with no tick for the floor, it
+adds only where the figure shows one. Under the small multiples it always says why
 the panels share one axis, which organ is drawn heavier as this atlas's
 declared cardiac tissue (or, where this dataset placed nothing there, that no
 panel is drawn heavier), that only medians placed against the percentile grid
@@ -1617,7 +1625,7 @@ classification to describe, and say so instead:
 
 > Not yet curated by the atlas, and no ClinGen expert panel has graded this
 > gene for any of the diseases in scope here: it is published because the Gene
-> Curation Coalition submitters named above independently assert it.
+> Curation Coalition submitters it is admitted by independently assert it.
 
 The scope in that second sentence is part of the claim. Unscoped it is false for
 five of the 21: ClinGen grades ACTC1 Definitive for hypertrophic cardiomyopathy

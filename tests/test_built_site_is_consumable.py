@@ -1245,12 +1245,17 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
     """The landing's own-lab sentence, against the blocks it vouches for (R7).
 
     "Of the 3 rare-variant studies whose results this atlas publishes, 2 are
-    by authors of this atlas, and a gene page says so in each of their
+    by an author of this atlas, and a gene page says so in each of their
     blocks." Both numbers are read here off the gene pages -- the distinct
     study blocks they render, and which of those `publications.json` marks
     `own_lab` -- and every block of such a study must carry the declaration,
     while no other study's block may. Measured on a real build the day it was
     written: 190 own-lab blocks, all declared; 36 others, none.
+
+    The declaration said "republished as published, no assessment added"
+    until review (2026-10-27), on every one of those blocks, while
+    `methods.html#rare-variants` states the rule the atlas applies to every
+    study's rows. The phrase is asserted absent from every page built.
     """
     own = {
         entry["id"]
@@ -1283,8 +1288,11 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
     )
     assert (
         f"Of the {len(rendered)} rare-variant studies whose results this atlas publishes, "
-        f"{mine} {'is' if mine == 1 else 'are'} by "
+        f"{mine} {'is' if mine == 1 else 'are'} by an author of this atlas"
     ) in landing
+    built = [*sorted((site / "genes").glob("*.html")), site / "index.html", site / "methods.html"]
+    for path in built:
+        assert "no assessment added" not in path.read_text(encoding="utf-8"), path.name
 
 
 # Per source `sources.json` records as `permitted_with_attribution`, a phrase

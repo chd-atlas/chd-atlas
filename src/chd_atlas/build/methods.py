@@ -77,6 +77,7 @@ import html
 from collections.abc import Mapping
 from typing import Final
 
+from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import COHORTS, DATASETS, METHODS_PAGE
 from chd_atlas.build.render import document, grade_key
@@ -251,7 +252,10 @@ _VALIDITY: Final = (
 #   strongest ClinGen record whatever the assertions say; an assertion feeds
 #   only `lesion_groups` and the curation fields.
 # * "Publications" lists the distinct publications the evidence cites, sorted,
-#   with their id, title and year (`_CITATION_HEADERS`).
+#   with their id, title and year (`_CITATION_HEADERS`), and renders exactly
+#   where "Curated evidence" does. Named as a curated gene's page's own: it
+#   read "The Publications section that follows" until review (2026-10-27),
+#   and on this page what follows is the rare-variant section.
 _CURATED_EVIDENCE: Final = (
     '<h2 id="curated-evidence">Curated evidence</h2>'
     "<p>Where this atlas has curated a gene itself, its page carries a <strong>Curated "
@@ -264,9 +268,9 @@ _CURATED_EVIDENCE: Final = (
     "shows.</p>"
     "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
     "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
-    "validity records alone, so no assertion admits a gene or moves its grade. The "
-    "<strong>Publications</strong> section that follows lists every publication the "
-    "evidence cites, with its title and year.</p>"
+    "validity records alone, so no assertion admits a gene or moves its grade. A curated "
+    "gene's page also has a <strong>Publications</strong> section, which lists every "
+    "publication its evidence cites, with its title and year.</p>"
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
@@ -302,6 +306,9 @@ _CURATED_EVIDENCE: Final = (
 # lost "the same uncorrected scale" (true of the one study that publishes a
 # synonymous row, stated in general) and "a scan of that size" (no antecedent
 # here).
+# `concordance.ALPHA` as the rule's sentence prints it: "0.05".
+_ALPHA: Final = f"{ALPHA:g}"
+
 _RARE_VARIANTS: Final = (
     '<h2 id="rare-variants">Rare-variant association</h2>'
     # The one rule the atlas applies (owner decision 2026-10-26, W2). It said
@@ -310,17 +317,21 @@ _RARE_VARIANTS: Final = (
     # Read off the code that day: `_supports` (not synonymous, a raw p below
     # `ALPHA` -- strictly -- and `is_upward`, which reads the effect, an
     # unbounded bound, or the published counts), then a study-published
-    # `pvalue_adjusted` below `ALPHA`, strictly; `ALPHA` is 0.05, the studies'
-    # convention; a row with no corrected p does not survive; `family_state`
-    # reads the matrix tier off the same rows; `pages._survived_correction`
-    # fills a forest marker by it for every row but a synonymous one, which is
-    # drawn muted (the forest paragraph below says so).
+    # `pvalue_adjusted` below `ALPHA`, strictly; a row with no corrected p does
+    # not survive; `family_state` reads the matrix tier off the same rows;
+    # `pages._survived_correction` fills a forest marker by it for every row but
+    # a synonymous one, which is drawn muted (the forest paragraph below says
+    # so). The threshold is rendered from `ALPHA`, so this page cannot state a
+    # number the rule does not use. It read "at the 0.05 the studies themselves
+    # use" until review (2026-10-27): no study here treats a raw p below 0.05 as
+    # significant -- PMID:42230622's block tells a reader to judge raw p against
+    # its whole scan -- so the number is stated as the atlas's, unattributed.
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
     "republished as published. The atlas computes none of them. It applies one rule of its "
-    "own, at the 0.05 the studies themselves use: a row that is not synonymous "
+    f"own, at {_ALPHA}: a row that is not synonymous "
     "<strong>supports</strong> the gene when its result points to enrichment in cases and "
-    "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
-    "corrected p its study published is below 0.05 as well; a row whose study published "
+    f"its p is below {_ALPHA}, and <strong>survives</strong> its study's correction when the "
+    f"corrected p its study published is below {_ALPHA} as well; a row whose study published "
     "no corrected p survives none. A gene page's card lists the rows that survive, the "
     "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
     "support, and a forest plot draws a surviving row filled. Where a study is by an "

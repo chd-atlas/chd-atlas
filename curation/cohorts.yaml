@@ -46,7 +46,9 @@ cohorts:
   # records in DECIPHER", publicly with HPO terms once the family has been
   # told. So DECIPHER's patient records include DDD participants, and a case
   # set drawn from DECIPHER may too. The registry holds them as two ids, which
-  # `shared_cohorts` never links -- the same test holds that.
+  # `shared_cohorts` never links -- the same test holds that. "this atlas's
+  # cohort registry", not "this registry" (review, 2026-10-27): the sentence
+  # renders in a gene page's cohort notes too, where no registry is in sight.
   - id: ddd
     name: Deciphering Developmental Disorders (DDD)
     description: >-
@@ -59,8 +61,8 @@ cohorts:
       cohort columns exist to make visible; only one study cited today names it.
       DDD links its participants' likely diagnostic variants to their own patient
       records in DECIPHER, so DECIPHER's cases may include DDD participants; this
-      registry records the two as separate collections and cannot see that
-      overlap.
+      atlas's cohort registry records the two as separate collections and cannot
+      see that overlap.
     url: https://www.ddduk.org/
   - id: nottingham
     name: University of Nottingham congenital heart disease collection
@@ -85,8 +87,8 @@ cohorts:
       ascertained on a diagnostic question rather than on heart disease. The
       Deciphering Developmental Disorders study links its participants' likely
       diagnostic variants to their own patient records in DECIPHER, so these
-      cases may include DDD participants; this registry records the two as
-      separate collections and cannot see that overlap.
+      cases may include DDD participants; this atlas's cohort registry records
+      the two as separate collections and cannot see that overlap.
     url: https://www.deciphergenomics.org/
   - id: isca
     name: International Standards for Cytogenomic Arrays (ISCA)

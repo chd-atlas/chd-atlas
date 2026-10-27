@@ -225,9 +225,11 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
             f"<p>{opening}1 is by an author of this atlas, and a gene page says so in its "
             "block.</p>"
         )
+    # "by an author", the words every block's declaration and card mark use; it
+    # read "by authors of this atlas" until review (2026-10-27).
     return (
-        f"<p>{opening}{own} are by authors of this atlas, and a gene page says so in each of "
-        "their blocks.</p>"
+        f"<p>{opening}{own} are by an author of this atlas, and a gene page says so in each "
+        "of their blocks.</p>"
     )
 
 

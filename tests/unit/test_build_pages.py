@@ -1645,10 +1645,12 @@ def test_a_study_by_an_author_of_this_atlas_says_so(
     assert disclosure, "an own-lab study's block carries no disclosure"
     assert disclosure.group(0) == (
         '<p class="disclosure">Declaration: this study is by an author of this atlas; '
-        "republished as published, no assessment added.</p>"
+        "its results are republished as published and read by the same rule as every other "
+        "study's.</p>"
     )
     for text in (page, html.unescape(page)):
         assert "nothing added" not in text
+        assert "no assessment added" not in text
 
     outside = _PUBLICATION.model_copy(update={"own_lab": False})
     other = _burden_page(
@@ -1822,21 +1824,31 @@ def test_the_pooling_notice_is_the_matrix_caption_and_no_longer_conditional(
 
     # **The caption also says the cell and the card lead differently** (owner
     # decision 2026-10-26, R4): the cell names the most significant row behind
-    # its state, the card a study's surviving rows in table order. Pinned as a
-    # literal, sliced to the caption -- from the matrix's end to the first
-    # study block -- and rendered with the matrix alone: two studies with no
-    # evidence axes draw no matrix, and keep the pooling sentence without it.
-    caption = section[section.index("</table></div>") : section.index("<h3")]
-    assert (
-        "<p>A cell names the most significant of the rows behind its state; where the card "
-        "lists surviving rows, it keeps each study table's order, a damaging union before its "
-        "parts, so the two can lead with different rows.</p>" in caption
+    # its state, the card a study's surviving rows, a damaging union first.
+    # Pinned as a literal, sliced to the caption -- from the matrix's end to
+    # the first study block -- and rendered only where both can lead: with a
+    # matrix, and where the card lists a surviving row (review, 2026-10-27).
+    # On the 86 pages whose card lists none it was a sentence about a lead
+    # that does not exist. `one`'s row publishes no corrected p, so nothing
+    # survives; the same row with one does, and its card lists it.
+    lead = (
+        "<p>A cell names the most significant of the rows behind its state; the card lists a "
+        "study's surviving rows with a damaging union before its parts, so the two can lead "
+        "with different rows.</p>"
     )
+    assert "A cell names the most significant" not in one
+    survivor = _burden_row(pvalue_adjusted=1e-4, pvalue_adjustment="benjamini_hochberg")
+    surviving = _burden_page(tmp_path / "surviving", facts_uncurated, [survivor])
+    assert "surviving their own study's correction" in surviving, "the card lists no row"
+    led = _burden_section_text(surviving)
+    assert lead in led[led.index("</table></div>") : led.index("<h3")]
+    # Two studies with no evidence axes draw no matrix, and keep the pooling
+    # sentence without it -- and no lead note, though a row survives.
     bare = _burden_section_text(
         _burden_page(
             tmp_path / "bare",
             facts_uncurated,
-            [_burden_row(), _burden_row(study="PMID:8988165", case_cohorts=("ddd", "pcgc"))],
+            [survivor, _burden_row(study="PMID:8988165", case_cohorts=("ddd", "pcgc"))],
             axes=(),
         )
     )
@@ -2303,12 +2315,15 @@ def test_every_particular_caveat_survives_outside_the_fold(
         publications=publications,
     )
     unfolded = re.sub(r"<details.*?</details>", "", page, flags=re.S)
-    split = "A row tagged <strong>union</strong> here is <strong>not fully split</strong>"
+    split = (
+        "The <strong>all cases · loss-of-function</strong> row is a union, and this study "
+        "published no non-syndromic · loss-of-function row for this gene."
+    )
     assert split in unfolded
-    assert page.count("not fully split") == 1, "the split warning is on the page twice"
+    assert page.count("row is a union") == 1, "the split warning is on the page twice"
     # The same studies with every tagged row fully split -- here, no union at all.
     whole = _burden_page(tmp_path / "split", facts_uncurated, rows, publications=publications)
-    assert "not fully split" not in whole
+    assert "row is a union" not in whole
 
     # The trajectory's floor note, against a heart series with and without a
     # stage below the floor.
@@ -3109,6 +3124,18 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
     Three panels, because the corpus can only show one of the two axes: all
     10 measured cases split on the **stratum** axis, so a fixture built from
     the corpus alone would leave the consequence branch unmeasured.
+
+    **The visible line names the row and what is missing from it** (review,
+    2026-10-27). It said "at least one of the rows it contains is not
+    plotted; the table below carries every row this study published for this
+    gene", pointing a reader at the table for a row that is in no table: on
+    all 10 published panels the missing component is a cell the study never
+    published for the gene. A fourth panel separates the two things an
+    absence can be -- a component the study published and the panel cannot
+    draw (no effect to place) is "not plotted here", never "published no" --
+    which no published panel shows today, so the fixture is its only
+    measurement. Each sentence is pinned as a literal on its panel's visible
+    line.
     """
     enrichment: dict[str, object] = {
         "study": "PMID:40127276",
@@ -3139,7 +3166,7 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
                 # **The missing component is on the panel under a different
                 # stratum**, and no row here is `all cases`, so the stratum
                 # union is off and this measures the consequence branch alone.
-                # Without it, dropping `_fully_split`'s `other.cohort_stratum
+                # Without it, dropping `_missing_components`' `other.cohort_stratum
                 # == row.cohort_stratum` -- checking the union across strata
                 # rather than within one -- survived all 1,050 tests: this
                 # panel's rows all shared a stratum, so holding it fixed or
@@ -3171,23 +3198,55 @@ def test_the_union_key_never_promises_a_component_row_the_panel_does_not_draw(
                 _burden_row(
                     study="PMID:40127276", cohort_stratum="syndromic", effect=8.0, **placed
                 ),
+                # Panel zero, PMID:34324492 odds ratios: the non-syndromic side
+                # is published and has no effect to place, so it is in this
+                # study's table and on no panel.
+                _burden_row(study="PMID:34324492", cohort_stratum="all", effect=2.0, **placed),
+                _burden_row(
+                    study="PMID:34324492", cohort_stratum="syndromic", effect=3.0, **placed
+                ),
+                _burden_row(
+                    study="PMID:34324492",
+                    cohort_stratum="nonsyndromic",
+                    effect=None,
+                    effect_measure=None,
+                    effect_bound=None,
+                    ci_low=None,
+                ),
             ],
-            publications={_PUBLICATION.id: _PUBLICATION, **_SIERANT_PUBLICATION},
+            publications={
+                _PUBLICATION.id: _PUBLICATION,
+                **_SIERANT_PUBLICATION,
+                **_OTHER_PUBLICATIONS,
+            },
         )
     )
 
-    # PMID:40127276 sorts first and `enrichment_ratio` before `odds_ratio`.
-    consequence_short, stratum_short, complete = _forest_figures(section)
-    warning = "here is <strong>not fully split</strong>"
-    assert warning in consequence_short
-    assert warning in stratum_short
-    assert warning not in complete
+    # Studies in id order, and `enrichment_ratio` before `odds_ratio`.
+    unplotted, consequence_short, stratum_short, complete = _forest_figures(section)
+
+    def visible(figure: str) -> str:
+        return figure[figure.index("<figcaption><p>") : figure.index("</p>")]
+
+    assert visible(unplotted).endswith(
+        " The <strong>all cases · loss-of-function</strong> row is a union, and the "
+        "non-syndromic · loss-of-function row it contains is not plotted here."
+    )
+    assert visible(consequence_short).endswith(
+        " The <strong>syndromic · damaging (LOF + missense)</strong> row is a union, and this "
+        "study published no syndromic · missense (damaging) row for this gene."
+    )
+    assert visible(stratum_short).endswith(
+        " The <strong>all cases · loss-of-function</strong> row is a union, and this study "
+        "published no non-syndromic · loss-of-function row for this gene."
+    )
+    assert "row is a union" not in complete
     # The tag itself is untouched on every one of them: the row really does
     # contain the row below it, and saying otherwise would publish two
     # overlapping rows as independent findings.
     assert all(
         figure.count('class="chart-union"') >= 1
-        for figure in (consequence_short, stratum_short, complete)
+        for figure in (unplotted, consequence_short, stratum_short, complete)
     )
 
 
@@ -3720,13 +3779,19 @@ def test_the_forest_key_folds_behind_one_visible_axis_line(
     )
     assert toggle, "the forest key is not folded behind a toggle"
     # The not-fully-split warning is on the visible line since the owner's
-    # decision of 2026-10-26 (E1): it is particular to this panel.
+    # decision of 2026-10-26 (E1): it is particular to this panel. Since review
+    # (2026-10-27) it names each unsplit row and each missing component, once,
+    # in panel order -- here four of each, in its plural form.
     assert visible == (
         "<p>Axis: <strong>OR</strong> on a logarithmic scale, 0.562 to 50; the vertical "
-        "line is <strong>1</strong>, no association. A row tagged <strong>union</strong> "
-        "here is <strong>not fully split</strong>: at least one of the rows it contains is "
-        "not plotted; the table below carries every row this study published for this "
-        "gene.</p>"
+        "line is <strong>1</strong>, no association. The <strong>all cases · damaging "
+        "(LOF + missense)</strong>, <strong>all cases · loss-of-function</strong>, "
+        "<strong>all cases · missense (damaging)</strong> and <strong>all cases · "
+        "synonymous</strong> rows are unions, and this study published no syndromic · "
+        "damaging (LOF + missense), non-syndromic · damaging (LOF + missense), "
+        "non-syndromic · loss-of-function, syndromic · missense (damaging), non-syndromic · "
+        "missense (damaging), syndromic · synonymous or non-syndromic · synonymous row for "
+        "this gene.</p>"
     )
     assert folded == (
         "<p>A <strong>filled</strong> marker is a row that <strong>survived</strong> its own "
@@ -4812,7 +4877,7 @@ _HEART_DATASET = {"E-MTAB-6814": _profile_dataset(cardiac_tissues=("heart",))}
 
 
 def _heart_series(
-    *stages: tuple[str, float | None | EllipsisType],
+    *stages: tuple[str, float | None | EllipsisType | str],
     phase_ids: tuple[str, ...] = ("atrial_septum_morphogenesis",),
     unplaced_reason: str = "below_detection_floor",
 ) -> ExpressionProfile:
@@ -4827,7 +4892,9 @@ def _heart_series(
       which `_trajectory` ticks on the axis;
     * `...` -- a stage this dataset has **no heart row for at all**, which
       gets no tick and nothing else, and is why the stage is still in
-      `entry["stages"]` and still occupies an x position.
+      `entry["stages"]` and still occupies an x position;
+    * a `str` -- a stage not placed for *that* reason rather than
+      `unplaced_reason`, so one figure can tick stages for two reasons.
 
     The order given is the published order -- `gene_expression_profiles` emits
     stages by `Stage.order`, so a fixture's own sequence is the trajectory's.
@@ -4837,21 +4904,26 @@ def _heart_series(
     about the gene, and a missing percentile grid is a hole in the reference
     that says nothing about the gene at all.
     """
+
+    def heart(median: float | None | str) -> TissueProfileEntry:
+        if median is None or isinstance(median, str):
+            reason = unplaced_reason if median is None else median
+            return _tissue_entry(
+                tissue="heart", median=0.3, unit="tpm", placement=None, not_placed_reason=reason
+            )
+        return _tissue_entry(
+            tissue="heart",
+            median=median,
+            unit="tpm",
+            placement=_placement(),
+            not_placed_reason=None,
+        )
+
     entries = [
         _stage_entry(
             stage=token,
             phase=_phase_info(phase_ids=phase_ids),
-            tissues=()
-            if median is ...
-            else (
-                _tissue_entry(
-                    tissue="heart",
-                    median=median if median is not None else 0.3,
-                    unit="tpm",
-                    placement=_placement() if median is not None else None,
-                    not_placed_reason=None if median is not None else unplaced_reason,
-                ),
-            ),
+            tissues=() if median is ... else (heart(median),),
         )
         for token, median in stages
     ]
@@ -5129,7 +5201,7 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     """
 
     def caption(
-        *stages: tuple[str, float | None | EllipsisType],
+        *stages: tuple[str, float | None | EllipsisType | str],
         reason: str = "below_detection_floor",
     ) -> str:
         return _expression_section_text(
@@ -5195,6 +5267,26 @@ def test_the_band_caption_names_only_the_breaks_this_figure_actually_draws(
     # nothing said about it, which is the defect the floor clause was written
     # for in the first place.
     assert "ticked" in caption_only
+
+    # **Both reasons on one figure** (review, 2026-10-27). The visible line's
+    # floor sentence is universal -- "Ticks on the axis mark stages below this
+    # dataset's detection floor" -- and was false of the tick the missing grid
+    # drew, while the clause saying a tick can mean something else sat in the
+    # fold. With both present the visible sentence names both, and the fold
+    # does not repeat the second. Latent on the committed corpus, where every
+    # unplaced cell is below the floor.
+    mixed = caption(("4wpc", None), ("5wpc", 5.0), ("6wpc", "no_quantile_grid"), ("7wpc", 275.0))
+    assert mixed.count('class="chart-absent"') == 2, "one tick per unplaced stage"
+    mixed_caption = _band_caption_text(mixed)
+    shown, toggle, folded = mixed_caption.partition('<details class="chart-notes">')
+    assert toggle, "the trajectory's key is not folded behind a toggle"
+    assert shown.endswith(
+        " Ticks on the axis, beneath the foot of the scale rather than at a value on it, mark "
+        "stages below this dataset's detection floor (1 tpm) or where no complete percentile "
+        "grid is published for this organ at this stage.</p>"
+    )
+    assert tick not in mixed_caption
+    assert "percentile grid" not in folded
 
     # And the tick is placed off the bottom of the scale rather than at a
     # value on it. Measured: KIF20A's axis starts at 42 tpm against a 1 tpm
@@ -8051,8 +8143,9 @@ def test_the_card_names_who_reports_no_known_disease_relationship_and_for_what(
 
     The bundle has published the flag and `no_association_reported_by` since
     schema 2.10, and the validity table lists the record, but the card said
-    nothing: GDF1's reads G2P's `Definitive` grade with no sign that Illumina
-    reports no known disease relationship for one of the same diseases. The
+    nothing: GDF1's names G2P among the submitters that admit it, with no sign
+    that Illumina reports no known disease relationship for one of the same
+    diseases. The
     line names each authority -- the panel for a ClinGen record, the submitter
     for a GenCC one -- its diseases and the year of its record, panels first,
     then submitters by name, diseases sorted, from the records rather than
@@ -8309,7 +8402,7 @@ _NOT_CURATED_BY_PANEL: Final = (
             ),
             "Not yet curated by the atlas, and no ClinGen expert panel has graded this gene for "
             "any of the diseases in scope here: it is published because the Gene Curation "
-            "Coalition submitters named above independently assert it.",
+            "Coalition submitters it is admitted by independently assert it.",
             id="not curated, admitted on agreement",
         ),
         pytest.param(

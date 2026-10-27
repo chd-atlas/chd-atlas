@@ -638,30 +638,41 @@ def _study(pmid: str, *, own_lab: bool) -> Publication:
 
 
 @pytest.mark.parametrize(
-    ("by_an_author", "sentence"),
+    ("tested", "by_an_author", "sentence"),
     [
         pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1"},
             "Of the 3 rare-variant studies whose results this atlas publishes, 1 is by an "
             "author of this atlas, and a gene page says so in its block.",
-            id="one",
+            id="one of several",
         ),
         pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1", "PMID:2"},
-            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by "
-            "authors of this atlas, and a gene page says so in each of their blocks.",
+            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by an "
+            "author of this atlas, and a gene page says so in each of their blocks.",
             id="several",
         ),
         pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
             set(),
             "Of the 3 rare-variant studies whose results this atlas publishes, none is by an "
             "author of this atlas.",
             id="none",
         ),
+        pytest.param(
+            ("PMID:1",),
+            {"PMID:1"},
+            "Of the 1 rare-variant study whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="a single study",
+        ),
+        pytest.param((), set(), None, id="no study"),
     ],
 )
 def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
-    tmp_path: Path, by_an_author: set[str], sentence: str
+    tmp_path: Path, tested: tuple[str, ...], by_an_author: set[str], sentence: str | None
 ) -> None:
     """One sentence, both counts computed (owner decision 2026-10-26, R7).
 
@@ -670,13 +681,20 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     reach a published bundle (`BurdenCensus.studies`), never every curated
     publication: two decoys are by an atlas author and are not among them --
     `PMID:9` tests only a gene outside the gate, and `PMID:8` tests nothing --
-    so counting `corpus.publications` reads "3 of 5" in every case
+    so counting `corpus.publications` instead reads 3 of 5, 4 of 5 and 2 of 5
+    in the first three cases, where the sentence must read 1, 2 and none of 3
     (CLAUDE.md section 4.30: two figures equal on the real corpus would let
-    the wrong one pass). Pinned in each of its three forms, as literals.
+    the wrong one pass). Pinned in each of its forms, as literals.
+
+    **And at both ends of the count** (review, 2026-10-27): a single study
+    takes the singular noun, and a build publishing no study's rows carries no
+    sentence at all -- there is nothing to declare, and "Of the 0 rare-variant
+    studies" would say there is. Both survived every test until then. "by an
+    author", in every form, as each block's declaration says it.
     """
     burden = {
-        "HGNC:1": [_burden_row(study="PMID:1"), _burden_row(study="PMID:2")],
-        "HGNC:2": [_burden_row(study="PMID:3")],
+        "HGNC:1": [_burden_row(study=pmid) for pmid in tested[:2]],
+        "HGNC:2": [_burden_row(study=pmid) for pmid in tested[2:]],
         # Outside the gate: mirrored, never published.
         "HGNC:9": [_burden_row(study="PMID:9")],
     }
@@ -693,8 +711,12 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     )
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+    listed = _prose(_section(text, "<h2>What's published</h2>"))
 
-    assert f"<p>{sentence}</p>" in _prose(_section(text, "<h2>What's published</h2>"))
+    if sentence is None:
+        assert "whose results this atlas publishes" not in listed
+    else:
+        assert f"<p>{sentence}</p>" in listed
 
 
 def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) -> None:
