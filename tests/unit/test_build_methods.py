@@ -479,11 +479,12 @@ def test_curated_evidence_says_what_an_assertion_is_and_that_it_changes_nothing_
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
     """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
 
-    Eight paragraphs, each pinned whole. The first two are the full forms of the
-    two notices a gene page keeps in one line (`pages._MIRRORED_NOTICE`, which
-    links here, and `pages._POOLING_NOTICE`); the next two were the page's folded
-    "How to read these numbers" notes; the fifth was the second sentence of its
-    composite note; the sixth says what `all cases` is; the last two are below.
+    Nine paragraphs, each pinned whole. The first is the front page's two
+    definitions (below). The next two are the full forms of the two notices a
+    gene page keeps in one line (`pages._MIRRORED_NOTICE`, which links here,
+    and `pages._POOLING_NOTICE`); the two after those were the page's folded
+    "How to read these numbers" notes; the next was the second sentence of its
+    composite note; the next says what `all cases` is; the last two are below.
     Each was re-read for a page with no table on it: "In each study's table"
     anchors what the units sentence describes, and "the rows above it" became
     "beside it".
@@ -548,7 +549,7 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
 
     **Three changes after review (2026-10-26).** The composite paragraph
     explained `damaging` and nothing said what the `all cases` case group is,
-    though a forest key says it in one clause; the sixth paragraph does, in
+    though a forest key says it in one clause; the `all cases` paragraph does, in
     general, and `test_an_all_cases_row_is_the_union_of_the_case_groups_its_
     study_splits` holds it to the mirror. "these have none" had no antecedent
     nearer than "a forest plot", so it names this atlas's. And the muted row was
@@ -570,7 +571,7 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     count 6,746 of its 7,958 cases); it now says only that the group is not a
     subgroup, and the old phrase is asserted absent.
 
-    **The first paragraph states the one rule the atlas applies** (owner
+    **The paragraph after the definitions states the one rule the atlas applies** (owner
     decision 2026-10-26, W2). It said the atlas "adds no assessment" of the
     studies' numbers, while the card, the matrix and the forest fill each
     decide what survives by `concordance.survives_own_correction`: not
@@ -599,7 +600,7 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     "copy-number variants" so a future non-deletion CNV analysis does not make
     it false) and what one independent dataset is.
     """
-    assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
+    assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' rule paragraph"
     expected = [
         "A <strong>rare-variant statistic</strong> is one study's rare-variant test of one "
         "gene under one design: a case-control burden test of rare SNVs and indels or of "

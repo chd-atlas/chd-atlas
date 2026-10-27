@@ -26,7 +26,7 @@ the corpus, and the same `published`, `validity` and census objects
 `build_genes` and `write_manifest` were handed — never hardcoded, so the page
 and `manifest.json` cannot state two censuses of one build.
 
-Two gene populations reach this page, and they are different claims:
+Two of its gene counts read alike and are different claims:
 
 - **Genes published** is `len(published)`, D21's population: the set
   `build_genes` keys `genes/index.json` on, each a gene an external authority
@@ -102,15 +102,15 @@ def _asserted_genes(genes: Sequence[str], symbols: Mapping[str, str]) -> str:
 def _number(value: int) -> str:
     """A figure as a reader reads it: grouped in thousands.
 
-    One helper rather than a format spec at each call site, so the hero band and
-    the census list cannot render the same number two ways -- 1,475 above 1475 is
-    the kind of drift nobody notices and everybody sees.
+    One helper rather than a format spec at each call site, so no two figures on
+    this page group their thousands differently -- 1,475 beside 1475 is the kind
+    of drift nobody notices and everybody sees.
     """
     return f"{value:,}"
 
 
 def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
-    """How many of the rare-variant studies published here are by an atlas author (R7).
+    """How many rare-variant studies whose results appear here are by an atlas author (R7).
 
     Owner decision 2026-10-26: the cards and blocks declare a study by an
     author of this atlas, and the front page said nothing. Both counts are
@@ -131,9 +131,10 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     so" holds by construction).
 
     Digits, as every figure on this page is. Empty where no study publishes a
-    row, since there is then nothing to declare. "published here" and "its
-    block says so" since the doorway page (2026-10-27), for "whose results this
-    atlas publishes" and "a gene page says so in its block".
+    row, since there is then nothing to declare. Shortened with the doorway page
+    (2026-10-27), then partly restored on review the same day: "published here"
+    read as though this atlas had published the studies, and "its block" named
+    a thing this page never defines.
     """
     total = len(studies)
     if not total:
@@ -141,14 +142,20 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     by_author = {publication.id for publication in corpus.publications if publication.own_lab}
     own = sum(1 for study in studies if study in by_author)
     noun = "rare-variant study" if total == 1 else "rare-variant studies"
-    opening = f"Of the {total} {noun} published here, "
+    opening = f"Of the {total} {noun} whose results appear here, "
     if not own:
         return f"<p>{opening}none is by an author of this atlas.</p>"
     # "by an author", the words every block's declaration and card mark use; it
     # read "by authors of this atlas" until review (2026-10-27).
     if own == 1:
-        return f"<p>{opening}1 is by an author of this atlas; its block says so.</p>"
-    return f"<p>{opening}{own} are by an author of this atlas; their blocks say so.</p>"
+        return (
+            f"<p>{opening}1 is by an author of this atlas, and a gene page says so wherever "
+            "it shows its results.</p>"
+        )
+    return (
+        f"<p>{opening}{own} are by an author of this atlas, and a gene page says so wherever "
+        "it shows their results.</p>"
+    )
 
 
 def _panel_correction_note(studies: Sequence[str], corpus: Corpus) -> str:
@@ -339,7 +346,7 @@ def _render(
       {_number(published_gene_count - panel_graded_count)} on two or more Gene Curation
       Coalition submitters agreeing where no panel disputes it. Rare-variant statistics are
       reported per study, and none is pooled across studies.
-      <a href="methods.html#rare-variants">How to read them</a>.</p>
+      <a href="methods.html#rare-variants">How to read these figures</a>.</p>
     <p><a class="cta" href="genes/index.html">Browse the genes</a></p>
   </div>
 
@@ -364,11 +371,11 @@ def _render(
     mirrored file and its licence terms.</p>
 
   <h2>Data</h2>
-  <p>Every page is static; the JSON behind it is for a client to fetch and filter itself:
-    <a href="genes/index.json"><code>genes/index.json</code></a> for every published gene,
-    <a href="manifest.json"><code>manifest.json</code></a> for the build's counts and a
-    checksum for every file, and <a href="{_ORGANIZATION_URL}">the source and curation
-    workflow</a> on GitHub.</p>
+  <p>Every page is static, and the JSON behind it is for a client to fetch and filter
+    itself: <a href="genes/index.json"><code>genes/index.json</code></a> for every published
+    gene, and <a href="manifest.json"><code>manifest.json</code></a> for the build's counts
+    and a checksum for every file it lists. The source and curation workflow are
+    <a href="{_ORGANIZATION_URL}">on GitHub</a>.</p>
 
   <footer>
     <p>Read <a href="{_REPOSITORY_URL}/blob/main/docs/data-api.md">the data API
@@ -416,9 +423,10 @@ def build_landing(
     this project's characteristic failure exactly.
 
     `profile_census` is `profiles.profile_census`'s return, the same object
-    `write_manifest` publishes as `counts.profile_genes` — for the identical
-    reason `census` is threaded rather than recomputed, and
-    with no default for the identical reason: a whole evidence layer has landed
+    `write_manifest` publishes as `counts.profile_datasets`/`counts.profile_genes`,
+    of which this page states the second — for the identical reason `census` is
+    threaded rather than recomputed, and with no default for the identical
+    reason: a whole evidence layer has landed
     with this page never touched before (CLAUDE.md section 4.29's burden
     precedent), and a silently-defaulted zero is exactly how that happens again.
     """

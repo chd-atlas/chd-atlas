@@ -1739,8 +1739,9 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
 ) -> None:
     """The landing's own-lab sentence, against the blocks it vouches for (R7).
 
-    "Of the 3 rare-variant studies published here, 2 are by an author of this
-    atlas; their blocks say so." Both numbers are read here off the gene pages -- the distinct
+    "Of the 3 rare-variant studies whose results appear here, 2 are by an
+    author of this atlas, and a gene page says so wherever it shows their
+    results." Both numbers are read here off the gene pages -- the distinct
     study blocks they render, and which of those `publications.json` marks
     `own_lab` -- and every block of such a study must carry the declaration,
     while no other study's block may. Measured on a real build the day it was
@@ -1781,7 +1782,7 @@ def test_the_front_page_declares_exactly_the_study_blocks_the_gene_pages_declare
         html.unescape(re.sub(r"<[^>]+>", "", (site / "index.html").read_text())).split()
     )
     assert (
-        f"Of the {len(rendered)} rare-variant studies published here, "
+        f"Of the {len(rendered)} rare-variant studies whose results appear here, "
         f"{mine} {'is' if mine == 1 else 'are'} by an author of this atlas"
     ) in landing
     built = [*sorted((site / "genes").glob("*.html")), site / "index.html", site / "methods.html"]
@@ -1821,13 +1822,13 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     Owner decision 2026-10-26: "Where this data comes from" named ClinGen,
     GenCC, HPO and Orphanet, and not Mondo, the Expression Atlas or the CC BY
     rare-variant supplements, all of which `sources.json` records as
-    `permitted_with_attribution`. One hand-written sentence now names them.
+    `permitted_with_attribution`. One hand-written sentence then named them.
     The set of attribution-required sources must equal the keys pinned above,
     so a source added to `mirrors/sources.yaml` with that term fails here until
     the page names it and a phrase is pinned; each phrase must be on the page,
     with the licence where it is CC BY. Measured on a real build the day it was
-    written: 7 such sources. The section is "Sources", one paragraph of about
-    100 words, since the doorway page (2026-10-27).
+    written: 7 such sources. Since the doorway page (2026-10-27) the section is
+    "Sources", one paragraph of 123 words, and the sentence is three.
 
     **Every licence the sentence states is held to `sources.json`** (review,
     2026-10-27), not only CC BY: "Audain et al. 2021, CC0" and "EMBL-EBI's

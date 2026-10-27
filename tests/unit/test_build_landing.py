@@ -21,7 +21,7 @@ from chd_atlas.build.profiles import ProfileCensus
 from chd_atlas.build.render import RESEARCH_USE_NOTICE, STYLESHEET
 from chd_atlas.build.runner import build_site
 from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
-from chd_atlas.corpus import Corpus
+from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
 from chd_atlas.models.literature import Publication
 from chd_atlas.validate.sources import Source, SourceRegistry
@@ -475,9 +475,11 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     # D49's definition of a rare-variant statistic, and of an independent
     # dataset, moved to `methods.html#rare-variants` with the doorway page
     # (2026-10-27); the note is how a reader of the figures above it gets there.
+    # "these figures", not "them": the link must cover the dataset figure's
+    # qualifier as well as the statistics the sentence before it names.
     assert sentence.endswith(
         'none is pooled across studies. <a href="methods.html#rare-variants">How to read '
-        "them</a>.</p>"
+        "these figures</a>.</p>"
     )
 
 
@@ -498,8 +500,8 @@ def test_the_published_count_is_derived_and_the_mirrored_count_is_not_stated(
     under this very label, which would render 2 here instead of 3.
 
     **The mirrored-validity row is gone** (doorway page, 2026-10-27): every gene
-    either mirror curates, CHD scope or not, under a 35-word label explaining why
-    most of them are not browsable. The rule it explained is `methods.html#scope`'s.
+    with mirrored validity in CHD scope, under a 32-word label explaining which
+    of them are browsable. The rule it explained is `methods.html#scope`'s.
     Five mirrored genes against three published is what makes "5" mean that row.
     """
     corpus = Corpus(
@@ -686,28 +688,29 @@ def _study(pmid: str, *, own_lab: bool) -> Publication:
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1"},
-            "Of the 3 rare-variant studies published here, 1 is by an author of this atlas; "
-            "its block says so.",
+            "Of the 3 rare-variant studies whose results appear here, 1 is by an author of this "
+            "atlas, and a gene page says so wherever it shows its results.",
             id="one of several",
         ),
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             {"PMID:1", "PMID:2"},
-            "Of the 3 rare-variant studies published here, 2 are by an author of this atlas; "
-            "their blocks say so.",
+            "Of the 3 rare-variant studies whose results appear here, 2 are by an author of this "
+            "atlas, and a gene page says so wherever it shows their results.",
             id="several",
         ),
         pytest.param(
             ("PMID:1", "PMID:2", "PMID:3"),
             set(),
-            "Of the 3 rare-variant studies published here, none is by an author of this atlas.",
+            "Of the 3 rare-variant studies whose results appear here, none is by an author of "
+            "this atlas.",
             id="none",
         ),
         pytest.param(
             ("PMID:1",),
             {"PMID:1"},
-            "Of the 1 rare-variant study published here, 1 is by an author of this atlas; "
-            "its block says so.",
+            "Of the 1 rare-variant study whose results appear here, 1 is by an author of this "
+            "atlas, and a gene page says so wherever it shows its results.",
             id="a single study",
         ),
         pytest.param((), set(), None, id="no study"),
@@ -732,9 +735,13 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     takes the singular noun, and a build publishing no study's rows carries no
     sentence at all -- there is nothing to declare, and "Of the 0 rare-variant
     studies" would say there is. Both survived every test until then. "by an
-    author", in every form, as each block's declaration says it. "published
-    here" and "its block says so" since the doorway page (2026-10-27), for
-    "whose results this atlas publishes" and "a gene page says so in its block".
+    author", in every form, as each block's declaration says it.
+
+    **Shortened with the doorway page, then partly restored** (2026-10-27).
+    "published here" read as though this atlas had published the studies,
+    which is the one misreading a conflict-of-interest line cannot carry, and
+    "its block" named a thing the front page never defines. "whose results
+    appear here" and "wherever it shows its results" say what is true of each.
     """
     burden = {
         "HGNC:1": [_burden_row(study=pmid) for pmid in tested[:2]],
@@ -909,9 +916,10 @@ def test_every_figure_the_page_states_is_the_manifests_own(
 ) -> None:
     """Three artifacts, one set of numbers, checked against a real build.
 
-    The page states five keys of `counts` and the manifest all of them
+    The page states six keys of `counts` and the manifest all of them
     (`docs/data-api.md`; the page stated every key until the doorway page,
-    2026-10-27). They are derived from a single `burden_census` call in
+    2026-10-27): five as figures, and `assertions` in the sentence naming the
+    curated genes. They are derived from a single `burden_census` call in
     `build_site` precisely so they cannot disagree -- and a test that only read
     fixtures could not see them start to, because the drift would be in the
     wiring rather than in either derivation.
@@ -931,8 +939,12 @@ def test_every_figure_the_page_states_is_the_manifests_own(
     whole census and guarded for a third of it -- so a cross-wire between two
     cards publishes a false front-page figure with the manifest still correct
     and nothing failing. Every card and hero figure on the page must be one of
-    the labels below, so a figure added without a manifest key to check it
-    against fails here rather than going unguarded.
+    the labels below, each with a value derived without `landing.py`, so a
+    figure added without one fails here rather than going unguarded. The two
+    cards that are not manifest keys are held to what the build published or
+    read instead (review, 2026-10-27: they were listed here and never checked):
+    the genes `genes/index.json` gives a rare-variant row, and the distinct
+    genes the curation's assertions name, published or not, as the card counts.
     """
     text = (real_build / "index.html").read_text(encoding="utf-8")
     manifest = json.loads((real_build / "manifest.json").read_text(encoding="utf-8"))
@@ -942,21 +954,25 @@ def test_every_figure_the_page_states_is_the_manifests_own(
 
     assert counts["burden_rows"] == fetchable
     assert counts["genes"] == len(bundles)
+    index = json.loads((real_build / "genes" / "index.json").read_text(encoding="utf-8"))
+    curation, issues = load_curation(real_build.parent / "repo")
+    assert issues == [], issues
 
-    # The label the page prints for each manifest count it states, and the two
-    # figures that are not manifest keys (`docs/data-api.md` names both).
+    # The label the page prints for each figure, and the value it must state.
     hero = {
         "genes published": "genes",
         "independent datasets": "cohort_families",
         "rare-variant statistics": "burden_rows",
     }
     cards = {
-        "Genes with a rare-variant result surviving its study's correction": (
+        "Genes with a rare-variant result surviving its study's correction": counts[
             "burden_surviving_genes"
+        ],
+        "Genes with developmental expression data": counts["profile_genes"],
+        "Genes with a reported rare-variant result": sum(
+            1 for row in index["genes"] if row["burden_row_count"]
         ),
-        "Genes with developmental expression data": "profile_genes",
-        "Genes with a reported rare-variant result": None,
-        "Genes the atlas has curated": None,
+        "Genes the atlas has curated": len({assertion.gene for assertion in curation.assertions}),
     }
     figures = re.findall(
         r'"figure-value">([\d,]+)</span>\s*<span class="figure-label">([^<]+)<', text
@@ -967,8 +983,10 @@ def test_every_figure_the_page_states_is_the_manifests_own(
     for value, label in figures:
         assert int(value.replace(",", "")) == counts[hero[label]], label
     for label, value in stated:
-        if (key := cards[html.unescape(label)]) is not None:
-            assert int(value.replace(",", "")) == counts[key], label
+        assert int(value.replace(",", "")) == cards[html.unescape(label)], label
+    assert re.search(
+        rf"<p>{counts['assertions']} curated gene-disease assertions? so far: ", text
+    ), "the assertion sentence does not state the manifest's `assertions`"
 
 
 def test_the_page_shares_the_shell_and_the_stylesheet_every_other_page_uses(
@@ -1032,7 +1050,7 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
     is what the licence asks for, not the name.
 
     **Pinned whole, since the doorway page (2026-10-27)**, when the section went
-    from 195 words to about 100 in one paragraph: "The atlas authors no validity
+    from 193 words to 123 in one paragraph: "The atlas authors no validity
     classification of its own" is the hero note's claim already, the mirrored-
     validity row is gone, and the other sources each take one clause.
     """

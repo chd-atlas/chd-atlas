@@ -291,13 +291,15 @@ point to the other 121. It carries the same development-status and
 research-use statement `status` above is the machine-readable half of, as every
 page does, and is a doorway rather than the census (since 2026-10-27): it says
 what the atlas is, states the figures a first-time reader needs, and sends
-them to `genes/index.html`. Those figures are five keys of
-[`counts`](#manifestjson) — `genes`, `burden_rows` and `cohort_families` in
-the hero, `burden_surviving_genes` and `profile_genes` as cards — plus two that
-are not manifest keys: the genes with a reported rare-variant result (any row
-at all; the label read "Genes with rare-variant evidence" until `2.19`) and the
-genes this atlas has itself curated. Every figure the page states equals its
-key in `manifest.json`, which states the rest. The independent-datasets figure
+them to `genes/index.html`. It states six keys of [`counts`](#manifestjson):
+`genes`, `burden_rows` and `cohort_families` in the hero,
+`burden_surviving_genes` and `profile_genes` as cards, and `assertions` in the
+sentence naming the curated genes. Each equals its key in `manifest.json`,
+which states the rest. Two cards are not manifest keys: the genes with a
+reported rare-variant result (any row at all; the label read "Genes with
+rare-variant evidence" until `2.19`) and the genes this atlas has itself
+curated. Nor is the hero's split of the published genes by which upstream
+assessment admitted them. The independent-datasets figure
 carries "(as far as the cohort registry records)": it counts cohort families,
 which join two studies only through a collection both name or collections
 [`cohorts.json`](#cohortsjson) records as overlapping, so two studies that
@@ -310,8 +312,8 @@ Below the cards it says, for any published study whose correction ran over a
 gene panel, that the correction was not genome-wide, and how many of the
 rare-variant studies whose results the site publishes are by an author of this
 atlas — both counts computed, from the studies with a row on a published gene
-and their `own_lab` in [`publications.json`](#publicationsjson) — and that
-each such study's block says so. Its *Sources* names every source
+and their `own_lab` in [`publications.json`](#publicationsjson) — and that a
+gene page says so wherever it shows such a study's results. Its *Sources* names every source
 [`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
 the licence where it is CC BY, and gives Orphadata's requested citation. It
 links to `genes/index.html`, `genes/index.json`, `manifest.json`,
@@ -372,8 +374,8 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   its syndromic and non-syndromic groups where it splits its cases (and its
   only case group, not a subgroup, where it does not), what each mark on a
   forest plot means, and what a study block with no effect measure shows
-  instead of a plot. A gene page keeps one-line forms of the first two and
-  links here, and each forest plot's folded key ends with a link here.
+  instead of a plot. A gene page keeps one-line forms of the paragraphs on the
+  studies' own numbers and on pooling, and links here, and each forest plot's folded key ends with a link here.
 - `#cohorts` lists every sample collection a rare-variant row names, sorted by
   id: its name, id, description and public page where it has one — the same
   records as [`cohorts.json`](#cohortsjson), each followed, where it carries a

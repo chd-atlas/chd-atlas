@@ -5824,8 +5824,8 @@ def build_gene_index_page(
     2026-08-04), and it was the only page on the site where that could be read
     as the atlas's own call: `_validity_section` says "Every classification
     below is an upstream panel's or submitter's" on each gene page, and
-    `landing.py` says "The atlas authors no validity classification of its own"
-    on the front page. The sentence below says the same thing in the same voice,
+    `landing.py`'s hero note says every gene is admitted on an upstream
+    assessment, "never this atlas's own". The sentence below says the same thing in the same voice,
     and names `atlas curation` as the column that answers the question the
     confidence column does not -- whether the atlas has curated the gene at all.
 

@@ -8,8 +8,8 @@ every page and the part particular to the gene was buried under them. This page
 holds that explanation once; each gene page keeps a short form and a link to the
 section here that states it in full.
 
-**Every sentence below the introduction either was moved off a gene page or the
-gene index, or was written here to state in full what a gene page now says in
+**Every sentence below the introduction either was moved off a gene page, the
+gene index or the front page, or was written here to state in full what a gene page now says in
 one line or prints without defining -- and each was read in this position.** A
 sentence's truth conditions travel with its position (CLAUDE.md section 4.27):
 "the table below" was true on a gene page, false on the gene index and false
@@ -35,9 +35,11 @@ here, and "this page" here names a page with no gene on it.
   clause was read off `models/assertion.py`, `pages._evidence_section`,
   `derive.gene_facts` and `validity.published_genes`; it names no count, so
   nothing in it expires when a second gene is curated.
-* `#rare-variants` is both: three paragraphs moved off every gene page (the
-  folded reading notes and the composite note's second sentence), and two are
-  the full forms of notices a gene page keeps in one line. Two more state in
+* `#rare-variants` opens with the front page's two definitions, moved here with
+  the doorway page (2026-10-27). After them it is both: three paragraphs moved
+  off every gene page (the folded reading notes and the composite note's
+  second sentence), and two are the full forms of notices a gene page keeps in
+  one line. Two more state in
   general what each forest plot's folded key says of its own marks (D57), and
   what a block with no effect measure shows instead of a plot; one more, what
   the `all cases` case group is, which a forest key says in one clause
@@ -295,9 +297,10 @@ _CURATED_EVIDENCE: Final = (
 )
 
 # How to read a gene page's rare-variant section (2026-10-26, D50). The page
-# keeps a one-line short form of the first two paragraphs (`pages._MIRRORED_NOTICE`
-# and `pages._POOLING_NOTICE`) and links here; the last three were the page's
-# folded reading notes and its composite note's second sentence, and left it.
+# keeps a one-line short form of the two paragraphs after the front page's
+# definitions (`pages._MIRRORED_NOTICE` and `pages._POOLING_NOTICE`) and links
+# here; the three after those were the page's folded reading notes and its
+# composite note's second sentence, and left it.
 #
 # Narrower than the text this was drafted from, each measured 2026-10-26 on a
 # real build of 4233eca:
