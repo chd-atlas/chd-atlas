@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from chd_atlas.build.burden import BurdenCensus, BurdenRow, burden_census
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.landing import build_landing
 from chd_atlas.build.paths import LANDING
@@ -27,7 +28,7 @@ from chd_atlas.vocab import Classification, ValiditySource, ValidityState
 # What a corpus with no burden evidence at all publishes. Every test in this
 # file that is about something else -- escaping, pluralisation, the shell --
 # renders against it.
-_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=())
+_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=(), surviving_genes=0)
 
 # The developmental-expression counterpart to `_NO_BURDEN`, for the same tests.
 _NO_PROFILES = ProfileCensus(genes=0, datasets=0)
@@ -584,7 +585,13 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     of this test gave the census 2 families and 2 genes-with-evidence, and the
     mutant putting `census.genes` in the hero where `census.families` belongs
     survived the whole file. Measured, then fixed: 6 statistics, 3 independent
-    datasets, 2 genes carrying evidence, 4 genes published.
+    datasets, 2 genes with a reported result, 4 genes published -- and, since
+    owner decision 2026-10-26 (R9), 1 gene with a result surviving its study's
+    correction (`HGNC:2`'s one row; none of `HGNC:1`'s five), so the new figure
+    differs from every other (CLAUDE.md section 4.30). Its label is not the
+    owner's "Genes tested in rare-variant studies": the figure counts genes a
+    study reports a result for, and the gene it leaves out on a real build
+    (CRIPTO) is one a study may have tested and not reported.
 
     The third family reports on no published gene, which is what makes it
     different from the gene count. That is not contrived -- it is a study whose
@@ -597,11 +604,15 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     """
     burden = {
         "HGNC:1": [_burden_row(study="PMID:1") for _ in range(5)],
-        "HGNC:2": [_burden_row(study="PMID:2")],
+        "HGNC:2": [
+            _burden_row(
+                study="PMID:2", pvalue_adjusted=0.01, pvalue_adjustment="benjamini_hochberg"
+            )
+        ],
     }
     published = {"HGNC:1", "HGNC:2", "HGNC:3", TBX5}
     families = (frozenset({"PMID:1"}), frozenset({"PMID:2"}), frozenset({"PMID:3"}))
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
@@ -620,7 +631,14 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
         ), f"the hero no longer states {value} beside {label!r}"
     assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
-    assert re.search(r"<dt>Genes with rare-variant evidence</dt>\s*<dd>2</dd>", listed)
+    assert re.search(r"<dt>Genes with a reported rare-variant result</dt>\s*<dd>2</dd>", listed)
+    assert re.search(
+        r"<dt>Genes with a rare-variant result surviving its study's correction</dt>"
+        r"\s*<dd>1</dd>",
+        listed,
+    )
+    assert "rare-variant evidence" not in listed
+    assert "Genes tested" not in listed
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
 
 
@@ -700,7 +718,7 @@ def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
     }
     published = {"HGNC:1", "HGNC:2", TBX5}
     families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
     corpus = Corpus(
         root=Path("."),
         assertions=(_assertion(),),
@@ -868,6 +886,9 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
         "assertions": "Curated gene-disease assertions",
         "burden_combined": "Within-study combined rare-variant results",
         "burden_rows": "Rare-variant statistics",
+        "burden_surviving_genes": (
+            "Genes with a rare-variant result surviving its study's correction"
+        ),
         "cohort_families": "Independent datasets",
         "cohorts": "Sample collections",
         "datasets": "Omics datasets",

@@ -314,7 +314,23 @@ def _render(
             # sample collections those group. Both are published, and
             # `cohorts.json` is where the caveats on each live.
             _stat("Sample collections", _number(len(corpus.cohorts))),
-            _stat("Genes with rare-variant evidence", _number(census.genes)),
+            # Renamed, and joined by the surviving count, by owner decision
+            # 2026-10-26 (R9): "evidence" read as support, for every gene with
+            # any row. Not the owner's "Genes tested in rare-variant studies":
+            # the census counts genes a study *reports* a result for, and a
+            # supplement that omits a gene does not say the study never tested
+            # it -- CRIPTO, the one published gene with no row, is such a gene,
+            # and its card says only that no study here reports a result
+            # (`pages._card_rare_variants`). "Tested" would say of it what the
+            # card refuses to.
+            _stat("Genes with a reported rare-variant result", _number(census.genes)),
+            # The genes whose card lists a result (`census.surviving_genes`,
+            # by the card's own predicate), and therefore never more than the
+            # line above.
+            _stat(
+                "Genes with a rare-variant result surviving its study's correction",
+                _number(census.surviving_genes),
+            ),
             # Immediately after the burden figures, for the reason this pair
             # exists at all: a whole developmental-expression layer landed
             # across Tasks 1-14 with nothing on this page naming it, which is

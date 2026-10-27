@@ -1107,6 +1107,11 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
 
     Counts derived, never pinned. Both sides of each "iff" must be exercised,
     or the test is measuring one population twice (CLAUDE.md section 4.30).
+
+    **`counts.burden_surviving_genes` is the number of cards listing a
+    result** (owner decision 2026-10-26, R9): the census counts by the
+    card's own predicate, and this is where the two would disagree on real
+    data. 32 on the build it was written against, of 118 genes with a row.
     """
     entries = _read(site, "genes/index.json")["genes"]
     assert len(entries) > 1, "the build published no genes; the fixture is broken"
@@ -1182,6 +1187,9 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
         assert disputed == int(bundle["has_conflicting_evidence"]), entry["gene"]
         flagged += disputed
     assert 0 < listed < len(entries), f"{listed} of {len(entries)} cards list a result"
+    # R9: the census the front page and `manifest.json` state is these cards.
+    surviving = _read(site, "manifest.json")["counts"]["burden_surviving_genes"]
+    assert surviving == listed, (surviving, listed)
     assert 0 < flagged < len(entries), f"{flagged} of {len(entries)} cards flag a dispute"
     assert 0 < uncorrected_cards < len(entries), (
         f"{uncorrected_cards} of {len(entries)} cards name a study with no correction"

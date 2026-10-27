@@ -23,7 +23,7 @@ derives nothing beyond a set intersection over what each study already declared.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -430,12 +430,18 @@ class BurdenCensus:
     # R7). Not published in `manifest.json`, which names its `counts` keys one
     # by one.
     studies: tuple[str, ...]
+    # Published genes with at least one row that survives its own study's
+    # correction: the genes whose card lists a rare-variant result (owner
+    # decision 2026-10-26, R9). Published as `counts.burden_surviving_genes`.
+    surviving_genes: int
 
 
 def burden_census(
     burden: Mapping[str, Sequence[BurdenRow]],
     published: Collection[str],
     families: tuple[frozenset[str], ...],
+    *,
+    survives: Callable[[BurdenRow], bool],
 ) -> BurdenCensus:
     """What the burden evidence *this site publishes* amounts to.
 
@@ -484,6 +490,16 @@ def burden_census(
     whose results the site publishes are by an author of this atlas, and a
     study whose rows all sit outside the gate has no block on any page to say
     so. Sorted, because it is derived from a set.
+
+    **`surviving_genes` counts the published genes whose card lists a
+    result** (owner decision 2026-10-26, R9): a gene with at least one row
+    `survives` passes. `survives` is `concordance.survives_own_correction`,
+    the predicate the card's list reads (`pages._card_rare_variants` groups
+    exactly the rows it passes, with no exclusion of its own), handed in by
+    the caller rather than imported, because `concordance` imports this
+    module; required, so no caller can count by a rule of its own. Measured on
+    a real build the day it was written: 32 of the 118 genes with a published
+    row, and every one of the 32 cards lists a line.
     """
     rows = 0
     genes = 0
@@ -494,8 +510,15 @@ def burden_census(
         if count:
             genes += 1
         studies.update(row.study for row in burden.get(gene, ()))
+    surviving_genes = sum(
+        1 for gene in published if any(survives(row) for row in burden.get(gene, ()))
+    )
     return BurdenCensus(
-        rows=rows, genes=genes, families=len(families), studies=tuple(sorted(studies))
+        rows=rows,
+        genes=genes,
+        families=len(families),
+        studies=tuple(sorted(studies)),
+        surviving_genes=surviving_genes,
     )
 
 

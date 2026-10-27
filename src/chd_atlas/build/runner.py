@@ -36,6 +36,7 @@ from chd_atlas.build.concordance import (
     cohort_families,
     evidence_axes,
     gene_concordance,
+    survives_own_correction,
 )
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.identity import GeneIdentity
@@ -421,7 +422,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # One census, two consumers: the front page states it in prose and the
     # manifest publishes it as `counts`. Derived here rather than in either, so
     # neither can drift from the other.
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
     concordance = {
         gene: gene_concordance(burden.get(gene, ()), families) for gene in sorted(published)
     }
@@ -560,6 +561,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
             # row count -- the same convention as `burden_rows`.
             "burden_combined": combined_results,
             "cohort_families": census.families,
+            # The genes whose card lists a surviving result (R9), by the
+            # card's own predicate through `census`.
+            "burden_surviving_genes": census.surviving_genes,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],
         },

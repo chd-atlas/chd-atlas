@@ -433,6 +433,8 @@ from chd_atlas.corpus import Corpus
 #   from 248 to `null`, because 248 counted its panel genes, not comparisons.
 # * Every `scope.json` term gains `syndrome`, a curated boolean, `true` on the
 #   nine ClinGen-scoped syndromes published genes are graded for.
+# * `counts` gains `burden_surviving_genes`: the published genes with a row
+#   surviving its own study's correction, the genes whose card lists one.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

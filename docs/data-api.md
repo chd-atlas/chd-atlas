@@ -49,7 +49,8 @@ What the build produced, and a checksum for every file in it.
 ```json
 {
   "counts": {
-    "assertions": 1, "burden_combined": 108, "burden_rows": 1210, "cohort_families": 3,
+    "assertions": 1, "burden_combined": 108, "burden_rows": 1210,
+    "burden_surviving_genes": 32, "cohort_families": 3,
     "cohorts": 13, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
@@ -90,7 +91,7 @@ wrong by the next one.
   classification rather than on curation done here. Read `atlas_curation` on the
   browse row to tell the two apart.
 
-  The other six keys are computed by the build, and the first three below were
+  The other seven keys are computed by the build, and the first three below were
   added because the object read as a census of the atlas while describing only
   its curation: through `2.6` it published `assertions: 1, datasets: 0,
   functional: 0` for a site serving 23 genes and 290 burden statistics — the
@@ -108,6 +109,13 @@ wrong by the next one.
     gene by construction. It is deliberately not named `independent_datasets`,
     because `datasets` above already means omics datasets and two adjacent keys
     reading `datasets: 0` and `independent_datasets: 3` invite a misreading.
+  - `burden_surviving_genes` (since `2.19`) is the number of published genes
+    with at least one rare-variant row that survives its own study's
+    correction — the genes whose gene-page card lists a rare-variant result,
+    by the card's own rule (`methods.html#rare-variants`). A survival is only
+    as wide as its study's correction, which for PMID:40127276 is within its
+    248-gene panel ([`publications.json`](#publicationsjson)'s
+    `correction_genes`).
   - `burden_combined` is the number of a study's own combined results reaching a
     published bundle — the total of every bundle's
     [`burden_combined`](#the-bundles-burden_combined-array-one-studys-own-combination-of-its-arms)
@@ -119,7 +127,7 @@ wrong by the next one.
     not `datasets`, which counts every curated omics dataset, published gene or
     not.
 
-  Each of the six counts only what the published genes' bundles carry, except
+  Each of the seven counts only what the published genes' bundles carry, except
   `cohort_families`, which groups the whole burden mirror's cohorts: restricting
   it to the published genes could split one family into what then reads as two
   independent ones. `index.html` states these figures in prose too. They are
@@ -247,7 +255,8 @@ wrong by the next one.
   [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
   ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
   `null`: its 248 counted panel genes, not comparisons. It added `syndrome` to
-  every [`scope.json`](#scopejson) term, `false` unless curated. Additive.
+  every [`scope.json`](#scopejson) term, `false` unless curated, and
+  `burden_surviving_genes` to `counts`. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -263,7 +272,8 @@ point to the other 121. It states what the atlas is, the same development-status
 and research-use statement `status` above is the machine-readable half of, and
 the real counts behind it — every key of `counts`, plus three figures that are
 not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
-carrying rare-variant evidence, and the genes this atlas has itself curated. All are
+with a reported rare-variant result (any row at all; the label read "Genes with
+rare-variant evidence" until `2.19`), and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
 than written by hand. Its *Where this data comes from* names every source
 [`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
