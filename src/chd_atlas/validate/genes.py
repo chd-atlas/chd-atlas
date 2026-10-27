@@ -7,12 +7,17 @@ corpus as unresolvable. A missing reference table must never present as hundreds
 of dangling references -- that buries the real error under cascading false
 positives, and distinguishing "the data is wrong" from "the reference data never
 loaded" is one of this project's two load-bearing guarantees.
+
+`GEN004` (owner decision 2026-10-26, R13) is the registry's other job: the
+Ensembl and NCBI Gene ids every published gene page links by, held to the rule
+the build refuses a page on (`build/identity.py::identity_id_problems`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
+from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, identity_id_problems
 from chd_atlas.genes import GeneRegistry, Resolution
 from chd_atlas.issues import Severity, ValidationIssue
 
@@ -151,6 +156,75 @@ def validate_mirror_symbols(
                 ),
             )
         )
+    return issues
+
+
+def validate_identity_ids(
+    identities: Mapping[str, GeneIdentity] | None,
+    published: Iterable[str],
+    location: str,
+) -> list[ValidationIssue]:
+    """GEN004: every published gene's identity ids, by the rule the build refuses a page on.
+
+    Owner decision 2026-10-26 (R13). `build/identity.py::external_links`
+    refuses a published gene whose Ensembl or NCBI Gene id is missing or
+    malformed, and nothing in `chd-atlas validate` reported either: measured
+    2026-10-26 on a copy of the committed corpus, TBX5's Ensembl id cut to
+    `ENSG0089225` validated with 0 errors and the build refused the repository
+    after writing had begun (a missing NCBI Gene id behaved the same). The
+    rule is `identity.identity_id_problems`, shared, so the two cannot
+    disagree; the population is the build's too, the published genes, so a
+    registry row for a gene the gate does not admit is not this check's
+    business. A published gene with no registry row at all lacks both ids.
+
+    ERROR, because the build refuses on it. A validator reports and never
+    raises. `identities` is `build.identity.read_gene_identities`' return, the
+    reader the build uses. `None` is a registry that is absent, unreadable or
+    missing an id column, which TBL008 or TBL001 reports as an error, so this
+    returns nothing rather than one GEN004 per published gene.
+
+    **An empty mapping is not `None`, and is one GEN004** (review,
+    2026-10-27). A header-only `mirrors/genes.tsv` reads, as no rows, and
+    neither TBL008 nor TBL001 fires on it. The caller passed `or None` to
+    spare the report one error per published gene, which switched the check
+    off: measured on a copy with TBX5's assertion moved out (so no REF001
+    either), validate reported 0 errors and the build raised from
+    `external_links` after writing had begun. So an empty registry with
+    published genes is one error naming the file, and the per-gene loop does
+    not run.
+    """
+    if identities is None:
+        return []
+    genes = sorted(published)
+    if not identities and genes:
+        return [
+            ValidationIssue(
+                code="GEN004",
+                severity=Severity.ERROR,
+                location=location,
+                message=(
+                    f"the gene registry holds no gene rows, and {len(genes)} published genes' "
+                    "pages link gnomAD and ClinVar by the ids it carries; the build refuses "
+                    "every such page"
+                ),
+            )
+        ]
+    issues: list[ValidationIssue] = []
+    for gene in genes:
+        missing, malformed = identity_id_problems(identities.get(gene, EMPTY_IDENTITY))
+        problems = ([f"no {' or '.join(missing)}"] if missing else []) + malformed
+        if problems:
+            issues.append(
+                ValidationIssue(
+                    code="GEN004",
+                    severity=Severity.ERROR,
+                    location=location,
+                    message=(
+                        f"{gene} is published and its gene page links gnomAD and ClinVar by "
+                        f"these ids: {'; '.join(problems)}; the build refuses such a page"
+                    ),
+                )
+            )
     return issues
 
 

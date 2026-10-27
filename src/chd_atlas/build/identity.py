@@ -56,16 +56,19 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
 from chd_atlas.build.emit import Json
+from chd_atlas.identifiers import ENSEMBL_GENE_PATTERN
+from chd_atlas.tables import TABLE_SCHEMAS, cell_text, read_table
 
 GNOMAD_DATASET: Final = "gnomad_r4"
 
 # Ensembl's stable human gene id. The mirror schema constrains nothing about
 # this column and its value is interpolated into an `href`, so it is checked
 # here, where it becomes a URL. Measured 2026-10-25: all 185 registry rows match.
-_ENSEMBL_GENE: Final = re.compile(r"ENSG\d{11}")
+_ENSEMBL_GENE: Final = re.compile(ENSEMBL_GENE_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,52 @@ class ExternalLink:
     href: str
 
 
+def read_gene_identities(root: Path) -> dict[str, GeneIdentity] | None:
+    """The identity columns of `mirrors/genes.tsv`, keyed on HGNC id. D52, R13.
+
+    **The one reader, for the build and for `chd-atlas validate` alike.**
+    GEN004 (`validate/genes.py::validate_identity_ids`) reports, by
+    `identity_id_problems`, what `external_links` refuses a page on; until
+    review (2026-10-27) each side read the registry through a copy of its own,
+    and a mutant to the validator's copy survived every test, so a padded or
+    blank cell could be read one way to validate and another to build. Every
+    cell is cleaned by `tables.cell_text`, the rule the build's labels use: a
+    blank or whitespace-only cell is absent, and a row with no `hgnc_id` has
+    nothing to key on and is dropped. `ncbi_gene` arrives as an `int`, as the
+    bundle publishes it.
+
+    `None` where the file is absent or unreadable, or lacks `hgnc_id`,
+    `ensembl_gene` or `ncbi_gene` -- each reported by a check of its own
+    (TBL008 for the first three, TBL001 for a missing column) -- so GEN004
+    does not report every published gene for the file's one fault. A registry
+    that reads and holds no row is `{}`, not `None`: GEN004 reports that once.
+    """
+    path = root / "mirrors" / "genes.tsv"
+    if not path.is_file():
+        return None
+    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
+    if frame is None or any(
+        column not in frame.columns for column in ("hgnc_id", "ensembl_gene", "ncbi_gene")
+    ):
+        return None
+
+    identities: dict[str, GeneIdentity] = {}
+    for row in frame.to_dicts():
+        gene = cell_text(row.get("hgnc_id"))
+        if gene is None:
+            continue
+        ncbi = row.get("ncbi_gene")
+        identities[gene] = GeneIdentity(
+            name=cell_text(row.get("name")),
+            locus=cell_text(row.get("locus")),
+            ensembl_gene=cell_text(row.get("ensembl_gene")),
+            ncbi_gene=int(ncbi) if ncbi is not None else None,
+            uniprot=cell_text(row.get("uniprot")),
+            mane_select=cell_text(row.get("mane_select")),
+        )
+    return identities
+
+
 def identity_payload(identity: GeneIdentity) -> dict[str, Json]:
     """The bundle's `identity` object: every key on every gene, `null` where absent.
 
@@ -118,28 +167,55 @@ def identity_payload(identity: GeneIdentity) -> dict[str, Json]:
     }
 
 
+def identity_id_problems(identity: GeneIdentity) -> tuple[list[str], list[str]]:
+    """The two ids a gene page links by, checked: `(missing, malformed)`. D52, R13.
+
+    **The one rule, read in two places** (owner decision 2026-10-26, R13):
+    `external_links` refuses a published gene's page on it, and GEN004
+    (`validate/genes.py`) reports it for every published gene, so `chd-atlas
+    validate` and the build cannot disagree about an identity row. Until then
+    a malformed Ensembl id passed validate with 0 errors and the build refused
+    the repository after writing had begun -- measured 2026-10-26 on a copy
+    with TBX5's id cut to `ENSG0089225`, and likewise for a missing NCBI Gene
+    id. `missing` names the absent ids; `malformed` says what is wrong with a
+    present one: an Ensembl id that is not `ENSG` + 11 digits, or an NCBI Gene
+    id below 1, which a ClinVar link would query as `0[geneid]` (the build
+    accepted that until this rule was shared).
+    """
+    missing = [
+        label
+        for label, value in (
+            ("Ensembl gene id", identity.ensembl_gene),
+            ("NCBI Gene id", identity.ncbi_gene),
+        )
+        if value is None
+    ]
+    malformed: list[str] = []
+    if identity.ensembl_gene is not None and not _ENSEMBL_GENE.fullmatch(identity.ensembl_gene):
+        malformed.append(f"{identity.ensembl_gene!r} is not an Ensembl gene id (ENSG + 11 digits)")
+    if identity.ncbi_gene is not None and identity.ncbi_gene < 1:
+        malformed.append(f"{identity.ncbi_gene} is not an NCBI Gene id (a positive integer)")
+    return missing, malformed
+
+
 def external_links(gene: str, identity: GeneIdentity) -> tuple[ExternalLink, ...]:
     """The gene page's link row: gnomAD and ClinVar first, both required. D52.
 
     Raises `ValueError` naming the gene and the missing id rather than leaving
     a link out -- the failure this project calls its characteristic one is a
     green build that quietly publishes less than it promised. `raise`, never
-    `assert`: `-O` strips `assert`.
+    `assert`: `-O` strips `assert`. The rule is `identity_id_problems`, which
+    GEN004 reports from `chd-atlas validate` before a build reaches here.
     """
+    missing, malformed = identity_id_problems(identity)
     ensembl, ncbi = identity.ensembl_gene, identity.ncbi_gene
-    if ensembl is None or ncbi is None:
-        absent = [
-            label
-            for label, value in (("Ensembl gene id", ensembl), ("NCBI Gene id", ncbi))
-            if value is None
-        ]
-        missing = " or ".join(absent)
+    if missing or ensembl is None or ncbi is None:
         raise ValueError(
-            f"{gene} has no {missing} in mirrors/genes.tsv; D52 requires every "
+            f"{gene} has no {' or '.join(missing)} in mirrors/genes.tsv; D52 requires every "
             f"published gene page to link gnomAD and ClinVar, which are keyed on them"
         )
-    if not _ENSEMBL_GENE.fullmatch(ensembl):
-        raise ValueError(f"{gene}: {ensembl!r} is not an Ensembl gene id (ENSG + 11 digits)")
+    if malformed:
+        raise ValueError(f"{gene}: {'; '.join(malformed)}")
     links = [
         ExternalLink(
             "gnomAD", f"https://gnomad.broadinstitute.org/gene/{ensembl}?dataset={GNOMAD_DATASET}"

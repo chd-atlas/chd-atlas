@@ -9,6 +9,7 @@ from pathlib import Path
 from chd_atlas.build.burden import (
     BurdenRow,
     CombinedRow,
+    Overlap,
     build_cohorts,
     burden_census,
     burden_payload,
@@ -19,8 +20,10 @@ from chd_atlas.build.burden import (
     load_combined,
     shared_cohorts,
 )
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.emit import Emitter
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.tables import BURDEN, BURDEN_COMBINED
 
 _BASE: dict[str, str] = {
@@ -35,6 +38,7 @@ _BASE: dict[str, str] = {
     "count_unit": "individuals",
     "n_case_carriers": "6",
     "n_cases": "3876",
+    "n_chd_case_carriers": "",
     "comparator": "control_cohort",
     "n_control_carriers": "0",
     "n_controls": "45082",
@@ -155,7 +159,7 @@ def test_two_studies_drawing_on_one_collection_are_named_as_not_independent() ->
         _row(study="PMID:3", case_cohorts=("gel",), control_cohorts=()),
     ]
 
-    assert shared_cohorts(rows) == {("PMID:1", "PMID:2"): ("ddd",)}
+    assert shared_cohorts(rows, {}) == {("PMID:1", "PMID:2"): Overlap(("ddd",), ())}
 
 
 def _row(**overrides: object) -> BurdenRow:
@@ -206,39 +210,82 @@ def test_the_census_counts_published_rows_and_families_not_mirrored_rows_and_stu
       wider than the publication gate -- measured 2026-08-05, 1,475 rows over 150
       genes of which 127 publish no page. `HGNC:9` here stands for those 127: it
       carries four rows and is absent from `published`. Counting the mapping
-      (`sum(len(rows) for rows in burden.values())`) gives 7, which is true of
+      (`sum(len(rows) for rows in burden.values())`) gives 13, which is true of
       the mirror and false of the site.
 
-    - **Families are not studies.** The two published genes' rows name *two*
+    - **Families are not studies.** The two published genes' rows name *eight*
       studies, and the fixture puts them in **one** family, so `len({row.study})`
-      gives 2 where the answer is 1. They are equal over the committed corpus --
-      three studies on disjoint collections -- which is exactly why a fixture has
-      to separate them: the day a fourth study reuses DDD or PCGC, a study count
-      would tell a reader that a reused cohort is independent evidence.
+      gives 8 where the answer is 1. They were equal over the committed corpus --
+      three studies, three families -- until owner decision 2026-10-27 (I3)
+      declared DDD and DECIPHER overlapping and made two of the three studies one
+      family: 2 families for 3 studies since. A fixture separates them by more
+      than one, so a study count cannot pass for a family count, which would
+      tell a reader that a reused cohort is independent evidence.
 
     - **Genes are those with rows, not the published population.** `HGNC:3` is
       published and has none, so `len(published)` gives 3 where the answer is 2.
 
-    One test rather than three because they share a fixture and a single call,
-    which is what makes the three numbers checkable against each other; a
-    per-figure split would triple the setup and weaken nothing that matters.
+    - **Studies are those with a published row** (owner decision 2026-10-26,
+      R7: the front page's own-lab sentence counts them). `PMID:9` tests only
+      the unpublished `HGNC:9`, so it has no block on any page and is not one
+      of them; sorted, because it is derived from a set.
+
+      **Eight of them, so the sort is guarded on every hash seed** (review,
+      2026-10-27). With two studies the census's `set` iterated in sorted
+      order on 152 of 300 seeds (measured by the review; 157 of 300
+      re-measured), so dropping the sort survived about half of all runs, and
+      no published byte depends on the order to catch it elsewhere. These
+      eight, inserted in this order, iterate sorted on 0 of 1,000 explicit
+      `PYTHONHASHSEED` values (0-999), probed by building the set exactly as
+      `burden_census` does in a fresh interpreter per seed (CLAUDE.md section
+      4.42): measured safe, not proven.
+
+    - **Surviving genes are published genes whose card lists a row** (owner
+      decision 2026-10-26, R9), by `concordance.survives_own_correction`, the
+      card's predicate, handed in. `HGNC:1` carries one surviving row and
+      `HGNC:2` none, so counting genes with any row gives 2 where the answer
+      is 1; unpublished `HGNC:9` carries one too, so dropping the
+      `published` restriction also gives 2.
+
+    One test rather than four because they share a fixture and a single call,
+    which is what makes the numbers checkable against each other; a
+    per-figure split would multiply the setup and weaken nothing that matters.
     """
+    first = ("PMID:1", "PMID:1", "PMID:28991257", "PMID:3155", "PMID:52")
+    second = ("PMID:2", "PMID:40127276", "PMID:687", "PMID:9314")
+    # A study-published corrected p below 0.05 on an upward row: it survives.
+    surviving = {"pvalue_adjusted": 0.01, "pvalue_adjustment": "benjamini_hochberg"}
     burden = {
-        "HGNC:1": [_row(study="PMID:1"), _row(study="PMID:1")],
-        "HGNC:2": [_row(study="PMID:2")],
+        "HGNC:1": [_row(study=first[0], **surviving), *(_row(study=s) for s in first[1:])],
+        "HGNC:2": [_row(study=study) for study in second],
         # Mirrored, never published: the 127-gene asymmetry, in miniature.
-        "HGNC:9": [_row(study="PMID:1") for _ in range(4)],
+        "HGNC:9": [
+            _row(study="PMID:1", **surviving),
+            *(_row(study="PMID:1") for _ in range(2)),
+            _row(study="PMID:9"),
+        ],
     }
     # Published and untested, so `genes` cannot be read off `published`.
     published = {"HGNC:1", "HGNC:2", "HGNC:3"}
-    # The two studies share a sample collection, so they are one dataset.
-    families = (frozenset({"PMID:1", "PMID:2"}),)
+    # The eight studies share sample collections, so they are one dataset.
+    families = (frozenset({*first, *second}),)
 
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
 
-    assert census.rows == 3
+    assert census.rows == 9
     assert census.families == 1
     assert census.genes == 2
+    assert census.surviving_genes == 1
+    assert census.studies == (
+        "PMID:1",
+        "PMID:2",
+        "PMID:28991257",
+        "PMID:3155",
+        "PMID:40127276",
+        "PMID:52",
+        "PMID:687",
+        "PMID:9314",
+    )
 
 
 def test_every_published_row_carries_every_key_whatever_its_comparator() -> None:
@@ -246,20 +293,22 @@ def test_every_published_row_carries_every_key_whatever_its_comparator() -> None
     field off `rows[0]` and expecting it on `rows[1]`.
 
     A case-control row and a de novo row populate disjoint halves of the
-    comparator block, and both publish all 27 keys with `null` where the
+    comparator block, and both publish all 28 keys with `null` where the
     comparator does not reach. Same rule `bundles._validity_record` follows for
     ClinGen-only and GenCC-only fields.
 
-    The count says 27 because the assertion was written before the measurement
+    The count says 28 because the assertion was written before the measurement
     and the test corrected it. It read 26 in the assertion and "24 keys" in this
     sentence until 2026-08-05 -- two numbers, neither of them right, exactly the
-    drift CLAUDE.md section 6 records. `count_unit` made it 27.
+    drift CLAUDE.md section 6 records. `count_unit` made it 27, and
+    `n_chd_case_carriers` 28 (owner decision R2, 2026-10-26): a number on the
+    case-control row, `null` on the de novo row, present on both.
 
     The two rows differ in `count_unit` as well as in comparator, which is the
     point of that column: these fixtures count 6 people and 6 de novo mutations
     respectively, and nothing else in the payload distinguishes those.
     """
-    case_control = _row()
+    case_control = _row(n_chd_case_carriers=5)
     de_novo = _row(
         comparator="mutation_model",
         origin="de_novo",
@@ -277,7 +326,9 @@ def test_every_published_row_carries_every_key_whatever_its_comparator() -> None
     payload = burden_payload([case_control, de_novo])
 
     assert set(payload[0]) == set(payload[1])  # type: ignore[arg-type]
-    assert len(payload[0]) == 27  # type: ignore[arg-type]
+    assert len(payload[0]) == 28  # type: ignore[arg-type]
+    assert payload[0]["n_chd_case_carriers"] == 5  # type: ignore[index,call-overload]
+    assert payload[1]["n_chd_case_carriers"] is None  # type: ignore[index,call-overload]
     assert payload[0]["count_unit"] == "individuals"  # type: ignore[index,call-overload]
     assert payload[1]["count_unit"] == "de_novo_mutations"  # type: ignore[index,call-overload]
     assert payload[1]["expected_count"] == 0.42  # type: ignore[index,call-overload]
@@ -351,13 +402,34 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
     - **`url` is `null`, never absent**, where a collection has no public page.
       An object whose shape varies is a trap for a consumer reading a field off
       one record and expecting it on the next.
+    - **`overlaps_with` is published, sorted, `[]` where none** (owner decision
+      2026-10-27, I3): the declared overlaps that make two studies one cohort
+      family, so a consumer can see why `independent_datasets` merged them.
+      Listed out of order in the fixture so the sort is observed.
+    - **`review_status` and `review_note` are published, `null` where none**
+      (owner's standing rule, 2026-10-27): a record's open question about its
+      sources reaches a program as well as a page, on one record of three
+      here so a field dropped or published unconditionally fails.
     """
     emitter = Emitter(root=tmp_path)
     build_cohorts(
         (
             Cohort(id="zebra", name="Zebra", description="Cited by nothing here.", url=None),
-            Cohort(id="ukbb", name="UK Biobank", description="Adults 40-69.", url="https://u"),
-            Cohort(id="unused", name="Unused", description="No row names this.", url=None),
+            Cohort(
+                id="ukbb",
+                name="UK Biobank",
+                description="Adults 40-69.",
+                url="https://u",
+                overlaps_with=["zebra", "unused"],
+            ),
+            Cohort(
+                id="unused",
+                name="Unused",
+                description="No row names this.",
+                url=None,
+                review_status=ReviewStatus.NOT_ACCESSIBLE,
+                review_note="The supplement could not be read.",
+            ),
         ),
         emitter,
     )
@@ -370,7 +442,14 @@ def test_cohorts_json_publishes_the_registry_a_burden_row_resolves_against(
         "name": "UK Biobank",
         "description": "Adults 40-69.",
         "url": "https://u",
+        "overlaps_with": ["unused", "zebra"],
+        "review_status": None,
+        "review_note": None,
     }
+    assert published[0]["review_status"] is None and published[0]["review_note"] is None
+    assert published[1]["review_status"] == "not_accessible"
+    assert published[1]["review_note"] == "The supplement could not be read."
+    assert published[2]["overlaps_with"] == []
     # `url` present and null rather than omitted -- `"url" in ...` fails on an
     # omitted key where `.get("url") is None` would pass on both.
     assert "url" in published[1] and published[1]["url"] is None

@@ -1587,7 +1587,7 @@ def test_the_bundle_carries_a_genes_burden_rows_and_the_browse_row_counts_them(
         # shape rather than a hand-written one.
         concordance={
             **_no_burden(),
-            TBX5: gene_concordance(rows, cohort_families(rows)),
+            TBX5: gene_concordance(rows, cohort_families(rows, {})),
         },
         profiles={},
     )

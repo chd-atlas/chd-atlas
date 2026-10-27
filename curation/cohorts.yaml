@@ -21,6 +21,20 @@
 # rows name the three collections the cohort description names and no more,
 # because inventing a fourth from an ethics approval would be the atlas asserting
 # something the study did not.
+#
+# REVIEW STATUS (owner's standing rule, 2026-10-27; `models/review.py`). Where
+# this atlas leaves a question about a record open rather than settling it, the
+# record carries `review_status` -- `pending_review` (a question about the
+# record left open for an expert: a conflict between the sources it rests on,
+# or a clinical judgement) or `not_accessible` (a source the record rests on
+# could not be read) -- and a `review_note` stating exactly what is
+# unresolved, and nothing more. Never assert either side, never speculate,
+# never drop the record. Both fields or neither: loading refuses one without
+# the other. `cohorts.json` publishes both (`null` where absent), and the note
+# renders after the description on methods.html and in each gene page's cohort
+# notes. The two records marked today are `pending_review` for a source
+# conflict: PMID:34324492's S2 Table against the cited paper's abstract (the
+# comment heading the seven S2 case series below says which and why).
 cohorts:
   - id: cnchd
     name: German Competence Network for Congenital Heart Defects
@@ -30,6 +44,38 @@ cohorts:
       Germany and holds the associated German Heart Registry consent. Named in
       PMID:42230622 as one of the three collections its CHD cases were drawn from.
     url: https://www.kompetenznetz-ahf.de/en/
+  # Rewritten 2026-10-26 (owner decisions W4, W5). It named a plan ("the CHD
+  # exome studies this atlas plans to curate"), which a reader cannot check and
+  # which says nothing about the data. "more than one", not the draft's
+  # "several": two are verified -- PMID:42230622 names DDD among its case
+  # collections, and Sifrim et al. 2016 (Nat Genet, doi:10.1038/ng.3627) lists
+  # "the Deciphering Developmental Disorders Study" among its authors -- and no
+  # third was found. "only one study cited today names it" is held to the
+  # mirror by `test_models_cohort.py`, so a second study citing `ddd` fails
+  # there until this is reworded.
+  #
+  # The DECIPHER sentence, here and in `decipher`'s entry: DDD's own data
+  # access page (https://www.ddduk.org/accessing-ddd-data/, read 2026-10-26)
+  # says likely diagnostic variants "will be linked to individual patient
+  # records in DECIPHER", publicly with HPO terms once the family has been
+  # told. So DECIPHER's patient records include DDD participants, and a case
+  # set drawn from DECIPHER may too. The registry holds them as two ids, which
+  # `shared_cohorts` never linked until owner decision 2026-10-27 (I3).
+  # "this atlas's cohort registry", not "this registry" (review, 2026-10-27):
+  # the sentence renders in a gene page's cohort notes too, where no registry
+  # is in sight.
+  #
+  # `overlaps_with` (I3, 2026-10-27). An author of PMID:34324492 -- a study by an
+  # atlas author (`own_lab`), which names `decipher` -- answered that its case
+  # set does, or likely does, include DDD participants; DECIPHER, as above, is
+  # the documented route. PMID:42230622 names `ddd`. The two studies were two
+  # independent datasets on every page; declared here, `shared_cohorts` links
+  # them and `cohort_families` makes them one. The descriptions' last clause read
+  # "this atlas's cohort registry records the two as separate collections and
+  # cannot see that overlap" until the declaration made it false; it is dropped
+  # rather than reworded, because a page carrying both studies now states the
+  # overlap in its own notice (`pages._overlap_notice`), and the descriptions
+  # keep the reason.
   - id: ddd
     name: Deciphering Developmental Disorders (DDD)
     description: >-
@@ -38,9 +84,12 @@ cohorts:
       Wellcome Sanger Institute. Cases are ascertained on developmental disorder
       rather than on heart disease, so its contribution is enriched for syndromic
       CHD. Individual-level data are under controlled access via the EGA. DDD
-      contributed to several of the CHD exome studies this atlas plans to
-      curate, which is the sample reuse the cohort columns exist to make
-      visible; only one study cited today names it.
+      contributed to more than one CHD exome study, which is the sample reuse the
+      cohort columns exist to make visible; only one study cited today names it.
+      DDD links its participants' likely diagnostic variants to their own patient
+      records in DECIPHER, so DECIPHER's cases may include DDD participants.
+    overlaps_with:
+      - decipher
     url: https://www.ddduk.org/
   - id: nottingham
     name: University of Nottingham congenital heart disease collection
@@ -62,29 +111,138 @@ cohorts:
     description: >-
       1,221 CHD cases from the DECIPHER database of submitted patient
       genotype-phenotype data. Submitted by clinical genetics centres, so
-      ascertained on a diagnostic question rather than on heart disease.
+      ascertained on a diagnostic question rather than on heart disease. The
+      Deciphering Developmental Disorders study links its participants' likely
+      diagnostic variants to their own patient records in DECIPHER, so these
+      cases may include DDD participants.
     url: https://www.deciphergenomics.org/
+    overlaps_with:
+      - ddd
   - id: isca
     name: International Standards for Cytogenomic Arrays (ISCA)
     description: >-
       629 CHD cases from the ISCA consortium's shared clinical array data.
     url: https://clinicalgenome.org/
+  # Owner decision 2026-10-26 (R12): the seven CHD case sources PMID:34324492's
+  # S2 Table identifies by PMID and credits with 50 or more cases, 1,969 in all
+  # (S2 gives the phenotype as CHD for each; the eighth source it identifies by
+  # PMID with that many, its aneurysm series, is `taa_cases` below), registered
+  # so that a study curated later which names one of these series is seen to
+  # share people with PMID:34324492 (`shared_cohorts`). Read from the
+  # supplement's `s007.xlsx` (sheet "S2 Table") on 2026-10-27.
+  #
+  # Each description states what S2 states of the series -- its case count,
+  # its phenotype (CHD for all seven) and its platform, verbatim -- and that S2
+  # lists it, and nothing else: no claim about the series was checked against
+  # the paper S2 cites for it. S2's notes column is blank for all seven, so
+  # S2 suggests no overlap between one of them and another registered cohort,
+  # and none is declared. No url: a series has no home page of its own, and
+  # the cohort list's link reads "website". The ids are the cited PMIDs; the
+  # one S2 cites under two PMIDs carries both.
+  #
+  # Two of the seven carry `review_status: pending_review` (owner's answer,
+  # 2026-10-27): for `pmid22939634_cases` and `pmid22969434_cases`, S2 and the
+  # cited paper's PubMed abstract (read 2026-10-27) conflict, and each note
+  # says how and nothing more. For the first, the abstract names a platform S2
+  # does not (Illumina 660W-Quad against S2's Affymetrix and Agilent arrays);
+  # for the second, S2 lists more individuals with CHD than the abstract
+  # reports affected (178 against 174).
+  #
+  # The other five were compared on the same two points, against their
+  # papers' abstracts only, never the full texts, and none conflicts on
+  # either. Each lists no more individuals with CHD than its abstract
+  # reports: 742 against PMID:22318994's 945 subjects with CHD; 340 against
+  # PMID:22912587's 433 adults with tetralogy of Fallot and/or pulmonary
+  # atresia, 340 being that abstract's own count of its Caucasian probands;
+  # 123 against the 203 subjects with cardiovascular malformations of
+  # PMID:22929023's survey; 91 against PMID:26655555's 101 adults with
+  # transposition of the great arteries; and 63, which equals the 20 + 43
+  # children with CHD the two abstracts of PMID:18535492 and PMID:22349727
+  # report recruiting (the first also screened a matched population with
+  # isolated heart defects, uncounted there). And none of their six
+  # abstracts names an array S2 contradicts: the two behind the 63 name array
+  # CGH, as S2 does, and the other four name no array model. A count within
+  # the abstract's, on an array it does not contradict, is no conflict, so
+  # the five carry no status.
+  - id: pmid22318994_cases
+    name: CHD case series of PMID:22318994
+    description: >-
+      742 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+  # Pending review: S2's platform and 432 cases against PMID:22939634's
+  # abstract, Illumina arrays in 2,256 individuals with CHD (the comment
+  # heading these seven says why this record and not the other five).
+  - id: pmid22939634_cases
+    name: CHD case series of PMID:22939634
+    description: >-
+      432 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix 6.0 array, Agilent CGH 44k/105K.
+    review_status: pending_review
+    review_note: >-
+      S2 gives the platform as Affymetrix 6.0 array, Agilent CGH 44k/105K and
+      lists 432 cases; PMID:22939634's abstract reports Illumina 660W-Quad SNP
+      arrays in 2,256 individuals with CHD. How S2's 432 relate to the
+      individuals that abstract reports, and which platform applies to them,
+      is not stated.
+  - id: pmid22912587_cases
+    name: CHD case series of PMID:22912587
+    description: >-
+      340 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+  # Pending review: S2's 178 individuals with CHD against PMID:22969434's
+  # abstract, "464 individuals with 174 affecteds (37.5%) in 59 multiplex
+  # families and 8 trios" (the comment heading these seven says why this
+  # record and not the other five).
+  - id: pmid22969434_cases
+    name: CHD case series of PMID:22969434
+    description: >-
+      178 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as
+      Affymetrix Array 6.0.
+    review_status: pending_review
+    review_note: >-
+      S2 lists 178 individuals with CHD from this source; PMID:22969434's
+      abstract reports "464 individuals with 174 affecteds (37.5%) in 59
+      multiplex families and 8 trios". How S2's 178 relate to the individuals
+      that abstract reports is not stated.
+  - id: pmid22929023_cases
+    name: CHD case series of PMID:22929023
+    description: >-
+      123 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set; S2 gives the platform as CGH
+      array, Agilent CGH 44k/105k/180k oligo array.
+  - id: pmid26655555_cases
+    name: CHD case series of PMID:26655555
+    description: >-
+      91 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as a source of its CNV case set and cited there as Table S2 of
+      PMID:26655555; S2 gives the platform as Affymetrix Array 6.0.
+  - id: pmid18535492_22349727_cases
+    name: CHD case series of PMID:18535492 and PMID:22349727
+    description: >-
+      63 individuals with congenital heart disease, listed in PMID:34324492's
+      S2 Table as one source of its CNV case set and cited there under both
+      PMIDs; S2 gives the platform as CGH array.
   # Rewritten 2026-10-26. It published a curator's instruction ("and the page
   # must say so"), credited the study with a scope judgement it does not make,
-  # and gave a row's case set as 7,958 beside rows that count 7,107. Each clause
-  # now measured: the abstract quote against PubMed's text; S1 Table (CHD cases:
-  # 7,958 with a CNV of any type, 7,107 in the deletion analysis) and S2 Table
-  # (this series: 777; total 7,958) in the study's supplement; every one of the
-  # 121 mirror rows citing this cohort is a deletion row publishing 7,107 cases;
-  # S8 Table holds only the 528 significant genes; chd_scope.yaml has no
-  # "aneurysm" term (its "aort" matches are aortic valve terms and
-  # supravalvular aortic stenosis, both congenital).
+  # and gave a row's case set as 7,958 beside rows that count fewer. Each clause
+  # now measured: the abstract quote against PubMed's text; S2 Table (this
+  # series: 777; total 7,958) in the study's supplement; every one of the 121
+  # mirror rows citing this cohort is a deletion row; S8 Table holds only the
+  # 528 significant genes; chd_scope.yaml has no "aneurysm" term (its "aort"
+  # matches are aortic valve terms and supravalvular aortic stenosis, both
+  # congenital).
   #
-  # Reworded the same day: the last sentence said a row "is computed on the
-  # 7,107". The article's methods put the permutation test on a filtered set of
-  # 6,746 cases and 14,024 controls, which is neither S1 pair, so which set the
-  # statistic used is open (see `DENOMINATORS` in scripts/convert_audain2021.py)
-  # and the description now says only what the rows publish.
+  # The last sentence's denominator changed later the same day. It named the
+  # 7,107 cases in S1 Table's deletion column, which counts the cohort as
+  # assembled; the article's methods put the permutation test on the 6,746
+  # cases and 14,024 controls that remained after filtering, the rows now
+  # publish those, and the sentence names them (see `DENOMINATORS` in
+  # scripts/convert_audain2021.py). It still names no count of the 777 within
+  # that set, because nothing read in the study gives one.
   - id: taa_cases
     name: Sporadic thoracic aortic aneurysm case series (PMID 21092924)
     description: >-
@@ -96,8 +254,9 @@ cohorts:
       any of these probands also has a congenital heart lesion is not recorded
       here. The study's S8 table reports the CHD-only contribution separately,
       for the 528 genes that reached significance. The study puts this series
-      at 777 of its 7,958 cases; a row naming this cohort publishes the 7,107
-      cases the study's S1 Table gives for its deletion analysis.
+      at 777 of its 7,958 cases; a row naming this cohort is computed on the
+      6,746 cases and 14,024 controls that remained after the study's
+      filtering, as its methods state.
   - id: gain_controls
     name: Genetic Association Information Network (GAIN) controls
     description: >-

@@ -18,17 +18,21 @@ reasons.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from typing import Final
 
 from chd_atlas.build.burden import BurdenRow, shared_cohorts
 from chd_atlas.build.emit import Json
+from chd_atlas.models.cohort import Cohort
 
-# The threshold both states are read against. 0.05 is the *studies'* convention
-# and not the atlas's: every p-value and corrected p-value here was published
-# against it, and this module chooses no threshold of its own. Named rather than
-# inlined so the two call sites below cannot drift apart.
+# The threshold both states are read against, and the one number in the rule
+# `methods.html#rare-variants` states as the atlas's own (owner decision
+# 2026-10-26, W2), which renders it from here. This said 0.05 was "the
+# studies' convention and not the atlas's" until review (2026-10-27), which is
+# not true of a raw p: PMID:42230622's block tells a reader to judge its raw p
+# against its whole scan of 138,609 tests. Named rather than inlined so the two
+# call sites below, and the page that states the rule, cannot drift apart.
 ALPHA: Final = 0.05
 
 
@@ -45,12 +49,15 @@ class FamilyState(StrEnum):
     NOT_TESTED = "not_tested"
 
 
-def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
+def cohort_families(
+    rows: Iterable[BurdenRow], cohorts: Mapping[str, Cohort]
+) -> tuple[frozenset[str], ...]:
     """Studies grouped into sets that do not describe independent people.
 
     A family is a connected component of the graph whose nodes are studies and
-    whose edges are shared sample collections. `shared_cohorts` computes the
-    edges; this walks them.
+    whose edges are shared sample collections, and collections the registry
+    declares overlapping (`cohorts`, `Cohort.overlaps_with`). `shared_cohorts`
+    computes the edges; this walks them.
 
     **Transitivity is why this is a graph walk and not a pairwise read of
     `shared_cohorts`.** If A shares a collection with B and B with C, all three
@@ -59,11 +66,15 @@ def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
     mapping alone cannot say so.
 
     Measured 2026-08-05 over the committed corpus: three studies, three
-    singleton families, because they draw on disjoint collections. The
-    definition is therefore currently indistinguishable from "one family per
-    study" -- and it is written this way so that the day a fourth study reuses
-    DDD or PCGC, the merge happens with no code change, and nobody is ever told
-    that a reused cohort is independent evidence.
+    singleton families, because they cite disjoint collections. That read
+    "draw on disjoint collections" until owner decision 2026-10-27 (I3), and
+    the collections were not disjoint: PMID:34324492's `decipher` cases may
+    include DDD participants, and PMID:42230622 names `ddd`. Declared in the
+    registry, the overlap merges the two into one family -- two families now,
+    measured on a real build -- and nobody is told that a reused cohort is
+    independent evidence. The walk did not change for it; its inputs did: this
+    and `shared_cohorts` each gained the required `cohorts` parameter that
+    carries the declarations, so every caller now hands the registry in.
 
     Sorted on the sorted tuple of study ids. Components come out of a set walk,
     and `encode_json`'s `sort_keys` orders dict keys only, so an array derived
@@ -82,7 +93,7 @@ def cohort_families(rows: Iterable[BurdenRow]) -> tuple[frozenset[str], ...]:
             study = parent[study]
         return study
 
-    for left, right in shared_cohorts(materialised):
+    for left, right in shared_cohorts(materialised, cohorts):
         parent[find(left)] = find(right)
 
     grouped: dict[str, set[str]] = {}
@@ -232,6 +243,19 @@ def gene_concordance(
     one -- the rule `burden_payload` follows, for the same reason: an object
     whose shape varies is a trap for a consumer that reads a field off one gene
     and expects it on the next.
+
+    **Each family entry also carries `members`, every study's own state** (one
+    per study, sorted by study id, on every entry, a singleton's included), by
+    the same `family_state` rule over that study's rows alone. Added with
+    schema 2.19 (review, 2026-10-27) because I3 made a family of two studies,
+    and the browse strip's hover then attributed the family's state to both:
+    measured on a build of 5f7161b, 10 of the 119 browse rows read
+    "PMID:34324492, PMID:42230622: enriched, and survives this study's own
+    correction" where only PMID:34324492's rows survive (PMID:42230622
+    publishes no corrected p), and on 46 one of the two named studies has no
+    row for the gene at all. The family's `state` is the strongest of its
+    members' -- `family_state` over the union is the maximum over the parts --
+    and it stays what the glyph and the tally read.
     """
     by_study: dict[str, list[BurdenRow]] = {}
     for row in rows:
@@ -246,7 +270,11 @@ def gene_concordance(
         member_rows = [row for study in sorted(family) for row in by_study.get(study, ())]
         state = family_state(member_rows)
         states.append(state)
-        entries.append({"studies": sorted(family), "state": state.value})
+        members: list[Json] = [
+            {"study": study, "state": family_state(by_study.get(study, ())).value}
+            for study in sorted(family)
+        ]
+        entries.append({"studies": sorted(family), "state": state.value, "members": members})
 
     return {
         # The denominator, and the reason the tally cannot read as a verdict.

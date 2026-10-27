@@ -48,6 +48,32 @@
 # was invisible in the figure first checked. Do not drop them again without
 # re-measuring that cost.
 #
+# `syndrome: true` (owner decision 2026-10-26, R5) marks a term naming a
+# syndrome -- a disease with a heart malformation among its features -- rather
+# than heart disease itself, so a gene page can say a grade for it is a grade
+# for the syndrome as a whole. Curated, because no field said it: "congenital
+# heart disease with heterotaxy syndrome" carries the word and is CHD itself.
+# Set on the nine ClinGen-scoped terms that the ten genes graded at their
+# headline for a syndrome are graded for (Alagille, Holt-Oram, Kabuki 1 and 2,
+# CHARGE, Ellis-van Creveld, Mowat-Wilson, TARP, and NR2F2-related multiple
+# congenital anomalies/dysmorphic syndrome); an Orphanet-path term needs no
+# mark, its warrant already says it. Absent means false.
+#
+# REVIEW STATUS (owner's standing rule, 2026-10-27; `models/review.py`). Where
+# this atlas leaves a question about a term open rather than settling it, the
+# term carries `review_status` -- `pending_review` (a question about the term
+# left open for an expert: a conflict between the sources it rests on, or a
+# clinical judgement) or `not_accessible` (a source the term rests on could
+# not be read) -- and a `review_note` stating exactly what is unresolved, and
+# nothing more. Never assert either side, never speculate, never drop the term.
+# Both fields or neither: loading refuses one without the other. `scope.json`
+# publishes both (`null` where absent); no page renders them, since the owner
+# wants no speculation on a gene's card. The two terms marked today
+# (MONDO:1010098, MONDO:1060150, owner's answer of 2026-10-27) are
+# `pending_review` for a clinical judgement, not a source conflict: whether
+# each names a syndrome, left open for clinical review. Their `syndrome` mark
+# stays unset meanwhile.
+#
 # Neither mechanical rule works, which is why a selection exists at all:
 # filtering by ClinGen expert panel drops TBX5, NOTCH1 and CHD7 (their curating
 # panels are Syndromic Disorders, Hereditary Cardiovascular Disease and Hearing
@@ -97,6 +123,7 @@ diseases:
       criteria.
     admitted_by: clingen_expert_panel
     attributed_to: Kidney Cystic and Ciliopathy Disorders Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0007732
     label: Holt-Oram syndrome
@@ -106,6 +133,7 @@ diseases:
       mechanical rule would admit it.
     admitted_by: clingen_expert_panel
     attributed_to: Syndromic Disorders Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0007843
     label: Kabuki syndrome 1
@@ -114,6 +142,7 @@ diseases:
       feature. Curated by the SCID-CID GCEP.
     admitted_by: clingen_expert_panel
     attributed_to: SCID-CID Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0008504
     label: supravalvular aortic stenosis
@@ -151,6 +180,7 @@ diseases:
       Curated by the Hearing Loss GCEP.
     admitted_by: clingen_expert_panel
     attributed_to: Hearing Loss Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0009162
     label: Ellis-van Creveld syndrome
@@ -159,6 +189,7 @@ diseases:
       a cardinal feature.
     admitted_by: clingen_expert_panel
     attributed_to: Kidney Cystic and Ciliopathy Disorders Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0009341
     label: Mowat-Wilson syndrome
@@ -167,6 +198,7 @@ diseases:
       half.
     admitted_by: clingen_expert_panel
     attributed_to: Intellectual Disability and Autism Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0010465
     label: Kabuki syndrome 2
@@ -174,6 +206,7 @@ diseases:
       Kabuki syndrome 2: as Kabuki 1, allelic at KDM6A.
     admitted_by: clingen_expert_panel
     attributed_to: SCID-CID Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0010607
     label: heterotaxy, visceral, 1, X-linked
@@ -188,6 +221,7 @@ diseases:
       TARP syndrome: the A is atrial septal defect, named in the acronym.
     admitted_by: clingen_chd_panel
     attributed_to: Congenital Heart Disease Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0010753
     label: cardiac valvular dysplasia, X-linked
@@ -463,6 +497,7 @@ diseases:
       Disease GCEP.
     admitted_by: clingen_chd_panel
     attributed_to: Congenital Heart Disease Gene Curation Expert Panel
+    syndrome: true
     admitted_on: 2026-08-03
   - id: MONDO:0800476
     label: HAND2 related congenital heart defect
@@ -500,6 +535,13 @@ diseases:
     admitted_by: clingen_expert_panel
     attributed_to: Syndromic Disorders Gene Curation Expert Panel
     admitted_on: 2026-08-03
+    # Owner's answer, 2026-10-27: `syndrome` stays unset, and whether it
+    # should be set is recorded as open rather than decided here.
+    review_status: pending_review
+    review_note: >-
+      Whether this term names a syndrome -- which decides whether a gene page
+      calls a grade for it a grade for a syndrome as a whole -- is left open
+      for clinical review.
   - id: MONDO:1010144
     label: PLD1-related congenital heart disease
     reason: >-
@@ -570,6 +612,13 @@ diseases:
     admitted_by: clingen_expert_panel
     attributed_to: Hereditary Cardiovascular Disease Gene Curation Expert Panel
     admitted_on: 2026-10-25
+    # Owner's answer, 2026-10-27: `syndrome` stays unset, and whether it
+    # should be set is recorded as open rather than decided here.
+    review_status: pending_review
+    review_note: >-
+      Whether this term names a syndrome -- which decides whether a gene page
+      calls a grade for it a grade for a syndrome as a whole -- is left open
+      for clinical review.
   # Admitted on Orphanet's phenotype frequencies (issue #8 part 1, 2026-10-25):
   # a syndrome where structural CHD is frequent but not part of the diagnosis.
   # Each was nominated by a curator and is checked by SCP006 against

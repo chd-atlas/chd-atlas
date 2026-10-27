@@ -36,9 +36,10 @@ from chd_atlas.build.concordance import (
     cohort_families,
     evidence_axes,
     gene_concordance,
+    survives_own_correction,
 )
 from chd_atlas.build.emit import Emitter
-from chd_atlas.build.identity import GeneIdentity
+from chd_atlas.build.identity import read_gene_identities
 from chd_atlas.build.landing import build_landing
 from chd_atlas.build.literature import build_literature, build_sources
 from chd_atlas.build.manifest import source_commit, write_manifest
@@ -58,7 +59,7 @@ from chd_atlas.build.variants import build_variants
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.assertion import LesionAssertion
 from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
-from chd_atlas.tables import TABLE_SCHEMAS, read_table
+from chd_atlas.tables import TABLE_SCHEMAS, cell_text, read_table
 from chd_atlas.validate.runner import validate_repository
 from chd_atlas.validate.sources import load_sources
 
@@ -72,27 +73,6 @@ class BuildRefused(Exception):
     because a curator who ran `build` needs to know what to fix without being
     told to go and run a second command.
     """
-
-
-def _cell(value: object) -> str | None:
-    """One mirror cell as text, with blank and whitespace-only treated as absent.
-
-    `read_table` maps the empty string to null, so TBL003 catches `symbol` left
-    empty — and catches nothing when the cell holds a single space. A generated
-    mirror produces exactly that, and the space survived every check to be
-    published as the gene's browse label and its search result: a row rendering
-    as nothing, on a build reporting zero errors, against a `docs/data-api.md`
-    that promises `symbol` is "always a non-empty string you can render and
-    search". Found by adversarial review of #2.
-
-    Stripped rather than reported, because the fallback the caller already has —
-    keep the HGNC id — is better than either publishing the blank or refusing to
-    build over one stray character.
-    """
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _gene_registry(root: Path) -> dict[str, GeneLabels]:
@@ -126,7 +106,7 @@ def _gene_registry(root: Path) -> dict[str, GeneLabels]:
 
     registry: dict[str, GeneLabels] = {}
     for row in frame.to_dicts():
-        gene = _cell(row.get("hgnc_id"))
+        gene = cell_text(row.get("hgnc_id"))
         # Both `hgnc_id` and `symbol` are non-nullable in the schema, so a blank
         # here is a bypassed TBL003. The two blanks are not the same failure,
         # though. A row with no id has nothing to key the registry on and no
@@ -146,8 +126,8 @@ def _gene_registry(root: Path) -> dict[str, GeneLabels]:
         if gene is None:
             continue
         registry[gene] = GeneLabels(
-            symbol=_cell(row.get("symbol")) or gene,
-            name=_cell(row.get("name")),
+            symbol=cell_text(row.get("symbol")) or gene,
+            name=cell_text(row.get("name")),
             aliases=_pipes(row.get("aliases")),
             prev_symbols=_pipes(row.get("prev_symbols")),
         )
@@ -170,43 +150,6 @@ def _pipes(raw: object) -> tuple[str, ...]:
     if not raw:
         return ()
     return tuple(part.strip() for part in str(raw).split("|") if part.strip())
-
-
-def _gene_identities(root: Path) -> dict[str, GeneIdentity]:
-    """The identity columns of `mirrors/genes.tsv`, keyed on HGNC id. D52.
-
-    A second projection of the registry rather than more fields on
-    `GeneLabels`, which is the search vocabulary -- what a visitor might type --
-    and is consumed as such by `build_search`. These are what a bundle publishes
-    as `identity` and what a page shows and links by. Both read the same file
-    through the same `_cell` cleaning, so a whitespace-only cell is absent in
-    each.
-
-    The same empty fallbacks as `_gene_registry`, unreachable behind
-    `build_site`'s gate for the same reason.
-    """
-    path = root / "mirrors" / "genes.tsv"
-    if not path.is_file():
-        return {}
-    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
-    if frame is None or "hgnc_id" not in frame.columns:
-        return {}
-
-    identities: dict[str, GeneIdentity] = {}
-    for row in frame.to_dicts():
-        gene = _cell(row.get("hgnc_id"))
-        if gene is None:
-            continue
-        ncbi = row.get("ncbi_gene")
-        identities[gene] = GeneIdentity(
-            name=_cell(row.get("name")),
-            locus=_cell(row.get("locus")),
-            ensembl_gene=_cell(row.get("ensembl_gene")),
-            ncbi_gene=int(ncbi) if ncbi is not None else None,
-            uniprot=_cell(row.get("uniprot")),
-            mane_select=_cell(row.get("mane_select")),
-        )
-    return identities
 
 
 def _assertions_by_gene(corpus: Corpus) -> dict[str, list[LesionAssertion]]:
@@ -271,7 +214,11 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # decision already made.
     corpus, _ = load_curation(root)
     genes = _gene_registry(root)
-    identities = _gene_identities(root)
+    # The reader `chd-atlas validate` reports GEN004 through, so the two
+    # cannot read a cell two ways (review, 2026-10-27). `None` is an
+    # unreadable registry, which TBL008 refuses at the gate above; `{}` is
+    # then the fallback `_gene_registry` has, unreachable in the same way.
+    identities = read_gene_identities(root) or {}
 
     # Unreachable behind the gate above in the same way `_gene_registry`'s
     # empty-mirror fallback is: TBL012 is an error, so `validate_repository`
@@ -416,12 +363,12 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # genes would show different numbers of family slots and an untested dataset
     # would stop looking like one.
     all_burden_rows = [row for rows in burden.values() for row in rows]
-    families = cohort_families(all_burden_rows)
+    families = cohort_families(all_burden_rows, cohort_registry(corpus.cohorts))
     axes = evidence_axes(all_burden_rows)
     # One census, two consumers: the front page states it in prose and the
     # manifest publishes it as `counts`. Derived here rather than in either, so
     # neither can drift from the other.
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
     concordance = {
         gene: gene_concordance(burden.get(gene, ()), families) for gene in sorted(published)
     }
@@ -461,9 +408,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         pinned_structural_phenotypes(root, registry.ontology_files()),
     )
     build_scope(corpus.chd_scope, warrants, emitter)
-    # The site's reading notes (D50): the full scope rule and grade key the gene
-    # pages' short forms link to. Every page's nav links it, so a build that
-    # skipped this would publish a dead link on all of them.
+    # The site's reading notes (D50): the full forms of what the gene pages'
+    # short forms and chart toggles link to. Every page's nav links it, so a
+    # build that skipped this would publish a dead link on all of them.
     build_methods(emitter, cohorts=cohort_registry(corpus.cohorts))
     build_search(corpus, emitter, genes=genes, published=published)
     # One integer, handed to the front page here and to the manifest below, for
@@ -478,6 +425,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         profile_census=profile_stats,
         combined_results=combined_results,
         emitter=emitter,
+        # For the Orphadata citation's data version (R11), read off the files'
+        # own headers into `mirrors/sources.yaml` by the converter.
+        sources=registry,
     )
     # The HTML over everything above. Wired here and nowhere else: until this
     # call existed, `pages.py` was imported by its unit test alone, `build_landing`
@@ -515,6 +465,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         combined=combined,
         scope_warrants=warrants,
         scope_labels={str(e.id): e.label for e in corpus.chd_scope},
+        # The registry itself, for the card's line on a syndrome a ClinGen
+        # panel scoped (R5): it reads each term's `syndrome` mark and authority.
+        scope_terms={str(e.id): e for e in corpus.chd_scope},
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`
@@ -557,6 +510,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
             # row count -- the same convention as `burden_rows`.
             "burden_combined": combined_results,
             "cohort_families": census.families,
+            # The genes whose card lists a surviving result (R9), by the
+            # card's own predicate through `census`.
+            "burden_surviving_genes": census.surviving_genes,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],
         },

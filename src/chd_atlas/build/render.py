@@ -53,7 +53,9 @@ import html
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, assert_never
+
+from chd_atlas.models.review import ReviewStatus
 
 # What `data_table` accepts as a `data-*` attribute name. Deliberately narrower
 # than HTML permits: every name this build passes is a literal, so the only way
@@ -219,6 +221,13 @@ STYLESHEET: Final = """
     font-variant-numeric: tabular-nums; color: var(--evidence);
   }
   .figure-label { font-size: 0.85rem; color: var(--muted); }
+  /* A qualifier under a figure or a census card's value (`landing._REGISTRY_
+     QUALIFIER`): read with the number, so smaller and muted rather than in the
+     value's size and weight. `.stat dd.stat-note` is (0,2,1) against
+     `.stat dd`'s (0,1,1). */
+  .figure-note, .stat dd.stat-note {
+    font-size: 0.78rem; font-weight: 400; line-height: 1.3; color: var(--muted);
+  }
   .hero-note { margin: 0 0 1rem; font-size: 0.9rem; color: var(--muted); }
   .cta {
     display: inline-block; background: var(--evidence); color: var(--on-evidence);
@@ -248,7 +257,7 @@ STYLESHEET: Final = """
   .reading-notes { margin: 1rem 0; }
   .reading-notes summary { cursor: pointer; color: var(--muted); }
   .reading-notes summary:focus-visible, .cohort-notes summary:focus-visible,
-  .forest summary:focus-visible {
+  .forest summary:focus-visible, .chart-notes summary:focus-visible {
     outline: 2px solid var(--evidence); outline-offset: 2px;
   }
   .cohort-notes { margin: 1rem 0; font-size: 0.9rem; }
@@ -341,7 +350,7 @@ STYLESHEET: Final = """
   .forest { margin: 0.6rem 0; }
   .forest figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.25rem; }
   .forest figcaption p { margin: 0.25rem 0; }
-  .forest summary { cursor: pointer; color: var(--muted); }
+  .forest summary, .chart-notes summary { cursor: pointer; color: var(--muted); }
 """
 
 # The one piece of client-side behaviour on the site, and a literal so it does
@@ -425,8 +434,14 @@ RESEARCH_USE_NOTICE: Final = (
 # The apostrophe is `&#x27;` rather than a literal, because these strings are
 # interpolated into HTML by three call sites and one of them may one day put one
 # inside an attribute. `render` is where escaping decisions live.
+#
+# `corrected` read "survives that study's own correction" until review
+# (2026-10-27): a glyph is a cohort family's, and since owner decision
+# 2026-10-27 (I3) one family holds two studies, so "that study" had no single
+# referent. A family is `corrected` when a row of one of its studies survives
+# that row's own study's correction (`concordance.family_state`).
 EVIDENCE_STATE_LABELS: Final[dict[str, str]] = {
-    "corrected": "enriched, and survives that study&#x27;s own correction",
+    "corrected": "enriched, and a result survives its own study&#x27;s correction",
     "nominal": "enriched nominally, or no correction published",
     "no_enrichment": "tested, no enrichment detected",
     "not_tested": "not tested by that dataset",
@@ -460,6 +475,56 @@ EVIDENCE_POWER_CAVEAT: Final = (
     "&mdash; rare-variant tests routinely detect nothing for genes with overwhelming family and "
     "functional evidence."
 )
+
+
+# What an independent-datasets count can see, said wherever a page prints one:
+# the front page's figure (owner decision 2026-10-26, R12) and each gene card's
+# "Tested in N independent dataset(s)" line (owner answer 2026-10-27). One
+# definition, so the two cannot come to say it differently.
+# `concordance.cohort_families` groups studies through the collections their
+# rows name and the overlaps `curation/cohorts.yaml` declares, and through
+# nothing else: two studies whose case sets share people the registry does not
+# record -- PMID:34324492's S2 Table lists case sources no row names
+# (`methods.html#cohorts` counts them) -- count as two. Measured 2026-10-27: 2,
+# of three studies, two of them joined by the one overlap the registry declares
+# (DDD and DECIPHER) and by no shared collection.
+REGISTRY_QUALIFIER: Final = "(as far as the cohort registry records)"
+
+
+def review_status_label(status: ReviewStatus) -> str:
+    """The words a page prints for a review status, before its note.
+
+    One place, so the label after a description and the methods page's
+    sentence saying what each label marks (`methods._review_key`) cannot come
+    to name a status differently. Exhaustive: a status added to the vocabulary
+    and not here fails `mypy --strict` rather than rendering as nothing.
+    """
+    match status:
+        case ReviewStatus.PENDING_REVIEW:
+            return "Pending review"
+        case ReviewStatus.NOT_ACCESSIBLE:
+            return "Source not accessible"
+        case _:
+            assert_never(status)
+
+
+def review_status_note(record: str, status: ReviewStatus | None, note: str | None) -> str:
+    """A curated record's open question, for after its description; `""` where none.
+
+    The owner's standing rule (2026-10-27, `models/review.py`): a record
+    carrying a question this atlas leaves open says so where it is read. One
+    function, so the methods page's cohort list and a gene page's cohort notes
+    cannot come to word it differently. The label says which kind of question
+    (`review_status_label`), the note what is unresolved; the note is
+    curator's free text and is escaped. A status arriving without its note
+    means the model's refusal was bypassed, and that raises rather than
+    printing a label with nothing after it.
+    """
+    if status is None:
+        return ""
+    if note is None:
+        raise ValueError(f"{record}: review_status {status.value!r} has no review_note to render")
+    return f" <strong>{review_status_label(status)}:</strong> {html.escape(note)}"
 
 
 def evidence_legend(*, swatches: bool) -> str:

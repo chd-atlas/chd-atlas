@@ -219,7 +219,7 @@ class GeneRegistry:
 def _text(value: object) -> str | None:
     """One registry cell as text, with blank and whitespace-only treated as absent.
 
-    The same rule `build/runner.py::_cell` applies, and for the same reason: a
+    The same rule `tables.cell_text` applies, and for the same reason: a
     single space survives a `min_length` check and renders as nothing, so it
     would enter the index as a symbol matching a query nobody typed.
     """

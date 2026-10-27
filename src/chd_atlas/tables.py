@@ -78,6 +78,32 @@ class TableSchema:
         return {column.name: column.dtype for column in self.columns}
 
 
+def cell_text(value: object) -> str | None:
+    """One mirror cell as text, with blank and whitespace-only treated as absent.
+
+    `read_table` maps the empty string to null, so TBL003 catches `symbol` left
+    empty — and catches nothing when the cell holds a single space. A generated
+    mirror produces exactly that, and the space survived every check to be
+    published as the gene's browse label and its search result: a row rendering
+    as nothing, on a build reporting zero errors, against a `docs/data-api.md`
+    that promises `symbol` is "always a non-empty string you can render and
+    search". Found by adversarial review of #2.
+
+    Stripped rather than reported, because the fallback the caller already has —
+    keep the HGNC id — is better than either publishing the blank or refusing to
+    build over one stray character.
+
+    Here rather than in `build/runner.py`, where it was `_cell` until review
+    (2026-10-27): `build.identity.read_gene_identities` reads the registry's
+    identity columns for `chd-atlas validate` and for the build alike, and the
+    validator cannot import the build's runner, which imports it.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def read_table(
     path: Path, schema: TableSchema
 ) -> tuple[pl.DataFrame | None, list[ValidationIssue]]:
@@ -691,6 +717,18 @@ BURDEN = TableSchema(
         Column("count_unit", pl.String, allowed=_COUNT_UNITS),
         Column("n_case_carriers", pl.Int64, minimum=0),
         Column("n_cases", pl.Int64, minimum=1),
+        # Of `n_case_carriers`, how many are congenital heart disease cases,
+        # where the study's case set also holds cases of a condition outside
+        # this atlas's scope and the study counts its CHD cases' carriers apart
+        # (owner decision R2, 2026-10-26). Empty where it does not. Only the
+        # studies in `CHD_CASE_SPLITS` below may carry it (BUR024), and only
+        # PMID:34324492 is one: its case set combines CHD with a series of 777
+        # sporadic thoracic aortic aneurysm probands, and its S8 Table gives
+        # the "only CHD" case count for 521 of the 528 genes it lists, leaving
+        # 7 blank, which `convert_audain2021.py` transcribes. `source` still
+        # names the file the row's statistic came from. Same `count_unit` as
+        # `n_case_carriers`, and never above it (BUR003).
+        Column("n_chd_case_carriers", pl.Int64, nullable=True, minimum=0),
         # The comparator, and the fields each kind requires. `validate_burden`
         # enforces which of the next three must be present and which must be
         # empty; the schema alone cannot express that dependency.
@@ -745,6 +783,38 @@ BURDEN = TableSchema(
         "maf_max",
     ),
 )
+
+
+@dataclass(frozen=True)
+class CaseSplit:
+    """Where one study's `n_chd_case_carriers` comes from, and what it excludes.
+
+    `source` is the `mirrors/sources.yaml` id of the file the column is
+    transcribed from -- not the row's own `source`, which names the file its
+    statistic came from -- and `table` is that file's name as a gene page's
+    card prints it ("the study's S8 Table"). `other_case` is one case of the
+    condition outside this atlas's scope that the study's case set also holds,
+    with its article, as the card's sentence ends where every carrier is a CHD
+    case ("so none is an aneurysm proband").
+    """
+
+    source: str
+    table: str
+    other_case: str
+
+
+# The studies whose burden rows may carry `n_chd_case_carriers`, keyed by study
+# (owner decision R2). One definition for its three readers: `validate_burden`
+# refuses the column on any other study's row (BUR024); the validation runner
+# holds `source` to the registry wherever a row carries the column, as it holds
+# every row's own `source` (SRC003, SRC004); and `pages._chd_only` takes the
+# table and the excluded condition from here, so a card never names one study's
+# table, or its other condition, for another study's row.
+CHD_CASE_SPLITS: Final[dict[str, CaseSplit]] = {
+    "PMID:34324492": CaseSplit(
+        source="audain2021_s8", table="S8 Table", other_case="an aneurysm proband"
+    ),
+}
 
 # One study's own combination of two of its burden arms. Added 2026-10-24 for
 # PMID:40127276's JL-FDR meta-analysis, which `convert_sierant2025.py` declined to

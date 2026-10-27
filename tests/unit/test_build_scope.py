@@ -11,6 +11,7 @@ import pytest
 
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.scope import build_scope, scope_warrants
+from chd_atlas.models.review import ReviewStatus
 from chd_atlas.models.scope import ScopeEntry
 from chd_atlas.orphanet_scope import Annotation, OrphanetTables
 
@@ -47,6 +48,7 @@ _HOLT_ORAM = _entry(
     admitted_by="clingen_expert_panel",
     attributed_to="Syndromic Disorders Gene Curation Expert Panel",
     orphanet=None,
+    syndrome=True,
 )
 _NOONAN = _entry("MONDO:0018997", "Noonan syndrome")
 _NOONAN_4 = _entry("MONDO:0012547", "Noonan syndrome 4")
@@ -61,8 +63,21 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
     the Orphanet mirror on every build, so `scope.json` cannot drift from what
     Orphanet records. A ClinGen-path term carries `orphanet: null`, never an
     absent key (CLAUDE.md section 5: check with `is`, not only equality).
+
+    `syndrome` (R5, 2026-10-26) is the curated mark, a boolean on every term:
+    `true` on the marked Holt-Oram term, `false` where nobody marked one.
+
+    `review_status` and `review_note` (owner's standing rule, 2026-10-27) are a
+    term's open question, on one term of three here and `null` on the others,
+    never omitted.
     """
-    entries = [_NOONAN_4, _HOLT_ORAM, _NOONAN]
+    open_question = _NOONAN.model_copy(
+        update={
+            "review_status": ReviewStatus.PENDING_REVIEW,
+            "review_note": "Left open for clinical review.",
+        }
+    )
+    entries = [_NOONAN_4, _HOLT_ORAM, open_question]
     warrants = scope_warrants(entries, _TABLES, _STRUCTURAL)
     emitter = Emitter(root=tmp_path)
     build_scope(entries, warrants, emitter)
@@ -70,7 +85,18 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
 
     assert [term["id"] for term in terms] == ["MONDO:0007732", "MONDO:0012547", "MONDO:0018997"]
     assert terms[0]["orphanet"] is None
-    assert set(terms[0]) == {"id", "label", "admitted_by", "attributed_to", "orphanet"}
+    assert set(terms[0]) == {
+        "id",
+        "label",
+        "admitted_by",
+        "attributed_to",
+        "orphanet",
+        "syndrome",
+        "review_status",
+        "review_note",
+    }
+    assert terms[0]["syndrome"] is True
+    assert terms[1]["syndrome"] is False
     assert terms[1] == {
         "id": "MONDO:0012547",
         "label": "Noonan syndrome 4",
@@ -89,7 +115,13 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
                 }
             ],
         },
+        "syndrome": False,
+        "review_status": None,
+        "review_note": None,
     }
+    assert terms[1]["review_status"] is None and terms[1]["review_note"] is None
+    assert terms[2]["review_status"] == "pending_review"
+    assert terms[2]["review_note"] == "Left open for clinical review."
     assert terms[2]["orphanet"]["via"] == "direct"
     assert terms[2]["orphanet"]["omim"] is None
 

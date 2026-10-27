@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 from ruamel.yaml import YAML
 
-from chd_atlas.build.burden import load_burden
+from chd_atlas.build.burden import load_burden, shared_cohorts
 from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import CohortFile
 
@@ -87,6 +87,15 @@ def test_the_committed_registry_parses_and_covers_every_cited_cohort() -> None:
         "decipher",
         "isca",
         "taa_cases",
+        # PMID:34324492's S2 Table CHD case sources identified by PMID with 50
+        # or more cases (owner decision R12, 2026-10-26).
+        "pmid22318994_cases",
+        "pmid22939634_cases",
+        "pmid22912587_cases",
+        "pmid22969434_cases",
+        "pmid22929023_cases",
+        "pmid26655555_cases",
+        "pmid18535492_22349727_cases",
         "gain_controls",
         "wtccc_controls",
         "ottawa_controls",
@@ -161,3 +170,79 @@ def test_taa_cases_says_no_scope_term_is_an_aortic_aneurysm_and_none_is(corpus: 
     assert "outside this atlas's scope, which lists no aortic aneurysm" in description
     assert corpus.chd_scope, "no scope terms loaded; this guard would pass vacuously"
     assert [term.label for term in corpus.chd_scope if "aneurysm" in term.label.lower()] == []
+
+
+def test_ddd_and_decipher_are_declared_one_overlap_and_say_so(corpus: Corpus) -> None:
+    """Two claims in curated text, each held to the data (owner decisions W4, W5, I3).
+
+    `ddd` says "only one study cited today names it", a count that expires the
+    day a second study's rows cite the collection: measured 2026-10-26, every
+    mirrored row naming `ddd` is PMID:42230622's. It fails here then, and the
+    sentence is reworded rather than left false.
+
+    `ddd` and `decipher` both said the registry "cannot see" that DECIPHER's
+    cases may include DDD participants, true while the two were separate ids
+    and `shared_cohorts` compared ids. Owner decision 2026-10-27 (I3) declared
+    them overlapping (`overlaps_with`), which made that clause false. It is
+    dropped, not reworded: a page carrying both studies states the overlap in
+    its own notice, and the descriptions keep the reason -- DDD links its
+    participants into DECIPHER. This test held the old clause and is
+    re-pointed at the reason and the declaration. The declaration is what
+    links the real rows: a row citing `ddd` and a row citing `decipher`, from
+    two studies, overlap through it and through nothing else.
+    """
+    described = {cohort.id: cohort.description for cohort in corpus.cohorts}
+    assert "only one study cited today names it" in described["ddd"]
+    assert "plans to curate" not in described["ddd"]
+    rows = [row for rows in load_burden(REPO_ROOT).values() for row in rows]
+    naming = {row.study for row in rows if "ddd" in (*row.case_cohorts, *row.control_cohorts)}
+    assert len(naming) == 1, f"{sorted(naming)} name ddd; 'only one study' is false"
+
+    for cohort in ("ddd", "decipher"):
+        text = " ".join(described[cohort].split())
+        assert "may include DDD participants." in text, cohort
+        assert "cannot see that overlap" not in text, cohort
+    registry = {str(cohort.id): cohort for cohort in corpus.cohorts}
+    assert registry["ddd"].overlaps_with == ["decipher"]
+    assert registry["decipher"].overlaps_with == ["ddd"]
+    ddd = next(row for row in rows if "ddd" in row.case_cohorts)
+    decipher = next(row for row in rows if "decipher" in row.case_cohorts)
+    assert ddd.study != decipher.study
+    pair = tuple(sorted((ddd.study, decipher.study)))
+    overlap = shared_cohorts([ddd, decipher], registry)[pair]  # type: ignore[index]
+    assert overlap.shared == ()
+    assert shared_cohorts([ddd, decipher], {}) == {}
+
+
+@pytest.mark.parametrize(
+    ("ddd", "decipher", "match"),
+    [
+        pytest.param(["decipher"], [], "does not list ddd", id="one-sided"),
+        pytest.param(["ddd"], [], "overlap with itself", id="self"),
+        pytest.param(["gel"], [], "gel, which is not a cohort", id="unknown"),
+        pytest.param(["decipher", "decipher"], ["ddd"], "twice", id="repeated"),
+    ],
+)
+def test_a_declared_overlap_must_name_a_cohort_other_than_itself_on_both_ends(
+    ddd: list[str], decipher: list[str], match: str
+) -> None:
+    """`overlaps_with` is refused at load unless it is known, not self, and symmetric (I3).
+
+    It merges two studies into one cohort family on every page, so a typo'd
+    id, a cohort overlapping itself, or a declaration on one end only is a
+    malformed registry, reported when the file loads rather than published.
+    """
+    entries = [
+        {**_ENTRY, "overlaps_with": ddd},
+        {**_ENTRY, "id": "decipher", "name": "DECIPHER", "overlaps_with": decipher},
+    ]
+    with pytest.raises(ValidationError, match=match):
+        CohortFile.model_validate({"cohorts": entries})
+    CohortFile.model_validate(
+        {
+            "cohorts": [
+                {**_ENTRY, "overlaps_with": ["decipher"]},
+                {**_ENTRY, "id": "decipher", "name": "DECIPHER", "overlaps_with": ["ddd"]},
+            ]
+        }
+    )

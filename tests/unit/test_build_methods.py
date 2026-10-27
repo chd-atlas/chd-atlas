@@ -20,11 +20,14 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, cohort_registry, load_burden
+from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.methods import build_methods
 from chd_atlas.build.paths import METHODS_PAGE
-from chd_atlas.corpus import load_curation
+from chd_atlas.corpus import Corpus, load_curation
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
+from chd_atlas.vocab import Technology
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -43,13 +46,18 @@ def page(tmp_path_factory: pytest.TempPathFactory) -> str:
 # dropped sort fails here under every PYTHONHASHSEED (CLAUDE.md section 4.42),
 # and the names sort differently from the ids (D, G, U against c, d, u), so a
 # sort on the name fails too. Every curated field a reader sees carries a
-# character that must be escaped.
+# character that must be escaped. One cohort carries an open question (owner's
+# standing rule, 2026-10-27) and two do not, so a status rendered on every
+# cohort fails as surely as one rendered on none; it is the one with a url, so
+# the note's place between the description and the link is pinned too.
 _REGISTRY: Final = {
     "ukbb": Cohort(
         id="ukbb",
         name="UK Biobank & partners",
         description="Adults recruited at 40-69.",
         url="https://example.org/ukbb?a=1&b=2",
+        review_status=ReviewStatus.PENDING_REVIEW,
+        review_note="S2 lists <432> & the abstract 2,256.",
     ),
     "ddd": Cohort(
         id="ddd",
@@ -69,10 +77,16 @@ def cohort_page(tmp_path_factory: pytest.TempPathFactory) -> str:
 
 
 @pytest.fixture(scope="module")
-def registry() -> dict[str, Cohort]:
-    """The committed registry, loaded the way `runner.build_site` loads it."""
-    corpus, issues = load_curation(REPO_ROOT)
+def corpus() -> Corpus:
+    """The committed curation, loaded the way `runner.build_site` loads it."""
+    loaded, issues = load_curation(REPO_ROOT)
     assert issues == [], issues
+    return loaded
+
+
+@pytest.fixture(scope="module")
+def registry(corpus: Corpus) -> dict[str, Cohort]:
+    """The committed registry, loaded the way `runner.build_site` loads it."""
     return cohort_registry(corpus.cohorts)
 
 
@@ -122,17 +136,32 @@ def test_the_page_sits_at_the_site_root_under_its_own_title(page: str) -> None:
     assert "<h1>How to read this atlas</h1>" in page
     assert '<a href="genes/index.html">Genes</a>' in page
     assert '<a href="methods.html">How to read this atlas</a>' in page
-    assert '<h2 id="scope">' in page
+    # The sections in the order the introduction names them and a gene page
+    # renders them, and nothing else at that rank (written once all five
+    # existed, 2026-10-26; `#curated-evidence` made six the same day, E3, in
+    # gene-page order: a curated gene's evidence follows its validity table).
+    assert re.findall(r'<h2 id="([^"]+)"', page) == [
+        "scope",
+        "validity",
+        "curated-evidence",
+        "rare-variants",
+        "cohorts",
+        "expression",
+    ]
+    assert page.count("<h2") == 6
     # The page's own account of what it holds (CLAUDE.md section 4.29: a
     # summary that omits what the page publishes passes every other check).
     # The cohort list joined it on 2026-10-26, and the same day it stopped
     # claiming the list is every collection a study "draws on": it is what the
     # rows name (`test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`).
+    # The expression section joined it the same day, once the page held one,
+    # and the curated evidence with its own section (E3).
     assert (
         "<p>What every gene page assumes, written once: which genes are here and what each "
-        "classification means, how the validity records are listed, how to read the "
-        "rare-variant results, and every sample collection the "
-        "rare-variant results name.</p>"
+        "classification means, how the validity records are listed, what the atlas's own "
+        "curated evidence is, how to read the rare-variant results, every sample collection "
+        "the rare-variant results name, and how to read the developmental expression "
+        "figures.</p>"
     ) in page
 
 
@@ -174,7 +203,7 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     (2026-10-26). It read "for a disease that an external authority treats as
     congenital heart disease (or in which Orphanet records a structural heart
     malformation in at least 30% of cases)", which reads as a sufficient
-    condition the build does not apply: SCP007 lists 239 unnominated terms
+    condition the build does not apply: SCP007 listed 239 unnominated terms
     that would qualify on Orphanet's frequencies, FLNA's periventricular
     nodular heterotopia among them, and Orphanet's own GenCC submissions name
     Ebstein anomaly, which is not a scope term. So the fragments now include
@@ -201,11 +230,14 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
         "qualify is not in scope until it is listed. Here a structural heart malformation is a "
         "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
         "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
-        "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
-        "ductus arteriosus. The branches kept still hold some findings that are not "
-        "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
-        "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
-        "arch, are not counted. "
+        "tumours, the pericardium and the like), plus eight lesions the ontology files "
+        "elsewhere, with any subtypes: coarctation of the aorta, a patent ductus "
+        "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
+        "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
+        "The findings counted still include some that are not malformations, such as a "
+        "calcified or prolapsing valve, and aortic valve stenosis can be acquired; other "
+        "lesions the ontology files elsewhere, among them peripheral pulmonary artery "
+        "stenosis and an aortopulmonary window, are not counted. "
         "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
         "is any gene: every scope term names the authority it came from "
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
@@ -402,6 +434,48 @@ def test_validity_states_how_a_gene_page_lists_its_records(page: str) -> None:
     assert "Every classification in this atlas is an upstream" not in page
 
 
+def test_curated_evidence_says_what_an_assertion_is_and_that_it_changes_nothing_mirrored(
+    page: str,
+) -> None:
+    """The two sections only a curated gene's page carries (owner decision 2026-10-26, E3).
+
+    TBX5's page has "Curated evidence" and "Publications" and this page
+    explained every other section but those, while the card's "How to read
+    this page" promised it. Each clause read off the code that day:
+    `LesionAssertion` (lesion groups, inheritance, mechanism, syndromic status
+    -- the four rows the page's definition list renders), `Evidence` (one
+    required publication, a class, a strength of four values, the curator's
+    summary -- the table's four columns), `validity.published_genes` and
+    `derive.gene_facts` (the gate and the headline read the validity records
+    alone, D37), and `pages._evidence_section` (the publications cited, with
+    title and year).
+
+    **One clause of the owner's draft was false.** "Each claim tied to a
+    publication and quoted evidence": an evidence item's `summary` is the
+    curator's summary, not a quotation, and the record locates the passage
+    instead (`locator`), which no page renders. It says "summary".
+
+    Pinned whole, as a literal, and it names no count: a second curated gene
+    must not make it stale.
+    """
+    assert _section(page, "curated-evidence") == (
+        '<h2 id="curated-evidence">Curated evidence</h2>'
+        "<p>Where this atlas has curated a gene itself, its page carries a <strong>Curated "
+        "evidence</strong> section. Each entry is a <strong>lesion assertion</strong>: a "
+        "curator's record that the gene belongs to one or more congenital heart disease lesion "
+        "groups, with its inheritance, its mechanism and whether it is isolated, syndromic or "
+        "both. Each item of evidence behind an assertion cites one publication, and gives the "
+        "class of the evidence, its strength as the curator grades it (strong, moderate, "
+        "supporting or contradictory) and the curator's summary of what the publication "
+        "shows.</p>"
+        "<p>An assertion is this atlas's own work, and it <strong>changes nothing "
+        "mirrored</strong>: a gene is published, and its grade is headlined, on the upstream "
+        "validity records alone, so no assertion admits a gene or moves its grade. A curated "
+        "gene's page also has a <strong>Publications</strong> section, which lists every "
+        "publication its evidence cites, with its title and year.</p>"
+    )
+
+
 def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str) -> None:
     """The rare-variant reading notes, moved off every gene page (2026-10-26, D50).
 
@@ -493,17 +567,54 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     filled and muted, not hollow, so it says "a non-synonymous row". And the
     case-group paragraph called an unsplit study's `all cases` its "whole case
     set", a denominator equivalence no study's rows bear out (PMID:34324492's
-    count 7,107 of its 7,958 cases); it now says only that the group is not a
+    count 6,746 of its 7,958 cases); it now says only that the group is not a
     subgroup, and the old phrase is asserted absent.
+
+    **The first paragraph states the one rule the atlas applies** (owner
+    decision 2026-10-26, W2). It said the atlas "adds no assessment" of the
+    studies' numbers, while the card, the matrix and the forest fill each
+    decide what survives by `concordance.survives_own_correction`: not
+    synonymous, a raw p below 0.05 and a result pointing to enrichment in
+    cases, then a study-published corrected p below 0.05, both strictly. The
+    owner's draft gave the rule as "a row whose study-published corrected p is
+    below 0.05", which is the second half alone: a depleted row, or a
+    synonymous one, clears that and survives nothing.
+
+    **0.05 is the atlas's, and the page renders it from `concordance.ALPHA`**
+    (review, 2026-10-27). It read "at the 0.05 the studies themselves use",
+    which is false of a raw p: PMID:42230622's block tells a reader to judge
+    raw p against its whole scan. The literal below pins the published number
+    and the assertion beside it pins the rule's, so a change to either fails
+    here until the other is reconsidered.
+
+    **It names how wide a survival is** (owner decision 2026-10-26, R3): a
+    correction over a gene panel is not a genome-wide one, and the card says
+    which, beside the q. PMID:40127276's per-arm q is Benjamini-Hochberg over
+    its 248 panel genes, reproduced from Dataset S6 on every arm; the card
+    pins on TBX5 are in `test_built_site_is_consumable.py`.
     """
+    assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
     expected = [
         "Every count and statistic in a gene page's study tables is an upstream study's, "
-        "republished as published. The atlas computes none of them and adds no assessment "
-        "of them; where a study is by an author of this atlas, its block says so.",
+        "republished as published. The atlas computes none of them. It applies one rule of "
+        "its own, at 0.05: a row that is not synonymous "
+        "<strong>supports</strong> the gene when its result points to enrichment in cases and "
+        "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
+        "corrected p its study published is below 0.05 as well; a row whose study published "
+        "no corrected p survives none. A study's correction covers only the genes it was run "
+        "over: where those were a gene panel rather than the genome, the card says so beside "
+        "the corrected p, and marks any surviving row whose raw p is also below the threshold "
+        "the study itself states for genome-wide significance. A gene page's card lists the "
+        "rows that survive, the "
+        "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
+        "support, and a forest plot draws a surviving row filled. Where a study is by an "
+        "author of this atlas, its block says so.",
         "The atlas computes <strong>no pooled statistic across studies</strong>. Where two "
-        "studies draw on the same sample collection they describe partly the same people, "
-        "so combining their results would count those people twice; a gene page names any "
-        "sample collection its studies share, as this atlas has recorded them.",
+        "studies draw on the same sample collection they describe partly the same people, and "
+        "where they draw on collections this atlas records as overlapping they may, so "
+        "combining their results could count those people twice; a gene page names any "
+        "sample collection its studies share, and any overlap between theirs, as this atlas "
+        "has recorded them.",
         "In each study's table, <code>cases</code> and <code>controls</code> each show "
         "<em>observed / total</em> (for a row tested against a mutation model, "
         "<code>controls</code> is instead the count that model expected), and <strong>every "
@@ -614,6 +725,12 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
     "website" (2026-10-26): it leads to the collection's home page, and
     "source" beside a description read as the citation for it.
 
+    **A record's open question follows its description** (owner's standing
+    rule, 2026-10-27), before the link, escaped like every curated field, and
+    only on the record carrying one; the sentence saying what its label marks
+    precedes the list (review, 2026-10-27, M8; the next test holds when it
+    renders).
+
     The intro's numbers are pinned against the mirror and the registry by
     `test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not`; here
     they are only the literal the fixture renders, since the intro is a
@@ -623,20 +740,92 @@ def test_cohorts_lists_the_whole_registry_sorted_and_escaped(cohort_page: str) -
         '<h2 id="cohorts">Cohorts</h2>'
         "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
         "its curator recorded. A row may not name every collection its study drew on: the "
-        "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
-        "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
-        "partly the same people, and two that name none in common may still share people "
-        "this registry does not record. The same records are published as "
+        "rows for PMID:34324492 name 11 of the 189 case sources its S2 Table lists, and those "
+        "11 hold 6,211 of its 7,958 cases. Two studies that name the same collection describe "
+        "partly the same people; two that name collections this registry records as "
+        "overlapping may; and two that name neither may still share people this registry "
+        "does not record. The same records are published as "
         '<a href="cohorts.json"><code>cohorts.json</code></a>.</p>'
+        "<p>A record marked <strong>Pending review</strong> carries a question about it that "
+        "this atlas leaves open for an expert: its note states what is unresolved, and the "
+        "atlas takes no side.</p>"
         '<dl class="cohort-list">'
         "<dt>German Competence Network (<code>cnchd</code>)</dt><dd>German registry.</dd>"
         "<dt>Deciphering Developmental Disorders (DDD) (<code>ddd</code>)</dt>"
         "<dd>Enriched for &lt;b&gt;syndromic&lt;/b&gt; CHD &amp; more.</dd>"
         "<dt>UK Biobank &amp; partners (<code>ukbb</code>)</dt>"
-        '<dd>Adults recruited at 40-69. <a href="https://example.org/ukbb?a=1&amp;b=2">'
+        "<dd>Adults recruited at 40-69. <strong>Pending review:</strong> S2 lists "
+        '&lt;432&gt; &amp; the abstract 2,256. <a href="https://example.org/ukbb?a=1&amp;b=2">'
         "website</a></dd>"
         "</dl>"
     )
+
+
+# What `#cohorts` says each review label marks, as literals (CLAUDE.md section
+# 4.38); the pending one is also inside the literal above.
+_PENDING_KEY: Final = (
+    "A record marked <strong>Pending review</strong> carries a question about it that this "
+    "atlas leaves open for an expert: its note states what is unresolved, and the atlas "
+    "takes no side."
+)
+_NOT_ACCESSIBLE_KEY: Final = (
+    "A record marked <strong>Source not accessible</strong> rests on a source that could not "
+    "be read: its note states what that leaves unchecked, and the atlas does not guess at it."
+)
+
+
+@pytest.mark.parametrize(
+    ("marked", "key"),
+    [
+        pytest.param({}, "", id="none-marked"),
+        pytest.param(
+            {"ddd": ReviewStatus.NOT_ACCESSIBLE},
+            f"<p>{_NOT_ACCESSIBLE_KEY}</p>",
+            id="not-accessible-only",
+        ),
+        pytest.param(
+            {
+                "ukbb": ReviewStatus.NOT_ACCESSIBLE,
+                "ddd": ReviewStatus.PENDING_REVIEW,
+                "cnchd": ReviewStatus.NOT_ACCESSIBLE,
+            },
+            f"<p>{_PENDING_KEY} {_NOT_ACCESSIBLE_KEY}</p>",
+            id="both",
+        ),
+    ],
+)
+def test_the_cohort_list_says_what_a_review_label_marks_only_for_labels_it_prints(
+    tmp_path: Path, marked: dict[str, ReviewStatus], key: str
+) -> None:
+    """What "Pending review:" means, said where the label is printed (review, 2026-10-27, M8).
+
+    The list printed the label after two descriptions, and every gene page's
+    cohort fold links here, but no page said what it marks. A sentence
+    between the intro and the list now does, one per status some record
+    carries, in the vocabulary's order -- and none where no record carries
+    one, since a key to a label the page does not print defines nothing a
+    reader meets. `cohort_page` above pins the pending sentence alone, from a
+    registry marking only `ukbb`. Here the same registry with nothing marked,
+    with only the status the real registry has never carried, and with both,
+    the pending record (`ddd`) between two not-accessible ones: `ukbb` comes
+    first in the registry's insertion order and `cnchd` first by id, so a
+    sentence order taken from either, rather than from the vocabulary, puts
+    "Source not accessible" first and fails, and one sentence per record
+    rather than per status prints it twice.
+    """
+    registry = {
+        identifier: cohort.model_copy(
+            update={
+                "review_status": marked.get(identifier),
+                "review_note": "What is unresolved." if identifier in marked else None,
+            }
+        )
+        for identifier, cohort in _REGISTRY.items()
+    }
+    build_methods(Emitter(root=tmp_path), cohorts=registry)
+    section = _section((tmp_path / METHODS_PAGE).read_text(encoding="utf-8"), "cohorts")
+    intro_end = section.index("</p>") + len("</p>")
+    assert section[intro_end : section.index('<dl class="cohort-list">')] == key
 
 
 def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
@@ -646,7 +835,7 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
 
     **It claimed a completeness the registry does not have** until 2026-10-26:
     "every sample collection a rare-variant study in this atlas draws on". The
-    rows for PMID:34324492 name 4 collections, while that study's S2 Table
+    rows for PMID:34324492 named 4 collections, while that study's S2 Table
     lists 189 case sources holding 7,958 cases, of which those 4 hold 4,242
     (counted from the supplement's `s007.xlsx`, sheet "S2 Table": 189 source
     rows summing to its "N" row, 7,958). A reader told the list is complete
@@ -655,13 +844,20 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     every collection a row names -- and that a row may not name all its study
     drew on.
 
+    **11 and 6,211 since owner decision R12 (2026-10-26)**, which registered
+    the seven CHD case sources S2 identifies by PMID with 50 or more cases.
+    Each description opens with S2's own count for its source, and the literal
+    below is those counts as read from S2 on 2026-10-27 -- so a count mistyped
+    in a description, or two counts swapped between sources, fails here,
+    which the sum alone would not catch for a swap.
+
     Every figure in the sentence that the repository can check is checked:
 
     * "every sample collection a rare-variant row ... names" describes the list
       both ways: the registry is exactly the ids the mirror's rows cite;
-    * the 4 is that study's distinct case cohorts in the mirror;
-    * 4,242 is the sum of the counts those 4 descriptions open with (1,615,
-      1,221, 629 and 777), and 7,958 is the total `taa_cases` states.
+    * the 11 is that study's distinct case cohorts in the mirror;
+    * 6,211 is the sum of the counts those 11 descriptions open with, and
+      7,958 is the total `taa_cases` states.
 
     189 is the supplement's alone; nothing committed carries it.
     """
@@ -673,7 +869,26 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     )
     opening = [re.match(r"([\d,]+) ", registry[cohort].description) for cohort in named]
     assert all(opening), f"a description for {named} does not open with its case count"
-    held = sum(int(match.group(1).replace(",", "")) for match in opening if match)
+    counts = {
+        cohort: int(match.group(1).replace(",", ""))
+        for cohort, match in zip(named, opening, strict=True)
+        if match
+    }
+    # S2 Table's "Number of Individuals" for each source, read from `s007.xlsx`.
+    assert counts == {
+        "decipher": 1221,
+        "isca": 629,
+        "pmid18535492_22349727_cases": 63,
+        "pmid22318994_cases": 742,
+        "pmid22912587_cases": 340,
+        "pmid22929023_cases": 123,
+        "pmid22939634_cases": 432,
+        "pmid22969434_cases": 178,
+        "pmid26655555_cases": 91,
+        "signature": 1615,
+        "taa_cases": 777,
+    }
+    held = sum(counts.values())
     assert "777 of its 7,958 cases" in registry["taa_cases"].description
 
     intro = re.search(r'<h2 id="cohorts">Cohorts</h2><p>(.*?)</p>', real_page, re.S)
@@ -682,7 +897,189 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         f"the rows for PMID:34324492 name {len(named)} of the 189 case sources its S2 Table "
         f"lists, and those {len(named)} hold {held:,} of its 7,958 cases."
     ) in intro.group(1)
-    assert (len(named), held) == (4, 4242)
+    assert (len(named), held) == (11, 6211)
+
+
+def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -> None:
+    """The expression reading notes, moved off every gene page (2026-10-26, D50).
+
+    Six paragraphs, pinned whole. The first is the bulk-dilution notice in
+    full: a gene page keeps one line of it (`pages._BULK_TISSUE_NOTICE`,
+    one of the ten caveats the spec keeps visible) and links here. The next
+    two were the page's folded "How to read these figures" notes. The next
+    two define tau and the developmental phases, which 118 and 119 gene pages
+    print and nothing on the site defined until review (2026-10-26; each
+    clause's source is recorded in `methods._EXPRESSION`). The last states in
+    general the axes each chart's visible caption line states of its own
+    figure (D57), and is where the charts' "How to read this chart" toggles
+    link.
+
+    Each was re-read for a page with no gene, dataset or figure on it, and
+    reworded where its words assumed one: "below", "shown below", "on this
+    page" and "elsewhere on this page" name nothing here. Read against the
+    code and a build of 0fc451a (`methods._EXPRESSION` records each):
+
+    * the bulk claim is scoped to *developmental* expression, the profile
+      datasets the gene page's section renders, and held to every curated
+      dataset by
+      `test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say`;
+    * "the number of genes measured" is the number the grid was built from
+      (`Placement.n_genes`: 58,735 in every cell of E-MTAB-6814's grid);
+    * "a dataset's own detection floor" read as the source's, and the only
+      floor in the corpus is this atlas's curated choice
+      (`floor_source: "Curated, not mirrored"`). "its dataset's" read the same
+      way, so since review (2026-10-26) the paragraph says whose a floor is
+      and where `datasets.json` gives its value and basis, and the bulk
+      paragraph says "the detection floor"; the dataset that sentence names is
+      held to its record by
+      `test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own`;
+    * the reference distribution changes shape "over development", not "as
+      the heart matures": every organ's grid moves -- liver's 90th percentile
+      is 24 tpm at 4 wpc and 5 at adolescence, heart's 28 and 6;
+    * the small multiples share one axis *within a dataset*
+      (`_small_multiples` fits one per dataset block), and a trajectory follows
+      one cardiac organ, its axis fitted to the gene's placed medians there;
+    * tau's 0 and 1 are the formula's bounds, and no value between is glossed:
+      D39(c) keeps every adjective about a tau off the site;
+    * the phases' source is named in the form the trajectory's key renders
+      `attributed_to`, and a stage matches a phase on `start <= wpc < end`.
+
+    Pinned whole rather than paragraph by paragraph, for the reason
+    `#rare-variants` is: a `findall` over `<p>` skips an appended `<p class=...>`
+    or `<details>`.
+    """
+    assert _section(page, "expression") == (
+        '<h2 id="expression">Developmental expression</h2>'
+        '<p class="notice-inline"><strong>Every developmental expression measurement in this '
+        "atlas is from bulk tissue, never a single cell type.</strong> An embryonic heart "
+        "sample mixes cardiomyocytes with endocardium, epicardium, cardiac neural crest, "
+        "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
+        "lineage &mdash; the cardiac neural crest and outflow tract, the second heart field, "
+        "the conduction system. A gene expressed intensely in one such lineage can still read "
+        "low, or fall below the detection floor, once diluted across the sample: "
+        "a low or absent bulk figure is not evidence that a gene is unimportant to heart "
+        "development.</p>"
+        "<p>A gene's median abundance in an organ is placed against that organ's own "
+        "percentile grid for the same dataset and developmental stage, and the number of "
+        "genes that grid was built from travels with every percentile a gene page shows. No "
+        "percentile is published for a median below its dataset's detection floor, because "
+        "the rank of an unreliable measurement is not itself a measurement. A detection floor "
+        "is a threshold this atlas records per dataset, not necessarily one its source "
+        "declares: where a source declares none, as the Expression Atlas declares none for "
+        "E-MTAB-6814, the atlas chooses one, and every developmental dataset's record in "
+        '<a href="datasets.json"><code>datasets.json</code></a> gives its floor and where '
+        "that floor comes from.</p>"
+        "<p>Percentiles in this atlas are <strong>not comparable across organs or across "
+        "developmental stages</strong>: each organ transcribes a different fraction of the "
+        "whole gene set, and an organ's reference distribution itself changes shape over "
+        "development. A high percentile shown for one organ or stage says nothing about a "
+        "lower one shown for another.</p>"
+        "<p><strong>τ</strong> (tau; Yanai et al. 2005) measures how concentrated a gene's "
+        "expression is across the organs a dataset sampled at one stage, computed on "
+        "log2(median + 1): it is 0 when every organ's median is equal, and 1 when one organ's "
+        "median is above zero and every other's is zero. It says nothing about <em>which</em> "
+        "organ, so beside it a gene page names the organ with the highest median, or says the "
+        "peak is tied. Every organ's median counts, even one below the detection floor; the "
+        "floor decides only whether τ is published at all, and it is not when every organ "
+        "sampled is below it. Where a stage has no τ, the page says why in its place, and each "
+        "gene's JSON carries the formula and the medians beside every τ it publishes.</p>"
+        "<p>A stage's <strong>developmental phases</strong> are the phases of heart "
+        "morphogenesis under way at its age, from a vocabulary transcribed from Buijtendijk "
+        "MFJ, Barnett P, van den Hoff MJB (2020), PMID:32048790. A phase runs from the start "
+        "of one Carnegie stage the review names to the end of another. Each boundary is "
+        "converted to weeks post conception from the day ranges the Human Developmental "
+        "Stages ontology gives its Carnegie stage, not read off the review's prose, which "
+        "counts weeks ordinally: its &ldquo;sixth week&rdquo; is five to six weeks elapsed. "
+        "Where the review names no end, as for heart looping, the atlas derives one from the "
+        "phase's Gene Ontology definition. A stage names every phase under way at its age, "
+        "from the phase's start up to but not including its end, so one stage can name "
+        "several; a stage no phase covers names none and says why, for example that it is "
+        "post-natal or after the curated window. A chart following one cardiac organ shades "
+        "each phase from the first stage "
+        "that names it to the last, and its folded key names the phases and their "
+        "source.</p>"
+        "<p>Every expression chart lays its stages out left to right in curated developmental "
+        "order, evenly spaced: the axis is <strong>order, not elapsed time</strong>. Within a "
+        "dataset, a gene's small multiples &mdash; one panel per organ with a placed "
+        "measurement &mdash; share <strong>one abundance axis</strong>, which is what makes a "
+        "gene concentrated in one organ look different from a broadly expressed one; a "
+        "per-organ axis would rescale every line to its own range and hide exactly that "
+        "difference. A chart following one cardiac organ across a dataset's stages fits its "
+        "vertical axis to the gene's own placed medians in that organ, so a curve's height "
+        "compares nothing to another gene's.</p>"
+    )
+
+
+def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(
+    corpus: Corpus,
+) -> None:
+    """`#expression` opens "Every developmental expression measurement in this
+    atlas is from bulk tissue", and so does every gene page's short form.
+
+    Both are unconditional by design -- a caveat beside only the bad news reads
+    as an excuse -- so neither reads the data it describes. This is what does:
+    a dataset of any other technology (single-cell, proteomics) can make both
+    sentences false, and fails here rather than on a reader. Measured
+    2026-10-26: one curated dataset, E-MTAB-6814, `bulk_rnaseq`.
+
+    **Every curated dataset, whatever its design** (review, 2026-10-26). It
+    checked profile datasets alone, while the sentence covers every
+    developmental measurement in the atlas, and a contrast dataset of
+    developmental tissue is one; nothing in a dataset's record says whether
+    its tissue is developmental, so the check takes them all. The error runs
+    the safe way: a bulk microarray, or an adult contrast dataset, fails here
+    though the sentence may still be true, and a person re-reads it; the
+    opposite error would publish a false sentence.
+    """
+    assert corpus.datasets, "no dataset curated; the check would pass vacuously"
+    other = sorted(
+        f"{dataset.id} ({dataset.technology.value}, {dataset.design.value})"
+        for dataset in corpus.datasets
+        if dataset.technology is not Technology.BULK_RNASEQ
+    )
+    assert not other, (
+        "re-read methods.html#expression's 'Every developmental expression measurement in "
+        "this atlas is from bulk tissue' and the gene page's 'Every measurement below "
+        f"is from bulk tissue' (pages._BULK_TISSUE_NOTICE) against: {other}"
+    )
+
+
+def test_the_dataset_the_floor_sentence_names_declares_no_threshold_of_its_own(
+    corpus: Corpus,
+) -> None:
+    """`#expression` says "the Expression Atlas declares none for E-MTAB-6814,
+    the atlas chooses one" (2026-10-26), and that is a fact about one record.
+
+    Unconditional, like the bulk claim, so it reads no data; this does. A
+    curator who found the Atlas's own threshold and recorded it would make the
+    sentence false, and the record's `floor_source` is where that would show.
+    """
+    record = next(dataset for dataset in corpus.datasets if dataset.id == "E-MTAB-6814")
+    assert record.detection_floor is not None
+    assert (record.floor_source or "").startswith(
+        "Curated, not mirrored: the Expression Atlas declares no threshold for this experiment."
+    ), record.floor_source
+
+
+def test_the_phase_paragraph_names_the_source_and_the_derived_end_the_curation_records(
+    corpus: Corpus,
+) -> None:
+    """`#expression` names the phases' source as the trajectory's key renders it
+    and says the review names every end but heart looping's (2026-10-26).
+
+    Both are facts about `curation/cardiac_phases.yaml`, which this page is
+    built without, so this holds the sentence to the file: a new source, or a
+    second phase whose end is derived or unstated, makes the paragraph false.
+    """
+    phases = corpus.cardiac_phases
+    assert phases is not None and phases.phases, "no phase vocabulary curated"
+    assert (phases.attributed_to, phases.citation) == (
+        "Buijtendijk MFJ, Barnett P, van den Hoff MJB (2020)",
+        "PMID:32048790",
+    )
+    assert {
+        phase.id: phase.end_basis for phase in phases.phases if phase.end_basis != "stated"
+    } == {"heart_looping": "derived"}
 
 
 @pytest.mark.parametrize("built", ["page", "real_page"])
@@ -715,18 +1112,36 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
         "these cohorts overlap",
         # The tables round to three significant figures (2026-10-26).
         "exactly as published",
+        # The card, the matrix and the forest fill apply a rule of the atlas's
+        # own, which `#rare-variants` states (owner decision 2026-10-26, W2).
+        "adds no assessment",
+        # No study here treats a raw p below 0.05 as significant (review,
+        # 2026-10-27): the threshold is the atlas's.
+        "the studies themselves use",
+        # `ddd`'s description published a plan a reader cannot check (owner
+        # decision 2026-10-26, W4); `#cohorts` renders it on the real page.
+        "plans to curate",
         # A shared collection may be adult controls (2026-10-26).
         "the same children",
         # True of one study, stated in general (2026-10-26).
         "uncorrected scale",
         # `all cases` is not a study's denominator (2026-10-26): PMID:34324492's
-        # rows count 7,107 of its 7,958 cases, PMID:40127276's 3,887 trios or an
+        # rows count 6,746 of its 7,958 cases, PMID:40127276's 3,887 trios or an
         # allele total against 11,555 probands.
         "whole case set",
         # The forest key's own deictics: no panel and no study is in sight here,
         # so its clauses are restated in general, never pasted (D57).
         "in this panel",
         "this study's",
+        # The expression notes' deictics (2026-10-26): the gene page's bulk
+        # notice, its reading notes and its percentile notice, and the band and
+        # spark captions' -- no figure, organ or gene is in sight here (D50,
+        # D57). "this dataset" is not among them: the inlined stylesheet says it.
+        "Every measurement below",
+        "shown below",
+        "on this page",
+        "this organ",
+        "for this gene",
     ],
 )
 def test_no_sentence_the_move_retired_comes_back_here(

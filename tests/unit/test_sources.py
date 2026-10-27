@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from chd_atlas.validate.sources import load_sources
 
 SOURCES_YAML = """\
@@ -207,3 +209,34 @@ def test_prohibited_source_used_by_a_mirror_is_reported(tmp_path: Path) -> None:
 
     assert [i.code for i in issues] == ["SRC004"]
     assert "clinvar" in issues[0].message
+
+
+@pytest.mark.parametrize(
+    ("fields", "accepted"),
+    [
+        pytest.param('    file_version: "1.3.42"\n    file_date: "2026-06-23"\n', True, id="both"),
+        pytest.param('    file_version: "1.3.42"\n', False, id="version without date"),
+        pytest.param('    file_date: "2026-06-23"\n', False, id="date without version"),
+        pytest.param('    file_version: "  "\n    file_date: "2026-06-23"\n', False, id="blank"),
+    ],
+)
+def test_a_files_own_version_and_date_are_declared_together(
+    tmp_path: Path, fields: str, accepted: bool
+) -> None:
+    """R11: a file's header version cites as little without its date as the reverse.
+
+    `file_version` and `file_date` are what an Orphadata file states in its
+    `<JDBOR>` header, written by the converter as a pair; one alone, or one
+    that is blank, is a malformed entry reported as SRC002 rather than
+    published as half a citation.
+    """
+    _write_sources(
+        tmp_path,
+        SOURCES_YAML.replace(
+            "    licence: public-domain\n", fields + "    licence: public-domain\n"
+        ),
+    )
+
+    _, issues = load_sources(tmp_path)
+
+    assert [i.code for i in issues] == ([] if accepted else ["SRC002"])

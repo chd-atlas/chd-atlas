@@ -83,6 +83,7 @@ EXHAUSTIVE: dict[str, str] = {
     "### The bundle's `burden_combined` array: one study's own combination of its arms": (
         "combined_row"
     ),
+    "### The bundle's `burden` array: per study, never pooled": "burden_row",
     "## `scope.json`": "scope_term",
 }
 
@@ -202,6 +203,11 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
         # The documented example is an Orphanet-path subtype, so the published
         # term compared against it is the same one: every key, warrant included.
         return dict(next(t for t in load("scope.json")["terms"] if t["id"] == "MONDO:0012547"))
+    if kind == "burden_row":
+        # TAB2, the documented row's gene. Its first row is PMID:34324492's,
+        # not the documented one, which the key-set comparison does not mind:
+        # every row carries every key (`burden.burden_payload`).
+        return dict(load("genes/HGNC_17075.json")["burden"][0])
     if kind == "combined_row":
         # TBX5 again: it carries PMID:40127276's rows, so its first combined
         # object is that study's damaging-class combination.
@@ -557,15 +563,17 @@ def test_the_burden_census_in_the_doc_is_the_census_the_build_publishes(site: Pa
     design = {"control_cohort": "case-control"}[empty[0]["comparator"]]
     assert f"{symbols[empty[0]['gene']]}'s {named} {design} row" in section
 
-    # PMID:34324492's denominators, which the doc sets against the filtered set
-    # its article's methods describe. Every row of that study carries the same
-    # two, so the doc can state them once.
+    # PMID:34324492's denominators, which the doc names as the filtered set its
+    # article's methods put the test on. Every row of that study carries the
+    # same two, so the doc can state them once. Until 2026-10-26 the rows
+    # carried S1 Table's deletion column instead and the doc called the choice
+    # open; a mirror re-run from a converter reverted to S1 fails here.
     cnv = [r for r in mirror if r["study"] == "PMID:34324492"]
     [n_cases] = {int(r["n_cases"]) for r in cnv}
     [n_controls] = {int(r["n_controls"]) for r in cnv}
     assert (
-        f"For `PMID:34324492` that last step is open. Its rows publish the {n_cases:,} cases "
-        f"and {n_controls:,} controls the study's S1 Table gives" in section
+        f"For `PMID:34324492` they are the {n_cases:,} cases and {n_controls:,} controls that "
+        "the article's methods say remained after filtering" in section
     )
 
 
@@ -608,6 +616,26 @@ def test_the_independent_datasets_section_states_the_shape_the_build_publishes(
     assert "never be rendered as one" in section
     assert "never `len(families)`" in section
     assert "KDM6A causes Kabuki syndrome" in section
+
+    # **How many families, read off the build** (review, 2026-10-27). The
+    # section said "three today" and "three `not_tested` entries" for a release
+    # after I3 made them two: nothing here read the count, only the states, the
+    # denominator and the obligations, so a sentence stating a number passed
+    # beside a build publishing another.
+    [count] = {len(gene["families"]) for gene in published}
+    assert f"one entry per cohort family in the whole corpus** — {_WORDS[count]} today" in section
+    assert f"A gene no study reported gets {_WORDS[count]} `not_tested` entries" in section
+
+    # `members` (2.19): every study of the family, in its order, and the family's
+    # state the strongest of theirs -- the claim the section makes, on what ships.
+    rank = ["not_tested", "no_enrichment", "nominal", "corrected"]
+    for gene in published:
+        for family in gene["families"]:
+            assert [member["study"] for member in family["members"]] == family["studies"]
+            assert family["state"] == max(
+                (member["state"] for member in family["members"]), key=rank.index
+            )
+    assert "Attribute a state to a study from `members`, never from the family" in section
 
 
 def test_the_omics_section_documents_profiles_stratified_top_not_ranked_by_significance() -> None:
@@ -1014,6 +1042,51 @@ def test_the_cohorts_example_quotes_the_record_the_build_publishes(site: Path) -
     assert published["description"].startswith(quoted)
 
 
+@pytest.mark.parametrize(
+    ("heading", "payload", "key", "pattern"),
+    [
+        ("## `cohorts.json`", "cohorts.json", "cohorts", r"`(pmid\w+)`"),
+        ("## `scope.json`", "scope.json", "terms", r"(MONDO:\d+)"),
+    ],
+)
+def test_the_review_status_bullets_name_the_records_the_build_marks(
+    site: Path, heading: str, payload: str, key: str, pattern: str
+) -> None:
+    """Each section's `review_status` bullet names its records with an open question.
+
+    Names, not a count, are what a reader acts on, and a count written beside
+    them ("Two records carry one today") expires the day a curator marks a
+    third. Read from the bullet itself, so a record marked or cleared in the
+    curation fails here until the bullet is reworded. Measured on the build it
+    was written against: two cohorts and two scope terms, each `pending_review`.
+
+    **The bullet ends where its paragraph does**, at the next bullet or a
+    blank line, found in the raw text and asserted found. It was sliced from
+    the whitespace-collapsed section up to the next `" - "`, which `find`
+    misses after a section's last bullet: `cohorts.json`'s ran to the end of
+    the section, and a name moved out of the bullet into the paragraph after
+    it passed the full suite (review, 2026-10-27, mutant M26).
+    """
+    doc = DOC.read_text()
+    section = doc[doc.index(heading) : doc.index("\n## ", doc.index(heading) + len(heading))]
+    start = section.index("- `review_status` and `review_note`")
+    ends = [end for end in (section.find("\n- ", start), section.find("\n\n", start)) if end != -1]
+    assert ends, f"the review_status bullet under {heading} has no end inside its section"
+    bullet = " ".join(section[start : min(ends)].split())
+    marked = sorted(
+        record["id"]
+        for record in json.loads((site / payload).read_text())[key]
+        if record["review_status"] is not None
+    )
+    assert marked, f"no {payload} record carries a review status; this checks nothing"
+    assert sorted(set(re.findall(pattern, bullet))) == marked
+    assert f"{_WORDS[len(marked)].capitalize()} " in bullet
+    # Review, 2026-10-27 (D1): the cohorts bullet defined `pending_review` as
+    # "the sources disagree", false for the two scope terms it also marks, and
+    # the words are the label of the `has_source_discordance` chip.
+    assert "sources disagree" not in bullet.lower()
+
+
 def test_the_contested_section_names_each_contested_gene_and_what_its_headline_is(
     site: Path, mirrored: dict[str, GeneValidity]
 ) -> None:
@@ -1303,13 +1376,22 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     had narrowed it to the terms the atlas lists; and it said the gene
     index's cells "are plain text, not chips" beside a `conflicting evidence`
     chip on every contested row. Each is pinned to a literal and to the page,
-    and each retired wording is asserted absent from the doc.
+    and each retired wording is asserted absent from the doc. So are the gene
+    page's short forms and the labels of its links to `methods.html`, which
+    the doc quotes so a reader can find them on the page.
     """
     doc = " ".join(DOC.read_text().split())
     pages = {path.stem: path.read_text() for path in sorted((site / "genes").glob("HGNC_*.html"))}
 
     quoted = re.search(r'the reason: "(Graded for [^"]+)"', doc)
     assert quoted, "the doc must still quote the card's Orphanet line"
+    # Owner decision R2: the doc quotes the card's S8 sentence; GATA4's card has it.
+    s8 = (
+        "For this gene, the study's S8 Table counts every carrier among its CHD cases, so "
+        "none is an aneurysm proband."
+    )
+    assert f'shows: "{s8}"' in doc
+    assert s8 in _card_paragraph(pages["HGNC_4173"], "card-note")
     scope_lines = {_card_paragraph(page, "card-scope") for page in pages.values()}
     assert quoted.group(1) in scope_lines
     assert "Graded for Noonan syndrome as a syndrome" not in doc
@@ -1348,15 +1430,60 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
         "OR ∞ (CI 0.786–∞)",
         "OR ∞ (95% CI 28.1–∞)",
         "About these cohorts, and the caveats recorded for them",
-        "not fully split",
+        "row is a union, and this study published no non-syndromic · loss-of-function row "
+        "for this gene.",
+        # The matrix label's mark for a family's study with no row for the
+        # gene, and EVC2's card scope line, whose panel graded EVC rather than
+        # EVC2 (both review, 2026-10-27).
+        "(no row for this gene)",
+        "in scope on ClinGen's Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+        "Panel's curation of it for EVC.",
+        # The overlap notice the doc says a declared overlap renders (review,
+        # 2026-10-27: the doc named only a shared collection as its trigger).
+        "collections this atlas records as overlapping, so their results may describe partly "
+        "the same people and must not be combined",
     ):
         assert literal in doc.replace("*", ""), literal
         assert literal in html.unescape(every_page), f"no page renders {literal!r}"
+    # The short forms and toggles the doc names (2026-10-26), against the text a
+    # reader sees: tags stripped with no space, because two carry a `<strong>`.
+    # Each link label is pinned with the anchor the doc says it opens.
+    shown = html.unescape(re.sub(r"<[^>]+>", "", every_page))
+    for sentence in (
+        "Every count and statistic in the study tables below is an upstream study's, "
+        "republished as published; the atlas computes none of them.",
+        "The atlas computes no pooled statistic across studies: pooling two that share a "
+        "sample collection would count the same people twice, and pooling two that draw on "
+        "collections this atlas records as overlapping could.",
+        "A cell names the most significant of the rows behind its state; the card lists a "
+        "study's surviving rows with a damaging union before its parts, so the two can lead "
+        "with different rows.",
+        "Declaration: this study is by an author of this atlas; its results are republished "
+        "as published and read by the same rule as every other study's.",
+        "Illumina reports no known disease relationship for congenital heart defects, "
+        "multiple types, 6 (2021); see the validity table.",
+        "Every measurement below is from bulk tissue: a low or absent figure is not "
+        "evidence a gene is unimportant to heart development.",
+    ):
+        assert f'"{sentence}"' in doc, sentence
+        assert sentence in shown, f"no page renders {sentence!r}"
+    for anchor, label in (
+        ("", "How to read this page"),
+        ("#rare-variants", "How to read these results"),
+        ("#rare-variants", "How to read rare-variant results"),
+        ("#expression", "How to read these figures"),
+        ("#expression", "How to read expression figures"),
+        ("#curated-evidence", "How to read curated evidence"),
+    ):
+        assert f"*{label}*" in doc, label
+        assert f'<a href="../methods.html{anchor}">{label}</a>' in every_page, label
+    assert "*How to read this chart*" in doc
+    assert "<summary>How to read this chart</summary>" in every_page
     methods = _text_of((site / "methods.html").read_text())
     assert "a flag on the gene, not on a disease" in methods
     assert "Both are flags on the gene, not on a disease" in doc
     # An unsplit study's `all cases` is not its whole case set: PMID:34324492's
-    # rows count 7,107 of its 7,958 cases. The doc restated `#rare-variants`'
+    # rows count 6,746 of its 7,958 cases. The doc restated `#rare-variants`'
     # retired "whole case set" until review on 2026-10-26.
     assert "all cases is its only case group: every case the row counts, not a subgroup" in (
         methods

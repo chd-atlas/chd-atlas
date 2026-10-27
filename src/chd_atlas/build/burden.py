@@ -14,8 +14,8 @@ page's job is to label them, not to choose between them.
 
 The one thing that is *not* published is anything this atlas computed. There is
 no pooled p-value across studies and no per-gene summary verdict, because the
-CHD literature reuses cohorts -- DDD contributed to several of the papers this
-atlas plans to curate, though only one cited today names it -- so a pooled
+CHD literature reuses cohorts -- DDD contributed to more than one CHD exome
+study, though only one cited today names it (`curation/cohorts.yaml`) -- so a pooled
 statistic would count the same children twice. `shared_cohorts` is the
 alternative: it names the overlap instead of pretending it away, and it
 derives nothing beyond a set intersection over what each study already declared.
@@ -23,14 +23,15 @@ derives nothing beyond a set intersection over what each study already declared.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 from chd_atlas.build.emit import Emitter, Json
 from chd_atlas.build.paths import COHORTS
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import check_review
 from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
 
 # The order strata are presented in, everywhere. Not alphabetical, which would
@@ -70,6 +71,10 @@ class BurdenRow:
     by `validate/burden.py`, and reshaping them here into, say, a union type
     would move that check into the build, where a violation raises mid-write
     instead of being reported by the gate.
+
+    `n_chd_case_carriers` sits last, out of the schema's order, only because a
+    field with a default must follow those without; `load_burden` always
+    passes it.
     """
 
     study: str
@@ -100,6 +105,7 @@ class BurdenRow:
     control_cohorts: tuple[str, ...]
     method_note: str | None
     source: str
+    n_chd_case_carriers: int | None = None
 
 
 def _cohorts(value: object) -> tuple[str, ...]:
@@ -212,14 +218,30 @@ def load_burden(root: Path) -> dict[str, list[BurdenRow]]:
             control_cohorts=_cohorts(record["control_cohorts"]),
             method_note=record["method_note"],
             source=str(record["source"]),
+            n_chd_case_carriers=record["n_chd_case_carriers"],
         )
         grouped.setdefault(row.gene, []).append(row)
 
     return {gene: sorted(rows, key=_sort_key) for gene, rows in grouped.items()}
 
 
-def shared_cohorts(rows: Iterable[BurdenRow]) -> dict[tuple[str, str], tuple[str, ...]]:
-    """Which sample collections each pair of studies has in common.
+class Overlap(NamedTuple):
+    """Why two studies are not independent: what they share, or are declared to.
+
+    `shared` is every collection both studies cite. `declared` is every pair
+    `(left's collection, right's collection)` that `curation/cohorts.yaml`
+    records as overlapping (`Cohort.overlaps_with`), the left study's first --
+    two ids for partly the same people, which no shared id can show.
+    """
+
+    shared: tuple[str, ...]
+    declared: tuple[tuple[str, str], ...]
+
+
+def shared_cohorts(
+    rows: Iterable[BurdenRow], cohorts: Mapping[str, Cohort]
+) -> dict[tuple[str, str], Overlap]:
+    """Which sample collections each pair of studies has in common, or overlapping.
 
     The reason `curation/cohorts.yaml` exists. The atlas publishes per-study rows
     and no pooled statistic, because pooling studies that share samples inflates
@@ -232,26 +254,39 @@ def shared_cohorts(rows: Iterable[BurdenRow]) -> dict[tuple[str, str], tuple[str
     stable order. Pairs sharing nothing are omitted: the interesting fact is the
     overlap, and an entry per independent pair would bury it.
 
-    **Still latent, but for a different reason than when this was written.** It
-    said "the committed corpus carries one study"; it carries three, and they
-    draw on disjoint collections, so this returns an empty mapping. That is no
-    longer a curiosity: `concordance.cohort_families` walks these edges to decide
-    what counts as an independent dataset, so an empty result here is exactly what
-    makes the three studies three families. Implemented and tested against a
-    fixture rather than left until two studies share a cohort, because a feature
-    nobody exercised is a feature that breaks the day it is first needed.
+    **No longer latent, and live by declaration rather than by a shared id**
+    (owner decision 2026-10-27, I3). The three studies cite disjoint ids, so
+    this returned an empty mapping, and `concordance.cohort_families`, which
+    walks these edges, made them three families. But PMID:34324492 cites
+    `decipher` and PMID:42230622 `ddd`, and DDD links its participants into
+    DECIPHER: an author of the first answered that its case set does or likely
+    does include DDD participants. `cohorts` is the registry, and a pair of
+    collections it declares overlapping (`Cohort.overlaps_with`) is an edge as
+    a shared id is, so the two studies are one family. Required, never
+    defaulted, so no consumer can read families without the declarations
+    (CLAUDE.md section 4.28): the families, every card's dataset count, the
+    matrix, the browse strip and the page's notice all come through here.
     """
     by_study: dict[str, set[str]] = {}
     for row in rows:
         by_study.setdefault(row.study, set()).update(row.case_cohorts, row.control_cohorts)
+    declared_with = {
+        identifier: set(cohort.overlaps_with) for identifier, cohort in cohorts.items()
+    }
 
-    overlaps: dict[tuple[str, str], tuple[str, ...]] = {}
+    overlaps: dict[tuple[str, str], Overlap] = {}
     studies = sorted(by_study)
     for index, left in enumerate(studies):
         for right in studies[index + 1 :]:
             common = by_study[left] & by_study[right]
-            if common:
-                overlaps[(left, right)] = tuple(sorted(common))
+            declared = sorted(
+                (mine, theirs)
+                for mine in by_study[left]
+                for theirs in by_study[right]
+                if theirs in declared_with.get(mine, ())
+            )
+            if common or declared:
+                overlaps[(left, right)] = Overlap(tuple(sorted(common)), tuple(declared))
     return overlaps
 
 
@@ -285,6 +320,10 @@ def burden_payload(rows: Iterable[BurdenRow]) -> list[Json]:
             "count_unit": row.count_unit,
             "n_case_carriers": row.n_case_carriers,
             "n_cases": row.n_cases,
+            # How many of the case carriers are CHD cases, where the study
+            # counted that apart from a case set holding another condition;
+            # `null` elsewhere (owner decision R2, 2026-10-26).
+            "n_chd_case_carriers": row.n_chd_case_carriers,
             "comparator": row.comparator,
             "n_control_carriers": row.n_control_carriers,
             "n_controls": row.n_controls,
@@ -425,12 +464,23 @@ class BurdenCensus:
     rows: int
     genes: int
     families: int
+    # The studies whose rows reach a published bundle, sorted: the population
+    # the front page's own-lab sentence counts (owner decision 2026-10-26,
+    # R7). Not published in `manifest.json`, which names its `counts` keys one
+    # by one.
+    studies: tuple[str, ...]
+    # Published genes with at least one row that survives its own study's
+    # correction: the genes whose card lists a rare-variant result (owner
+    # decision 2026-10-26, R9). Published as `counts.burden_surviving_genes`.
+    surviving_genes: int
 
 
 def burden_census(
     burden: Mapping[str, Sequence[BurdenRow]],
     published: Collection[str],
     families: tuple[frozenset[str], ...],
+    *,
+    survives: Callable[[BurdenRow], bool],
 ) -> BurdenCensus:
     """What the burden evidence *this site publishes* amounts to.
 
@@ -447,11 +497,12 @@ def burden_census(
     **`families` is the dataset count, never `len({row.study for row in rows})`.**
     A cohort family is a connected component over shared sample collections, so
     two papers drawing on one collection describe the same people and count once
-    (`concordance.cohort_families`). The two are equal over the committed corpus
-    — three studies on disjoint collections — which is precisely why they are
-    separated here and separated again in the tests: the day a fourth study
-    reuses DDD or PCGC, a study count on this page would tell a reader that a
-    reused cohort is independent evidence. Taken as a parameter rather than
+    (`concordance.cohort_families`). The two were equal over the committed
+    corpus — three studies citing disjoint collections — which is precisely why
+    they were separated here and separated again in the tests. They parted on
+    owner decision 2026-10-27 (I3): DECIPHER and DDD are declared overlapping
+    (`Cohort.overlaps_with`), so PMID:34324492 and PMID:42230622 are one family
+    and the census reads 2 families for 3 studies. Taken as a parameter rather than
     recomputed, so this page and the strip on every browse row count the same
     families.
 
@@ -473,15 +524,42 @@ def burden_census(
     one higher than the number of families any published gene was tested by.
     Reviewed 2026-08-06 and kept; the alternative was measured and inverts a
     real overlap.
+
+    **`studies` is restricted to `published`, like `rows`** (owner decision
+    2026-10-26, R7): the front page says how many of the rare-variant studies
+    whose results the site publishes are by an author of this atlas, and a
+    study whose rows all sit outside the gate has no block on any page to say
+    so. Sorted, because it is derived from a set.
+
+    **`surviving_genes` counts the published genes whose card lists a
+    result** (owner decision 2026-10-26, R9): a gene with at least one row
+    `survives` passes. `survives` is `concordance.survives_own_correction`,
+    the predicate the card's list reads (`pages._card_rare_variants` groups
+    exactly the rows it passes, with no exclusion of its own), handed in by
+    the caller rather than imported, because `concordance` imports this
+    module; required, so no caller can count by a rule of its own. Measured on
+    a real build the day it was written: 32 of the 118 genes with a published
+    row, and every one of the 32 cards lists a line.
     """
     rows = 0
     genes = 0
+    studies: set[str] = set()
     for gene in published:
         count = len(burden.get(gene, ()))
         rows += count
         if count:
             genes += 1
-    return BurdenCensus(rows=rows, genes=genes, families=len(families))
+        studies.update(row.study for row in burden.get(gene, ()))
+    surviving_genes = sum(
+        1 for gene in published if any(survives(row) for row in burden.get(gene, ()))
+    )
+    return BurdenCensus(
+        rows=rows,
+        genes=genes,
+        families=len(families),
+        studies=tuple(sorted(studies)),
+        surviving_genes=surviving_genes,
+    )
 
 
 def cohort_registry(cohorts: Iterable[Cohort]) -> dict[str, Cohort]:
@@ -527,9 +605,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     from a row without those sentences is computing something else.
 
     **The whole registry is published, not only the ids the published rows
-    cite.** The two sets are identical today -- 13 and 13 -- and identical
-    figures are one figure to every test (CLAUDE.md section 4.30), so this says
-    which one it is: this is a *resolution table*, and a table that omitted an id
+    cite.** The two sets were identical when measured -- 20 and 20 on
+    2026-10-27 -- and identical figures are one figure to every test (CLAUDE.md
+    section 4.30), so this says which one it is: this is a *resolution table*,
+    and a table that omitted an id
     some row cites would 404 exactly where a reader needed it. The direction is
     also the safe one -- `validate_burden_references` (BUR009) already refuses a
     row citing a cohort this file does not carry, so publishing the registry
@@ -539,11 +618,23 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     Sorted by id: `encode_json`'s `sort_keys` orders dict keys and never list
     elements, so an unsorted array here checksums differently between two builds
     of one commit. `url` is emitted as `null` rather than omitted where a
-    collection has no public page (4 of the 13), because an object whose shape
-    varies is a trap for a consumer reading a field off one record and expecting
-    it on the next -- the rule `admission_provenance` and `burden_payload`
-    already follow.
+    collection has no public page (11 of the 20 on 2026-10-27), because an
+    object whose shape varies is a trap for a consumer reading a field off one
+    record and expecting it on the next -- the rule `admission_provenance` and
+    `burden_payload` already follow. `review_status` and `review_note` follow
+    it too: both `null` on a record no open question is recorded for.
+
+    **Both or neither, checked again here** (review, 2026-10-27, N2): the
+    model refuses one without the other where the file loads, but a record
+    built without validation (`model_construct`, `model_copy`) reached this
+    emitter and published `"pending_review"` beside a `null` note -- a
+    question with no statement of what it is. `models.review.check_review`
+    raises before anything is written, a guard on a bypassed gate like the
+    pages' `render.review_status_note`.
     """
+    ordered = sorted(cohorts, key=lambda item: str(item.id))
+    for cohort in ordered:
+        check_review(str(cohort.id), cohort.review_status, cohort.review_note)
     emitter.write_json(
         COHORTS,
         {
@@ -553,8 +644,20 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
                     "name": cohort.name,
                     "description": cohort.description,
                     "url": cohort.url,
+                    # The registry's declared overlaps (owner decision
+                    # 2026-10-27, I3), sorted, `[]` where none: the edges
+                    # `cohort_families` merges on besides a shared id.
+                    "overlaps_with": sorted(str(other) for other in cohort.overlaps_with),
+                    # A question about the record this atlas leaves open
+                    # (owner's standing rule, 2026-10-27; `models/review.py`),
+                    # `null` and `null` where none is recorded -- never
+                    # omitted, like `url`.
+                    "review_status": (
+                        None if cohort.review_status is None else cohort.review_status.value
+                    ),
+                    "review_note": cohort.review_note,
                 }
-                for cohort in sorted(cohorts, key=lambda item: str(item.id))
+                for cohort in ordered
             ]
         },
     )

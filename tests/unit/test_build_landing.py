@@ -8,10 +8,12 @@ import re
 import shutil
 from datetime import date
 from pathlib import Path
+from typing import Final
 
 import pytest
 
 from chd_atlas.build.burden import BurdenCensus, BurdenRow, burden_census
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.landing import build_landing
 from chd_atlas.build.paths import LANDING
@@ -21,12 +23,43 @@ from chd_atlas.build.runner import build_site
 from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
 from chd_atlas.corpus import Corpus
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
+from chd_atlas.models.literature import Publication
+from chd_atlas.validate.sources import Source, SourceRegistry
 from chd_atlas.vocab import Classification, ValiditySource, ValidityState
+
 
 # What a corpus with no burden evidence at all publishes. Every test in this
 # file that is about something else -- escaping, pluralisation, the shell --
 # renders against it.
-_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0)
+def _orphadata(
+    source_id: str, file_version: str | None = None, file_date: str | None = None
+) -> Source:
+    """An Orphadata product's registry entry; only the header fields are read here."""
+    return Source.model_validate(
+        {
+            "id": source_id,
+            "name": "Orphadata Science",
+            "version": "sha256:" + "0" * 64,
+            "retrieved_on": "2026-10-25",
+            "url": "https://www.orphadata.com/",
+            "licence": "CC-BY-4.0",
+            "redistribution": "permitted_with_attribution",
+            "file_version": file_version,
+            "file_date": file_date,
+        }
+    )
+
+
+# Both products of one release, as `mirrors/sources.yaml` records them today:
+# one version, one day, two times of day.
+_SOURCES = SourceRegistry(
+    sources=[
+        _orphadata("orphanet_product4", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"),
+        _orphadata("orphanet_product1", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"),
+    ]
+)
+
+_NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=(), surviving_genes=0)
 
 # The developmental-expression counterpart to `_NO_BURDEN`, for the same tests.
 _NO_PROFILES = ProfileCensus(genes=0, datasets=0)
@@ -155,6 +188,7 @@ def _build(
     census: BurdenCensus = _NO_BURDEN,
     profile_census: ProfileCensus = _NO_PROFILES,
     combined_results: int = 0,
+    sources: SourceRegistry = _SOURCES,
 ) -> str:
     """Render the page.
 
@@ -186,6 +220,7 @@ def _build(
         profile_census=profile_census,
         combined_results=combined_results,
         emitter=emitter,
+        sources=sources,
     )
     return (tmp_path / LANDING).read_text(encoding="utf-8")
 
@@ -351,6 +386,7 @@ def test_the_page_is_published_through_write_text_and_reaches_the_checksums(
         profile_census=_NO_PROFILES,
         combined_results=0,
         emitter=emitter,
+        sources=_SOURCES,
     )
 
     assert list(emitter.checksums) == ["index.html"]
@@ -448,7 +484,13 @@ def test_the_hero_note_splits_the_published_genes_by_which_warrant_admitted_them
     assert "Every gene here is published on an upstream expert panel" not in text
     # D49: the figures count every rare-variant test, and a de novo enrichment is
     # not a burden test, so the front page never calls them "burden statistics".
-    assert "Rare-variant statistics are reported per independent cohort family" in sentence
+    # Per study, not "per independent cohort family" (review, 2026-10-27): rows
+    # are each one study's, and since I3 one family holds two studies.
+    assert (
+        "Rare-variant statistics are reported per study, and none is pooled across studies."
+        in sentence
+    )
+    assert "reported per independent cohort family" not in text
     assert "burden statistic" not in text.lower()
     # D49: the definition names all three analyses, as literal prose (not the
     # source constant), and says "copy-number variants" so a future non-deletion
@@ -583,12 +625,25 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     of this test gave the census 2 families and 2 genes-with-evidence, and the
     mutant putting `census.genes` in the hero where `census.families` belongs
     survived the whole file. Measured, then fixed: 6 statistics, 3 independent
-    datasets, 2 genes carrying evidence, 4 genes published.
+    datasets, 2 genes with a reported result, 4 genes published -- and, since
+    owner decision 2026-10-26 (R9), 1 gene with a result surviving its study's
+    correction (`HGNC:2`'s one row; none of `HGNC:1`'s five), so the new figure
+    differs from every other (CLAUDE.md section 4.30). Its label is not the
+    owner's "Genes tested in rare-variant studies": the figure counts genes a
+    study reports a result for, and the gene it leaves out on a real build
+    (CRIPTO) is one a study may have tested and not reported.
 
     The third family reports on no published gene, which is what makes it
     different from the gene count. That is not contrived -- it is a study whose
     genes all sit outside the publication gate, and 127 of the burden mirror's
     150 genes are in exactly that position today.
+
+    **The dataset count says what it can see, in both places** (owner decision
+    2026-10-26, R12): "(as far as the cohort registry records)", under the hero
+    figure and as the census card's second `<dd>`, and on no other figure. The
+    families are joined only through collections the registry names or declares
+    overlapping, so case sources no row names are invisible to them. Pinned as
+    literals, never as the constant that renders them.
 
     The census is built by `burden_census` from a real fixture rather than
     constructed here, so this test cannot pass against a derivation the module
@@ -596,11 +651,15 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     """
     burden = {
         "HGNC:1": [_burden_row(study="PMID:1") for _ in range(5)],
-        "HGNC:2": [_burden_row(study="PMID:2")],
+        "HGNC:2": [
+            _burden_row(
+                study="PMID:2", pvalue_adjusted=0.01, pvalue_adjustment="benjamini_hochberg"
+            )
+        ],
     }
     published = {"HGNC:1", "HGNC:2", "HGNC:3", TBX5}
     families = (frozenset({"PMID:1"}), frozenset({"PMID:2"}), frozenset({"PMID:3"}))
-    census = burden_census(burden, published, families)
+    census = burden_census(burden, published, families, survives=survives_own_correction)
     corpus = Corpus(root=Path("."), assertions=(_assertion(),))
 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
@@ -619,8 +678,184 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
         ), f"the hero no longer states {value} beside {label!r}"
     assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
-    assert re.search(r"<dt>Genes with rare-variant evidence</dt>\s*<dd>2</dd>", listed)
+    qualifier = "(as far as the cohort registry records)"
+    assert (
+        '<div class="stat"><dt>Independent datasets</dt><dd>3</dd>'
+        f'<dd class="stat-note">{qualifier}</dd></div>'
+    ) in listed
+    assert (
+        '"figure-value">3</span> <span class="figure-label">independent datasets</span> '
+        f'<span class="figure-note">{qualifier}</span></div>'
+    ) in hero
+    assert text.count(qualifier) == 2
+    assert re.search(r"<dt>Genes with a reported rare-variant result</dt>\s*<dd>2</dd>", listed)
+    assert re.search(
+        r"<dt>Genes with a rare-variant result surviving its study's correction</dt>"
+        r"\s*<dd>1</dd>",
+        listed,
+    )
+    assert "rare-variant evidence" not in listed
+    assert "Genes tested" not in listed
     assert re.search(r"<dt>Genes published</dt>\s*<dd>4</dd>", listed)
+
+
+def _study(pmid: str, *, own_lab: bool) -> Publication:
+    """A curated rare-variant study; only its id and `own_lab` are read here."""
+    return Publication(
+        id=pmid,
+        title=f"Study {pmid}",
+        journal="J",
+        year=2026,
+        authors=["A"],
+        study_type="case_control",  # type: ignore[arg-type]
+        own_lab=own_lab,
+    )
+
+
+@pytest.mark.parametrize(
+    ("tested", "by_an_author", "sentence"),
+    [
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            {"PMID:1"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="one of several",
+        ),
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            {"PMID:1", "PMID:2"},
+            "Of the 3 rare-variant studies whose results this atlas publishes, 2 are by an "
+            "author of this atlas, and a gene page says so in each of their blocks.",
+            id="several",
+        ),
+        pytest.param(
+            ("PMID:1", "PMID:2", "PMID:3"),
+            set(),
+            "Of the 3 rare-variant studies whose results this atlas publishes, none is by an "
+            "author of this atlas.",
+            id="none",
+        ),
+        pytest.param(
+            ("PMID:1",),
+            {"PMID:1"},
+            "Of the 1 rare-variant study whose results this atlas publishes, 1 is by an "
+            "author of this atlas, and a gene page says so in its block.",
+            id="a single study",
+        ),
+        pytest.param((), set(), None, id="no study"),
+    ],
+)
+def test_the_front_page_declares_the_rare_variant_studies_by_an_atlas_author(
+    tmp_path: Path, tested: tuple[str, ...], by_an_author: set[str], sentence: str | None
+) -> None:
+    """One sentence, both counts computed (owner decision 2026-10-26, R7).
+
+    The cards and the study blocks declare a study by an author of this atlas
+    and the front page said nothing. The population is the studies whose rows
+    reach a published bundle (`BurdenCensus.studies`), never every curated
+    publication: two decoys are by an atlas author and are not among them --
+    `PMID:9` tests only a gene outside the gate, and `PMID:8` tests nothing --
+    so counting `corpus.publications` instead reads 3 of 5, 4 of 5 and 2 of 5
+    in the first three cases, where the sentence must read 1, 2 and none of 3
+    (CLAUDE.md section 4.30: two figures equal on the real corpus would let
+    the wrong one pass). Pinned in each of its forms, as literals.
+
+    **And at both ends of the count** (review, 2026-10-27): a single study
+    takes the singular noun, and a build publishing no study's rows carries no
+    sentence at all -- there is nothing to declare, and "Of the 0 rare-variant
+    studies" would say there is. Both survived every test until then. "by an
+    author", in every form, as each block's declaration says it.
+    """
+    burden = {
+        "HGNC:1": [_burden_row(study=pmid) for pmid in tested[:2]],
+        "HGNC:2": [_burden_row(study=pmid) for pmid in tested[2:]],
+        # Outside the gate: mirrored, never published.
+        "HGNC:9": [_burden_row(study="PMID:9")],
+    }
+    published = {"HGNC:1", "HGNC:2", TBX5}
+    families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
+    census = burden_census(burden, published, families, survives=survives_own_correction)
+    corpus = Corpus(
+        root=Path("."),
+        assertions=(_assertion(),),
+        publications=tuple(
+            _study(pmid, own_lab=pmid in by_an_author or pmid in {"PMID:8", "PMID:9"})
+            for pmid in ("PMID:1", "PMID:2", "PMID:3", "PMID:8", "PMID:9")
+        ),
+    )
+
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+    listed = _prose(_section(text, "<h2>What's published</h2>"))
+
+    if sentence is None:
+        assert "whose results this atlas publishes" not in listed
+    else:
+        assert f"<p>{sentence}</p>" in listed
+
+
+_PANEL_NOTE_LINK: Final = (
+    '<a href="methods.html#rare-variants">How to read rare-variant results</a>.'
+)
+
+
+@pytest.mark.parametrize(
+    ("panels", "note"),
+    [
+        pytest.param(
+            {"PMID:2": 248},
+            "For PMID:2, the correction a result must survive ran over its 248-gene panel, not "
+            f"the genome. {_PANEL_NOTE_LINK}",
+            id="one published study corrected over a panel",
+        ),
+        pytest.param(
+            {"PMID:1": 1200, "PMID:3": 248},
+            "For PMID:1 and PMID:3, the correction a result must survive ran over each study's "
+            "gene panel (1,200 genes for PMID:1, 248 genes for PMID:3), not the genome. "
+            f"{_PANEL_NOTE_LINK}",
+            id="two, each with its own panel",
+        ),
+        pytest.param({"PMID:9": 248}, None, id="the only such study is outside the gate"),
+        pytest.param({}, None, id="no study corrected over a panel"),
+    ],
+)
+def test_the_front_page_says_whose_correction_ran_over_a_panel_not_the_genome(
+    tmp_path: Path, panels: dict[str, int], note: str | None
+) -> None:
+    """The surviving count's qualifier (review, 2026-10-27; owner decision R3).
+
+    "Genes with a rare-variant result surviving its study's correction" is the
+    owner's label and reads as genome-wide, and 22 of the 32 genes it counted on
+    a build of 5f7161b survive only PMID:40127276's Benjamini-Hochberg over its
+    248 panel genes. So the page names each published study whose correction
+    ran over a panel, from its curated `correction_genes`. Only the studies
+    whose rows reach a published bundle: `PMID:9` tests only a gene outside the
+    gate, so a note naming it would qualify a count it is not in.
+    """
+    burden = {
+        "HGNC:1": [_burden_row(study="PMID:1"), _burden_row(study="PMID:2")],
+        "HGNC:2": [_burden_row(study="PMID:3")],
+        "HGNC:9": [_burden_row(study="PMID:9")],
+    }
+    published = {"HGNC:1", "HGNC:2", TBX5}
+    families = tuple(frozenset({f"PMID:{n}"}) for n in (1, 2, 3, 9))
+    census = burden_census(burden, published, families, survives=survives_own_correction)
+    corpus = Corpus(
+        root=Path("."),
+        assertions=(_assertion(),),
+        publications=tuple(
+            _study(pmid, own_lab=False).model_copy(update={"correction_genes": panels.get(pmid)})
+            for pmid in ("PMID:1", "PMID:2", "PMID:3", "PMID:9")
+        ),
+    )
+
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, published, census)
+    listed = _prose(_section(text, "<h2>What's published</h2>"))
+
+    if note is None:
+        assert "not the genome" not in text
+    else:
+        assert f"<p>{note}</p>" in listed
 
 
 def test_the_landing_card_names_the_layer_the_build_publishes(tmp_path: Path) -> None:
@@ -692,7 +927,7 @@ def test_the_front_page_teaches_the_glyphs_before_a_reader_meets_them(tmp_path: 
     text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path)
 
     for css, caption in (
-        ("dot full", "enriched, and survives that study&#x27;s own correction"),
+        ("dot full", "enriched, and a result survives its own study&#x27;s correction"),
         ("dot half", "enriched nominally, or no correction published"),
         ("dot none", "tested, no enrichment detected"),
         ("dot untested", "not tested by that dataset"),
@@ -772,6 +1007,9 @@ def test_the_page_and_the_manifest_publish_one_census_of_a_real_build(
         "assertions": "Curated gene-disease assertions",
         "burden_combined": "Within-study combined rare-variant results",
         "burden_rows": "Rare-variant statistics",
+        "burden_surviving_genes": (
+            "Genes with a rare-variant result surviving its study's correction"
+        ),
         "cohort_families": "Independent datasets",
         "cohorts": "Sample collections",
         "datasets": "Omics datasets",
@@ -891,7 +1129,16 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
         "nominates is in scope on how often it carries a structural heart malformation; its "
         "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
         "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
-        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>. Data '
+        "version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23.</em> "
+        # Every other attribution-required source, in one hand-written sentence
+        # (owner decision 2026-10-26, R10); `test_built_site_is_consumable.py`
+        # holds the set it names to `sources.json`.
+        "Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY "
+        "4.0; developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s "
+        "(experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results "
+        "are taken from the supplements of Audain et al. 2026 and Sierant et al. 2025, both "
+        "CC BY 4.0, and of Audain et al. 2021, CC0. "
         '<a href="sources.json">sources.json</a> identifies each mirrored file by a version, '
         "a date or a checksum, and carries the licence and attribution terms each of these is "
         "mirrored under.</p>"
@@ -901,6 +1148,92 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
     # false of three sources (review, 2026-10-26).
     assert "by version or checksum" not in sources_section
     assert "ClinGen, GenCC, HPO, Orphanet" in _prose(_section(text, "<h2>What this is</h2>"))
+
+
+@pytest.mark.parametrize(
+    ("sources", "stated"),
+    [
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata(
+                        "orphanet_product4", "1.3.43 / 4.1.8 [2026-01-01]", "2026-12-01 01:00:00"
+                    ),
+                    _orphadata(
+                        "orphanet_product1", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"
+                    ),
+                ]
+            ),
+            "Data version 1.3.43 / 4.1.8 [2026-01-01], 2026-12-01 (product 4); "
+            "1.3.42 / 4.1.8 [2025-03-03], 2026-06-23 (product 1).</em>",
+            id="two releases: each product named",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[_orphadata("orphanet_product4"), _orphadata("orphanet_product1")]
+            ),
+            "http://sciences.orphadata.com/</a>.</em>",
+            id="no header recorded: nothing to cite",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata(
+                        "orphanet_product4", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"
+                    ),
+                    _orphadata("orphanet_product1"),
+                ]
+            ),
+            "Data version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23 (product 4).</em>",
+            id="one product's header: named, never cited as both",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata("orphanet_product4", "1.3 <b> & 4", "2026<12>01 01:00:00"),
+                    _orphadata("orphanet_product1", "1.3 <b> & 4", "2026<12>01 02:00:00"),
+                ]
+            ),
+            "Data version 1.3 &lt;b&gt; &amp; 4, 2026&lt;12&gt;01.</em>",
+            id="markup in a header is escaped, the date as the version",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata("orphanet_product4", "1.3 <b>", "2026<12>01 01:00:00"),
+                    _orphadata("orphanet_product1", "1.2 & 4", "2025<06>23 02:00:00"),
+                ]
+            ),
+            "Data version 1.3 &lt;b&gt;, 2026&lt;12&gt;01 (product 4); 1.2 &amp; 4, "
+            "2025&lt;06&gt;23 (product 1).</em>",
+            id="and escaped per product where the releases differ",
+        ),
+    ],
+)
+def test_the_orphadata_citation_states_the_release_each_product_was_mirrored_from(
+    tmp_path: Path, sources: SourceRegistry, stated: str
+) -> None:
+    """Orphadata's citation asks for its "Data version" (owner decision 2026-10-26, R11).
+
+    The page printed none and pointed to `sources.json`, which identified both
+    files by sha256 alone. Each product's own `<JDBOR>` header version and date
+    are now in `mirrors/sources.yaml`, written there by the converter, and the
+    citation prints them: once where both products are one release on one day
+    (the literal in the test above), each by name where they differ, and
+    nothing where no header was recorded -- never a version one product
+    carries attributed to both, which is also why a release only one product
+    records is printed against that product's name (review, 2026-10-27: the
+    `len(stated) == len(_ORPHADATA)` guard that keeps it so survived every
+    test). Both header fields are a curator's transcription interpolated into
+    HTML, so both are escaped; the date reached the page unescaped until then.
+    """
+    corpus = Corpus(root=Path("."), assertions=(_assertion(),))
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, sources=sources)
+
+    cited = _prose(_section(text, "<h2>Where this data comes from</h2>"))
+    assert stated in cited
+    if "Data version" not in stated:
+        assert "Data version" not in cited
 
 
 def test_a_single_assertion_is_singular_not_plural(tmp_path: Path) -> None:

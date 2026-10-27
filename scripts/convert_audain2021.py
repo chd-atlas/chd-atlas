@@ -4,7 +4,12 @@
 Run locally by a curator, never by CI or the build -- design decision D6.
 
     .venv/bin/python scripts/convert_audain2021.py \\
-        local/data/audain2021/s011.xlsx mirrors/burden.tsv
+        local/data/audain2021/s011.xlsx local/data/audain2021/s013.xlsx \\
+        mirrors/burden.tsv
+
+The first workbook is S6 Table, which every row's statistic is transcribed
+from; the second is S8 Table, which gives one more number for the genes it
+lists (see CHD-ONLY CARRIERS below).
 
 Merges beside the rows other studies already contributed rather than replacing
 the file; see `burden_mirror.merge_study`.
@@ -74,30 +79,70 @@ overlap machinery cannot see.
 The CNV part does not have that problem, and the difference is the point. S2
 Table lists 189 case sources for 7,958 cases (measured 2026-10-26; this
 paragraph said "~190 sources are mostly single-case reports plus four
-collections" until then): the four collections registered as this study's case
-cohorts hold 4,242, 105 single-case sources hold 105, 69 sources of 2 to 49
-cases hold 471, and 11 unregistered sources of 50 or more hold 3,140. None is a
-CNV study this atlas carries, so aggregating them puts no deletion in the
-mirror twice. The de novo part aggregates two studies this atlas intends to
-carry individually. What the unregistered sources cost is visibility, not a
-double count; see the comment on `CASE_COHORTS`.
+collections" until then). The 11 registered as this study's case cohorts hold
+6,211 of them (owner decision R12, 2026-10-26: the four it named before, 4,242,
+and the seven CHD case sources S2 identifies by PMID with 50 or more cases,
+1,969); of the other 178, 105 single-case sources hold 105, 69 sources of 2 to
+49 cases hold 471, and 4 sources of 50 or more hold 1,171. None is a CNV study
+this atlas carries, so aggregating them puts no deletion in the mirror twice.
+The de novo part aggregates two studies this atlas intends to carry
+individually. What the unregistered sources cost is visibility, not a double
+count; see the comment on `CASE_COHORTS`.
 
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
 
+CHD-ONLY CARRIERS (owner decision R2, 2026-10-26)
+-------------------------------------------------
+S8 Table repeats S6's test for the 528 genes that reached significance and
+splits its case carriers by the case series they came from. Its first header
+row names three bands, "CHD+TAA", "only CHD" and "only TAA" (columns 4, 8 and
+12 of the workbook read on 2026-10-27), and its second reads `case`,
+`control`, `p_value`, `p_value_adj` under each. The sheet's "Info" tab
+defines `case` as "number of CNV cases", and its caption says the bands are
+the 528 genes "combining both CHD and TAA cases (CHD+TAA), the contribution of
+only CHD cases (only CHD) and the contribution of only TAA cases (only TAA)".
+It is a gene-level table, one row per gene, like S6's Sheet A.
+
+`n_chd_case_carriers` is the "only CHD" band's `case`: of the row's case
+carriers, how many are CHD cases rather than aneurysm probands. It is
+transcribed only where S8 lists the gene and is empty elsewhere; S8 is not a
+source of rows. Before it is written, S8's "CHD+TAA" `case` must equal S6's
+`case` for every gene S8 lists, or the two tables are not the same analysis
+and the converter stops. Measured 2026-10-27: equal for all 528, and so are
+the controls and the corrected p. S8 leaves the CHD-only `case` blank for 7
+genes, none registered, and a blank is left blank rather than read as 0. The
+workbook's sha256 is recorded as `audain2021_s8` in `mirrors/sources.yaml`.
+
+**Both columns are located from the header rows, never from a fixed index**
+(`_band_case`): the band's label once on the first row, then `case` once on
+the second, between that label and the next. A sheet where either is not
+found exactly once is refused. Nothing downstream could catch a misread band:
+BUR003 holds `n_chd_case_carriers` to at most `n_case_carriers`, and every
+band's `case` is within that bound -- measured 2026-10-27, "only CHD" plus
+"only TAA" equals "CHD+TAA" for all 528 genes, a blank read as none -- so the
+TAA-only or the combined count read in its place validated clean. The review
+re-ran the converter both ways (2026-10-27): 0 errors each time, and read from
+the TAA-only band, four cards said S8 counts 0 of the carriers among its CHD
+cases.
+
 DENOMINATORS
 ------------
-S1 Table gives the per-CNV-type counts: 7,107 cases and 14,040 controls have
-deletion data, against 7,958 and 14,082 for CNVs of any type. The deletion
-figures are the ones S1 gives for this analysis, so they are the ones the
-mirror carries -- the rule applied to PMID:42230622, whose abstract likewise
-quotes a larger set than its statistics used. That they are also the figures
-the statistic was computed on is not established; see the next paragraph.
+Every row carries 6,746 cases and 14,024 controls, the set the article's
+Methods put the permutation test on: "After filtering, 6,746 cases (3,929
+harbouring CNV deletions) and 14,024 controls (12,585 harbouring CNV
+deletions) remained for further analysis. A region-based permutation test
+(using PLINK version 1.07 ...) was used on the filtered set to perform a
+case-control association analysis." That is the rule applied to PMID:42230622,
+whose abstract likewise quotes a larger set than its statistics used: a row's
+denominators are the ones its statistic was computed on.
 
-**Unresolved since 2026-10-26.** The article's methods say the permutation test
-was run on a post-QC set of 6,746 cases and 14,024 controls, which is neither
-S1 pair. The mirror still carries 7,107 and 14,040 until the study's authors
-say which set PLINK counted; see the comment on `METHOD_NOTE`.
+S1 Table ("Number of probands in the CNV cohort", by CNV type) is not that set.
+The article cites it for the cohort as assembled, 7,958 cases and 14,082
+controls, before describing the quality-control filters, and its deletion
+column gives 7,107 cases and 14,040 controls. The mirror carried that column
+until 2026-10-26, when this was resolved: the statistic was computed on the
+filtered set the Methods state, so the filtered set is what the rows publish.
 """
 
 from __future__ import annotations
@@ -108,26 +153,49 @@ from pathlib import Path
 from typing import Final
 
 from burden_mirror import merge_study
-from convert_burden import gene_symbols, read_sheet
+from convert_burden import gene_symbols, read_sheet, read_sheet_rows
 
 STUDY: Final = "PMID:34324492"
 SOURCE: Final = "audain2021_s6"
 
-# S2/S3 Tables. Only four of S2's 189 case sources are registered, and they hold
-# 4,242 of its 7,958 cases (53%). This comment called the rest "~190
-# single-case PMID sources" until 2026-10-26; measured from S2 that day, 105 of
-# the other 185 are single cases (105 individuals), 69 hold 2 to 49 (471 in all)
-# and 11 hold 50 or more (3,140 in all). The unregistered sources are named on
-# no row, so `shared_cohorts` cannot report an overlap between one of them and
-# a study curated later: check S2 before curating another CHD cohort.
-CASE_COHORTS: Final = "decipher;isca;signature;taa_cases"
+# S8 Table's header cells, quoted: two band labels from its first header row,
+# and the two column names this reads from its second. The columns are found
+# from these and never from a fixed index; see CHD-ONLY CARRIERS above.
+S8_COMBINED: Final = "CHD+TAA"
+S8_CHD_ONLY: Final = "only CHD"
+S8_CASE: Final = "case"
+S8_SYMBOL: Final = "symbol"
+
+# S2/S3 Tables. 11 of S2's 189 case sources are registered, and they hold 6,211
+# of its 7,958 cases (78%). Four were registered with the study on 2026-08-05,
+# holding 4,242 (53%); this comment called the rest "~190 single-case PMID
+# sources" until S2 was measured on 2026-10-26. Owner decision R12
+# (2026-10-26) added the seven CHD case sources S2 identifies by PMID with 50
+# or more cases: 742 + 432 + 340 + 178 + 123 + 91 + 63 = 1,969, read from S2's
+# own counts on 2026-10-27 and recorded in each `curation/cohorts.yaml`
+# description. (S2 identifies an eighth source of that size by PMID, its
+# aneurysm series, which is `taa_cases`, one of the four.) Of the 178 still
+# unregistered, measured from S2 that day, 105 are single cases (105
+# individuals), 69 hold 2 to 49 (471 in all) and 4 hold 50 or more (1,171 in
+# all). S2 labels 6 of the 178 by a collection name rather than a
+# publication: those 4, which the owner decided are not registered, and 2 of
+# the 69. The unregistered sources are named on no row, so `shared_cohorts`
+# cannot report an overlap between one of them and a study curated later:
+# check S2 before curating another CHD cohort. Alphabetical, as before.
+CASE_COHORTS: Final = (
+    "decipher;isca;pmid18535492_22349727_cases;pmid22318994_cases;pmid22912587_cases;"
+    "pmid22929023_cases;pmid22939634_cases;pmid22969434_cases;pmid26655555_cases;"
+    "signature;taa_cases"
+)
 CONTROL_COHORTS: Final = "gain_controls;ottawa_controls;wtccc_controls"
 
-# S1 Table, the deletion column.
-N_CASES: Final = 7107
-N_CONTROLS: Final = 14040
+# The Methods' filtered set, on which the permutation test was run; see
+# DENOMINATORS above. Not S1 Table's deletion column (7,107 and 14,040), which
+# counts the cohort as assembled and which the mirror carried until 2026-10-26.
+N_CASES: Final = 6746
+N_CONTROLS: Final = 14024
 
-# Renders unfolded directly under "N carriers / 7,107" on every gene page that
+# Renders unfolded directly under "N carriers / 6,746" on every gene page that
 # carries this study. It read "777 sporadic thoracic aortic aneurysm probands
 # (of 7,958 contributing individuals)" until 2026-10-26, which put all 777 in
 # the case count printed above it. Measured 2026-10-26: S2 Table gives the
@@ -136,11 +204,11 @@ N_CONTROLS: Final = 14040
 # the analysis. How many of the 777 are is stated nowhere read -- S1, S2, S3,
 # S6, S8, S10, S11 and the article's text and table captions.
 #
-# The note deliberately names no case count of its own. `N_CASES` is S1
-# Table's deletion column, but the article's methods say the permutation test
-# ran "on the filtered set": "6,746 cases (3,929 harbouring CNV deletions) and
-# 14,024 controls (12,585 harbouring CNV deletions)". Which figure is this
-# row's denominator is unresolved, so the note does not repeat one.
+# The note deliberately names no case count for the row. `n_cases` prints
+# directly above it, and the 7,958 the note does name is the assembled cohort
+# S2 Table counts the 777 against, not the 6,746 the test ran on. How many of
+# the 777 survived the filtering is stated nowhere read (above), which is why
+# the note says so rather than putting a count on it.
 METHOD_NOTE: Final = (
     "Cases combine congenital heart disease with a series of 777 sporadic "
     "thoracic aortic aneurysm probands among the study's 7,958 cases; the study "
@@ -151,9 +219,73 @@ METHOD_NOTE: Final = (
 )
 
 
-def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]], list[str]]:
-    """Build the mirror rows, and the report lines describing what was dropped."""
+def _only(path: Path, cells: list[str], value: str, start: int, end: int, where: str) -> int:
+    """The index of the one cell in `cells[start:end]` reading `value`; refuses none or several."""
+    found = [index for index in range(start, min(end, len(cells))) if cells[index] == value]
+    if len(found) != 1:
+        raise ValueError(
+            f"{path}: S8 Table's {where} reads {value!r} {len(found)} times, not once, so "
+            f"the column it names cannot be located"
+        )
+    return found[0]
+
+
+def _band_case(path: Path, groups: list[str], header: list[str], band: str) -> int:
+    """The index of `case` under `band`: its label once on the first header row,
+    then `case` once on the second, from that label up to the next one.
+
+    A band label sits in the first cell of the band it heads and the cells
+    after it are blank, so the band ends where the next label begins, or with
+    the row.
+    """
+    start = _only(path, groups, band, 0, len(groups), "first header row")
+    end = next((index for index in range(start + 1, len(groups)) if groups[index]), len(header))
+    return _only(path, header, S8_CASE, start, end, f"second header row under {band!r}")
+
+
+def read_chd_only(path: Path) -> dict[str, tuple[str, str]]:
+    """S8 Table as symbol -> (its "CHD+TAA" `case`, its "only CHD" `case`).
+
+    Every column is located from the two header rows (`_band_case`); refuses
+    a sheet where one cannot be, and a gene listed twice.
+    """
+    rows = read_sheet_rows(path, "S8 Table")
+    groups, header = ([cell.strip() for cell in row] for row in [*rows, [], []][:2])
+    symbol_at = _only(path, header, S8_SYMBOL, 0, len(header), "second header row")
+    combined_at = _band_case(path, groups, header, S8_COMBINED)
+    chd_only_at = _band_case(path, groups, header, S8_CHD_ONLY)
+    split: dict[str, tuple[str, str]] = {}
+    for row in rows[2:]:
+        # Padded: a row read from the sheet ends at its last cell, which may
+        # fall short of the columns this reads.
+        cells = row + [""] * (len(header) - len(row))
+        symbol = cells[symbol_at].strip()
+        if not symbol:
+            continue
+        if symbol in split:
+            raise ValueError(f"{path}: S8 Table lists {symbol} twice")
+        split[symbol] = (cells[combined_at].strip(), cells[chd_only_at].strip())
+    return split
+
+
+def convert(
+    source: Path, chd_only: Path, symbols: dict[str, str]
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Build the mirror rows, and the report lines describing what was dropped.
+
+    `source` is S6 Table and `chd_only` S8 Table; see CHD-ONLY CARRIERS above.
+    """
     records = read_sheet(source, "Sheet A")
+    split = read_chd_only(chd_only)
+    cases = {record["symbol"]: record["case"] for record in records}
+    disagree = sorted(
+        symbol for symbol, (combined, _) in split.items() if cases.get(symbol) != combined
+    )
+    if disagree:
+        raise ValueError(
+            f"S8 Table's CHD+TAA case count differs from S6 Table's, or S6 lists no such "
+            f"gene, for {len(disagree)} gene(s): {', '.join(disagree)}"
+        )
     rows: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -188,6 +320,9 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
                 "count_unit": "individuals",
                 "n_case_carriers": record["case"],
                 "n_cases": str(N_CASES),
+                # S8 Table's "only CHD" `case`, for a gene S8 lists; empty
+                # otherwise, and where S8 leaves the cell blank.
+                "n_chd_case_carriers": split.get(symbol, ("", ""))[1],
                 "comparator": "control_cohort",
                 "n_control_carriers": record["control"],
                 "n_controls": str(N_CONTROLS),
@@ -216,9 +351,17 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
 
     kept = {row["gene"] for row in rows}
     missing = sorted(symbol for symbol, hgnc in symbols.items() if hgnc not in kept)
+    split_rows = [row for row in rows if row["n_chd_case_carriers"]]
+    smaller = sum(
+        1 for row in split_rows if int(row["n_chd_case_carriers"]) < int(row["n_case_carriers"])
+    )
+    blank = sorted(symbol for symbol, (_, chd) in split.items() if not chd)
     report = [
         f"{len(rows)} row(s) for {len(kept)} of the {len(symbols)} registered genes",
         f"{len(seen)} genes tested in the supplement; {len(seen) - len(kept)} out of scope",
+        f"{len(split_rows)} row(s) carry S8 Table's CHD-only case carriers, of {len(split)} "
+        f"genes S8 lists; on {smaller} of them it is below the row's case carriers",
+        f"S8 leaves the CHD-only case count blank for {len(blank)} gene(s): {', '.join(blank)}",
     ]
     if missing:
         report.append(
@@ -234,19 +377,20 @@ def _number(value: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if not 2 <= len(argv) <= 3:
+    if not 3 <= len(argv) <= 4:
         print(__doc__, file=sys.stderr)
         return 2
-    source, out = Path(argv[0]), Path(argv[1])
-    root = Path(argv[2]) if len(argv) == 3 else Path.cwd()
+    source, chd_only, out = Path(argv[0]), Path(argv[1]), Path(argv[2])
+    root = Path(argv[3]) if len(argv) == 4 else Path.cwd()
 
-    rows, report = convert(source, gene_symbols(root))
+    rows, report = convert(source, chd_only, gene_symbols(root))
     kept, written = merge_study(out, STUDY, rows)
 
     for line in report:
         print(line)
     print(f"wrote {written} row(s) for {STUDY}, keeping {kept} row(s) from other studies")
-    print(f"sha256 of {source.name}: {hashlib.sha256(source.read_bytes()).hexdigest()}")
+    for path in (source, chd_only):
+        print(f"sha256 of {path.name}: {hashlib.sha256(path.read_bytes()).hexdigest()}")
     return 0
 
 

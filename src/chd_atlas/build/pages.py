@@ -67,10 +67,11 @@ from __future__ import annotations
 
 import html
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
+from urllib.parse import quote
 
-from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
+from chd_atlas.build.burden import BurdenRow, CombinedRow, Overlap, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
 from chd_atlas.build.concordance import (
     FamilyState,
@@ -98,6 +99,7 @@ from chd_atlas.build.render import (
     FILTER_SCRIPT,
     GRADE_CHIP_KIND,
     GRADE_GLOSS,
+    REGISTRY_QUALIFIER,
     Cell,
     Link,
     Markup,
@@ -107,6 +109,7 @@ from chd_atlas.build.render import (
     definition_list,
     document,
     evidence_legend,
+    review_status_note,
 )
 from chd_atlas.build.validity import (
     GeneValidity,
@@ -122,7 +125,9 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile
+from chd_atlas.models.scope import ScopeAuthority, ScopeEntry
 from chd_atlas.orphanet_scope import Warrant
+from chd_atlas.tables import CHD_CASE_SPLITS
 from chd_atlas.vocab import (
     CONTESTED,
     AtlasCuration,
@@ -215,13 +220,20 @@ _SCOPE_SHORT: Final = (
 #   `curation/chd_scope.yaml`; `methods.SCOPE_RULE` says how a term gets there.
 # * The opening names the lesion assertion as what is absent whenever the
 #   atlas has curated functional records for the gene; see `_card_curation`.
+# * **"the submitters it is admitted by", not "named above"** (review,
+#   2026-10-27). Above this sentence the card named only the `admitted by`
+#   row's submitters until R6 put a no-association line between them: on
+#   GDF1 it names Illumina, whose `No Known Disease Relationship` asserts
+#   nothing, so "the submitters named above independently assert it" took
+#   in the one submitter that dissents. The clause now names the admitting
+#   submitters by their role, wherever the card puts them.
 _CURATION_BY_PANEL: Final = (
     "every classification on this page is a ClinGen expert panel's or a named curator's."
 )
 
 _CURATION_BY_AGREEMENT: Final = (
     "and no ClinGen expert panel has graded this gene for any of the diseases in scope "
-    "here: it is published because the Gene Curation Coalition submitters named above "
+    "here: it is published because the Gene Curation Coalition submitters it is admitted by "
     "independently assert it."
 )
 
@@ -385,15 +397,17 @@ _STRATUM_LABEL: Final[dict[str, str]] = {
 _MATRIX_LEGEND: Final = (
     evidence_legend(swatches=True)
     + '<p class="strip-legend">Rows are <strong>independent cohort families</strong>, not '
-    "studies: two papers sharing a sample collection describe the same people and appear "
-    "once. " + EVIDENCE_POWER_CAVEAT + "</p>"
+    "studies: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and appear once. "
+    + EVIDENCE_POWER_CAVEAT
+    + "</p>"
 )
 
 _STRIP_LEGEND: Final = (
     evidence_legend(swatches=False)
     + '<p class="strip-legend">One glyph per <strong>independent cohort family</strong>, not '
-    "per study: two papers sharing a sample collection describe the same people and count "
-    "once. "
+    "per study: two papers that share a sample collection, or draw on collections this atlas "
+    "records as overlapping, can describe the same people and count once. "
     + EVIDENCE_POWER_CAVEAT
     + " The tally reads <em>enriched</em> of <em>tested</em>: the first "
     "number counts datasets that found something, the second counts datasets that looked. "
@@ -595,9 +609,48 @@ _MIRRORED_NOTICE: Final = (
 # "children" (2026-10-26): `shared_cohorts` unions case and control collections,
 # and a shared collection may be a control cohort of adults -- UK Biobank's
 # registry note says "~500,000 UK adults recruited at ages 40-69".
+#
+# The declared-overlap clause since review (2026-10-27): the reason it gave was
+# a shared collection alone, and on the 72 pages carrying both PMID:34324492
+# and PMID:42230622 the reason is a declared overlap (`Cohort.overlaps_with`,
+# owner decision I3), for which "may describe partly the same people" is all
+# the registry knows -- so "would" for a shared collection, "could" for the
+# declared kind, as `methods.html#rare-variants` words the two.
 _POOLING_NOTICE: Final = (
     "<p>The atlas computes <strong>no pooled statistic across studies</strong>: pooling "
-    "two that share a sample collection would count the same people twice.</p>"
+    "two that share a sample collection would count the same people twice, and pooling "
+    "two that draw on collections this atlas records as overlapping could.</p>"
+)
+
+# The matrix and the card each lead with one row, by two rules the owner kept
+# (owner decision 2026-10-26, R4), so the caption says they differ rather than
+# leaving a reader to find the two disagreeing. A cell names the most
+# significant of the rows that give it its state (`_matrix_cell`: among
+# `concordance.deciding_rows`, by corrected p where published and raw p
+# otherwise); the card lists a study's surviving rows in its table's reading
+# order (`_card_rare_variants`, `burden._sort_key`), in which the `damaging`
+# union sorts before its components. Measured on a build of 3b766ba: of the 45
+# card lines on 32 pages, 15 lead with a different row from their matrix cell,
+# on 13 pages. The owner's draft said "its strongest supporting row": the cell
+# names a surviving row in a `corrected` cell, ranked by p, not by effect --
+# "most significant", the word `docs/data-api.md` uses for it.
+#
+# **Rendered only where the card lists a surviving row** (review,
+# 2026-10-27): with the matrix, and only if some row of this gene survives
+# its own study's correction (`concordance.survives_own_correction`, the
+# predicate the card's list reads). It rendered with every matrix, 118 pages,
+# and on the 86 whose card lists no row there is no lead for a cell to differ
+# from; on 55 of those no cell names a row at all (measured on a build of
+# ad03128). On the 32 where it renders, card and matrix can lead differently.
+# And it claims the card's order only as far as it holds: the card groups a
+# study's surviving rows into one line per analysis, ordered by analysis
+# label, so "it keeps each study table's order" was true within a line and
+# not across a study's lines; that a damaging union comes before its parts is
+# true on every line.
+_MATRIX_LEAD_NOTE: Final = (
+    "<p>A cell names the most significant of the rows behind its state; the card lists a "
+    "study's surviving rows with a damaging union before its parts, so the two can lead "
+    "with different rows.</p>"
 )
 
 # `_BURDEN_PREAMBLE` and `_SYNONYMOUS_NOTICE` sat here until 2026-10-26: the
@@ -915,6 +968,116 @@ def _row_label(row: BurdenRow) -> str:
 _OWN_LAB_MARK: Final = " · study by an atlas author"
 
 
+def _correction_scope(row: BurdenRow, publication: Publication | None) -> str:
+    """What a card line's row survived, where its study says (owner decision 2026-10-26, R3).
+
+    "Surviving its own study's correction" read as genome-wide on every line,
+    and for PMID:40127276 it is not: that study's q is a Benjamini-Hochberg
+    correction over its 248 panel genes (`Publication.correction_genes`,
+    measured against Dataset S6), and the same study draws a genome-wide line
+    of its own at p < 2.6e-6 (`Publication.genome_wide_threshold`, from its
+    Fig. 1 legend; `_genome_wide`). Measured on a build of e0393f4: 67
+    non-synonymous rows on 25 published genes survive at q < 0.05, and 25 of
+    them, on 13 genes, are below the study's genome-wide line -- two strengths
+    of finding the card printed identically. TBX5's case-control damaging row
+    (p 1.34e-4, q 0.00369) is the first kind and its de novo damaging row (p
+    1.07e-8) the second.
+
+    So a line's row gains its corrected p and the panel it was corrected over.
+    Only the line's own row: the rest of the group are named, not stated, and
+    carry no corrected p. The statistic is named by `_statistic`, so it is `q`
+    only where the correction is a false-discovery rate, as on the matrix and
+    the forest panel. Renders only where the field is curated, so every other
+    study today renders exactly as before.
+    """
+    if publication is None or publication.correction_genes is None:
+        return ""
+    if row.pvalue_adjusted is None:
+        return ""
+    return f" · {_statistic(row)} within its {publication.correction_genes:,}-gene panel"
+
+
+def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
+    """What a study's own table says of the CHD cases among a card's carriers (R2).
+
+    PMID:34324492's case set combines CHD with a series of 777 sporadic
+    thoracic aortic aneurysm probands, and the study's summary caveat on the
+    card says so. For the genes its S8 Table counts, `n_chd_case_carriers`
+    says how many of a row's case carriers are CHD cases. Where that is all of
+    them: "For this gene, the study's S8 Table counts every carrier among its
+    CHD cases, so none is an aneurysm proband." The second clause is what
+    stops the first reading as a remark on how S8 counts, true of any gene
+    (review, 2026-10-27). It is the consequence, not a second figure read off
+    S8: the table's bands partition its carriers (measured 2026-10-27, "only
+    CHD" plus "only TAA" is "CHD+TAA" for all 528 genes, a blank read as
+    none), and of the 10 published genes the line shows, S8's TAA-only `case`
+    is 0 for TBX1, EFNB2, SOX7 and ETS1 and blank for the other six -- so the
+    sentence never says S8 "counts none" there. It does not retire the
+    caveat: the line's denominator is the case set the study analysed,
+    aneurysm probands among it (S8 has a TAA-only carrier for 144 of its 528
+    genes).
+
+    Where it is fewer, the sentence gives both counts, never "every", and no
+    aneurysm count: the mirror carries none, and a difference of two counts is
+    not a figure S8 prints. Measured on a build of this tree (2026-10-27): all
+    10 published genes with a card line from that study carry the column and
+    are equal (ELN, TBX1, GATA4, TAB2, EFNB2, SOX7, ROBO4, ETS1, NKX2-5,
+    NR2F2); the one row where it is smaller, ANKRD11's 12 of 13, is on no
+    published page, so that form is reachable from a fixture only.
+
+    `rows` are the rows the card's lines show, one per line. The table, and
+    the case the second clause rules out, are the ones `CHD_CASE_SPLITS`
+    records for the row's study: BUR024 refuses the column on a row of any
+    study it does not list, so a row that reaches here without one means the
+    gate was bypassed, and that raises rather than names a table the study
+    never had. A row with no case carrier says nothing,
+    since "every carrier" of none is vacuous. Deduplicated in order, so two
+    lines of one study cannot repeat a sentence.
+    """
+    sentences: list[str] = []
+    for row in rows:
+        chd = row.n_chd_case_carriers
+        if chd is None:
+            continue
+        split = CHD_CASE_SPLITS.get(row.study)
+        if split is None:
+            raise ValueError(
+                f"a row of {row.study} carries n_chd_case_carriers, which only a study in "
+                f"CHD_CASE_SPLITS may (BUR024); the validation gate was bypassed"
+            )
+        if row.n_case_carriers == 0:
+            continue
+        sentence = (
+            f"For this gene, the study's {split.table} counts every carrier among its CHD "
+            f"cases, so none is {split.other_case}."
+            if chd == row.n_case_carriers
+            else f"For this gene, the study's {split.table} counts {chd:,} of the "
+            f"{row.n_case_carriers:,} carriers among its CHD cases."
+        )
+        if sentence not in sentences:
+            sentences.append(sentence)
+    return sentences
+
+
+def _genome_wide(row: BurdenRow, publication: Publication | None) -> str:
+    """`p <raw p>` where a row clears its study's own genome-wide line, else "" (R3).
+
+    Strictly below, as the paper's "P-value < 2.6 x 10^-6" reads; formatted as
+    the study tables format a p. Marked on **every** surviving row of a card
+    line, the named ones too, not only the line's own row: measured on a real
+    build, marking the line's row alone left 15 of the 25 genome-wide rows
+    unmarked and 6 of the 13 genes with one -- FLT4's case-control
+    loss-of-function row (p 1.75e-15) sat named under a damaging row that
+    survives within the panel only. Independent of `correction_genes`: a study
+    may state a genome-wide line without correcting over a panel.
+    """
+    if publication is None or publication.genome_wide_threshold is None:
+        return ""
+    if row.pvalue is None or not row.pvalue < publication.genome_wide_threshold:
+        return ""
+    return f"p {row.pvalue:.3g}"
+
+
 def _card_rare_variants(
     rows: Sequence[BurdenRow],
     families: tuple[frozenset[str], ...],
@@ -932,9 +1095,14 @@ def _card_rare_variants(
     missense (damaging)". It counted them ("2 more survive") until 2026-10-26,
     which beside the `damaging` union counted the union's own components as
     further findings; the union's label already says what it is the union of.
-    **Never the "most significant" row**: choosing one by p-value would be a
-    ranking, and the atlas authors none (D12). Groups in study-id order, then
-    analysis label, the order the section's own subtitles use.
+    **Not the "most significant" row**: a line keeps its study table's reading
+    order. The evidence matrix's cell is where a row is chosen by p
+    (`_matrix_cell`, among the rows behind its state), and its caption says
+    the two can lead with different rows (`_MATRIX_LEAD_NOTE`). This read
+    "choosing one by p-value would be a ranking, and the atlas authors none
+    (D12)" until review (2026-10-27), beside a matrix that chooses by p.
+    Groups in study-id order, then analysis label, the order the section's
+    own subtitles use.
 
     "Survives" is `concordance.survives_own_correction`, the predicate the
     evidence matrix's `corrected` tier reads, so the card and the matrix on the
@@ -986,11 +1154,38 @@ def _card_rare_variants(
     sample collection describe the same people -- and, where some study
     published a correction for the gene, says none survives one; where none
     did, it says only how many tested it, and the no-correction lines say the
-    rest. With no row at all it says no
+    rest.
+
+    **That line named no study, so it shed the declaration** (owner decision
+    2026-10-26, R7): MYH11, HRAS, KLF13 and CFC1 are tested by PMID:34324492
+    alone, nothing survives, and their cards said nothing of its being by an
+    atlas author. Where any study that tested the gene is one, the line says
+    so: "(a study by an atlas author)" where one study tested it, "(each
+    study by an atlas author)" where several did and all are, and "(k of the
+    n studies by an atlas author)" where only some are -- counted in studies,
+    because the line's own count is of datasets and one family may hold both
+    kinds. Measured on a real build: all 86 such lines carry it (24 + 4 of
+    the first form, 48 of the second, 7 + 3 of the third). Where a
+    no-correction line follows for the same study, it carries the mark too
+    (24 cards); each line keeps its own declaration. With no row at all it says no
     study here reports a result, and not that no study *tested* the gene: a
     supplement that omits a gene (CRIPTO, in PMID:42230622) does not say the
     study never ran it. The power caveat follows whenever the gene has rows,
     so "none survives" never stands alone beside a definitive chip.
+
+    **The count carries the front page's qualifier** (owner answer
+    2026-10-27), `render.REGISTRY_QUALIFIER`, "(as far as the cohort registry
+    records)": the families are joined only through collections the registry
+    names or declares overlapping, so this count, like the front page's, sees
+    no overlap the registry does not record. It follows the count directly
+    and precedes the declaration: placed after it, it would read as
+    qualifying who wrote the studies, which the registry does not record at
+    all. Measured on a real build the day it was added: all 86 lines carry
+    it, in these five forms: "Tested in 1 independent dataset (as far
+    as the cohort registry records) (a study by an atlas author)." on 24, the
+    same ending "; none survives a correction its study published." on 4,
+    "(each study by an atlas author)" on 48, and two datasets with "(1 of the
+    2 studies ...)" on 7 and "(2 of the 3 studies ...)" on 3.
 
     `families` is the corpus-wide grouping `build_site` derives once; a study
     of this gene's rows that no family holds means it was derived over another
@@ -1003,9 +1198,12 @@ def _card_rare_variants(
             "<p>No rare-variant study in this atlas reports a result for this gene.</p></div>"
         )
 
-    def own_lab(study: str) -> str:
+    def by_an_author(study: str) -> bool:
         publication = publications.get(study)
-        return _OWN_LAB_MARK if publication is not None and publication.own_lab else ""
+        return publication is not None and publication.own_lab
+
+    def own_lab(study: str) -> str:
+        return _OWN_LAB_MARK if by_an_author(study) else ""
 
     groups: dict[tuple[str, str], list[BurdenRow]] = {}
     for row in rows:
@@ -1039,16 +1237,24 @@ def _card_rare_variants(
         for study, analysis in sorted(groups):
             surviving = sorted(groups[(study, analysis)], key=_sort_key)
             first, others = surviving[0], surviving[1:]
-            also = (
-                f" · also surviving: {'; '.join(_row_label(row) for row in others)}"
-                if others
-                else ""
-            )
+            publication = publications.get(study)
+            named = []
+            for row in others:
+                genome_wide = _genome_wide(row, publication)
+                named.append(
+                    f"{_row_label(row)} (genome-wide, {genome_wide})"
+                    if genome_wide
+                    else _row_label(row)
+                )
+            also = f" · also surviving: {'; '.join(named)}" if named else ""
+            genome_wide = _genome_wide(first, publication)
             name = _study_label(study, publications)
             line = (
                 f"{name} · {analysis} — {_row_label(first)}: "
                 f"{_count(first.n_case_carriers, first.n_cases, first.count_unit)} vs "
-                f"{_controls(first)}{also}{own_lab(study)}"
+                f"{_controls(first)}{_correction_scope(first, publication)}"
+                f"{f' · genome-wide ({genome_wide})' if genome_wide else ''}"
+                f"{also}{own_lab(study)}"
             )
             # `caveats` where a surviving row's `method_note` qualifies these
             # counts -- it is footnoted in the study's block, outside every
@@ -1065,16 +1271,27 @@ def _card_rare_variants(
         # A study's curated summary caveat, once per study with a line, in the
         # lines' own study order: it qualifies the counts those lines show, so
         # a study with no line -- a no-correction line shows no counts -- has
-        # nothing here for it to qualify.
+        # nothing here for it to qualify. After it, what the study's own table
+        # says of the CHD cases among the carriers those lines show
+        # (`_chd_only`, owner decision R2): whether the caveat reaches those
+        # carriers, never whether it reaches the denominator. Only after it: a
+        # study with no caveat gets neither, because that sentence speaks of
+        # aneurysm probands only the caveat introduces (review, 2026-10-27).
         notes: list[str] = []
         for study in dict.fromkeys(study for study, _ in sorted(groups)):
             publication = publications.get(study)
             if publication is None or publication.summary_caveat is None:
                 continue
+            shown = [
+                sorted(members, key=_sort_key)[0]
+                for (owner, _), members in sorted(groups.items())
+                if owner == study
+            ]
+            text = " ".join([publication.summary_caveat, *_chd_only(shown)])
             notes.append(
                 f'<p class="card-note"><a href="#{html.escape(_study_anchor(study))}">'
                 f"{html.escape(_study_label(study, publications))}</a>: "
-                f"{html.escape(publication.summary_caveat)}</p>"
+                f"{html.escape(text)}</p>"
             )
         body = (
             "<p><strong>Rare variants</strong> surviving their own study's correction</p>"
@@ -1097,7 +1314,25 @@ def _card_rare_variants(
         verdict = (
             "; none survives a correction its study published." if published_correction else "."
         )
-        body = f"{heading}<p>Tested in {tested} independent {noun}{verdict}</p>"
+        # The declaration this line names no study to carry (owner decision
+        # 2026-10-26, R7). Counted in studies, never in datasets: a cohort
+        # family can hold a study by an atlas author beside one that is not.
+        own = sum(1 for study in studies if by_an_author(study))
+        declared = ""
+        if len(studies) == 1 and own:
+            declared = " (a study by an atlas author)"
+        elif own == len(studies) > 1:
+            declared = " (each study by an atlas author)"
+        elif own:
+            declared = f" ({own} of the {len(studies)} studies by an atlas author)"
+        # What the count can see (owner answer 2026-10-27): the front page's
+        # qualifier, from one constant, straight after the count it qualifies
+        # and before the declaration, which is about studies and which the
+        # registry does not record.
+        body = (
+            f"{heading}<p>Tested in {tested} independent {noun} {REGISTRY_QUALIFIER}"
+            f"{declared}{verdict}</p>"
+        )
     return (
         f'<div class="card-variants">{body}{"".join(uncorrected)}'
         f"<p>{EVIDENCE_POWER_CAVEAT}</p></div>"
@@ -1270,8 +1505,102 @@ def _card_dispute(fact: GeneFacts, gene_validity: GeneValidity) -> str:
     return f'<p class="card-dispute">{html.escape(sentence)}</p>'
 
 
+def _card_no_association(fact: GeneFacts, gene_validity: GeneValidity) -> str:
+    """Who reports no known disease relationship, for what, and when (owner decision R6).
+
+    Rendered exactly where `has_no_association_report` is true: some authority
+    recorded `No Known Disease Relationship` in scope while another supports
+    the gene (`vocab.reports_no_association`). The bundle published the flag
+    and `no_association_reported_by` since schema 2.10, and the validity table
+    listed the record, but the card -- the summary a reader takes in first --
+    said nothing. Measured on a build of 3b766ba: one published gene, GDF1,
+    admitted on GenCC agreement, so its card's chip reads `not classified`
+    and its `admitted by` row names four submitters, G2P (`Definitive`) among
+    them; the line beneath reads "Illumina reports no known disease
+    relationship for congenital heart defects, multiple types, 6 (2021); see
+    the validity table."
+
+    Built from the records, never from a literal or from the bundle's name
+    list: grouped by authority -- the expert panel for a ClinGen record, the
+    submitter for a GenCC one, as `_card_dispute` names them -- with each
+    authority's diseases and the year of its own record (`_record_date`, the
+    date the validity table shows). Panels first, then submitters, each by
+    name; diseases sorted. ClinGen's own GenCC copy of a panel record folds as
+    it does in the table (`_repeats_the_panel`), so it is not named twice.
+    "no known disease relationship" is the one term either mirror maps to
+    `NO_KNOWN_ASSOCIATION` (`vocab`), said in words rather than in the
+    authority's capitals. A record with no calendar date names no year.
+
+    A flag with no record to name means the facts and the records were
+    derived apart, and the page is refused, as `_card_dispute` refuses.
+    """
+    if not fact.has_no_association_report:
+        return ""
+    panel = [record for record in gene_validity.records if record.source is ValiditySource.CLINGEN]
+    reports = [
+        record
+        for record in gene_validity.records
+        if record.classification is Classification.NO_KNOWN_ASSOCIATION
+        and not _repeats_the_panel(record, panel)
+    ]
+    if not reports:
+        raise ValueError(
+            f"{fact.gene} is flagged has_no_association_report with no such record to name; "
+            "its facts and its validity records were derived apart"
+        )
+    # De-duplicated through a dict, not a `set`, so the sorts below are for the
+    # reader and dropping one changes the text on every hash seed.
+    groups: dict[tuple[int, str], dict[str, None]] = {}
+    for record in reports:
+        if record.source is ValiditySource.CLINGEN:
+            key = (0, f"the {record.gcep}" if record.gcep else "ClinGen")
+        else:
+            key = (1, record.submitter or "a Gene Curation Coalition submitter")
+        dated = _date(_record_date(record))
+        year = f" ({dated[:4]})" if _CALENDAR_DATE.match(dated) else ""
+        groups.setdefault(key, {})[f"{record.disease_label}{year}"] = None
+    clauses = [
+        f"{authority} reports no known disease relationship for {_and_join(sorted(diseases))}"
+        for (_, authority), diseases in sorted(groups.items())
+    ]
+    sentence = "; ".join(clauses) + "; see the validity table."
+    sentence = sentence[0].upper() + sentence[1:]
+    return f'<p class="card-no-association">{html.escape(sentence)}</p>'
+
+
+# The two scope classes whose authority is a ClinGen expert panel, for which a
+# marked syndrome's card line names the panel (`_card_scope`, R5).
+_CLINGEN_SCOPES: Final = frozenset(
+    {ScopeAuthority.CLINGEN_CHD_PANEL, ScopeAuthority.CLINGEN_EXPERT_PANEL}
+)
+
+
+def _panel_graders(
+    validity: Mapping[str, GeneValidity], symbols: Mapping[str, str]
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """`(disease, panel)` -> the genes that ClinGen panel graded for that disease.
+
+    Over every gene the validity mirrors curate in scope, published or not, by
+    registry symbol (the HGNC id where the registry names none), sorted. For
+    `_card_scope`, which must name them when the panel a syndrome is scoped on
+    is not the one that graded the page's own gene.
+    """
+    graders: dict[tuple[str, str], set[str]] = {}
+    for gene, gene_validity in validity.items():
+        for record in gene_validity.records:
+            if record.source is ValiditySource.CLINGEN and record.gcep is not None:
+                graders.setdefault((record.disease, record.gcep), set()).add(
+                    symbols.get(gene, gene)
+                )
+    return {key: tuple(sorted(names)) for key, names in graders.items()}
+
+
 def _card_scope(
-    fact: GeneFacts, gene_validity: GeneValidity, warrants: Mapping[str, Warrant]
+    fact: GeneFacts,
+    gene_validity: GeneValidity,
+    warrants: Mapping[str, Warrant],
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """Why a syndrome's grade is on a CHD atlas, beside the chip. D55.
 
@@ -1299,25 +1628,109 @@ def _card_scope(
     among the 21 Orphanet lines measured 2026-10-26. The clause then names the
     Orphanet syndromes the frequency was recorded for, so it is never read as
     a frequency recorded for the subtype itself.
+
+    **A syndrome a ClinGen expert panel scoped gets the line too** (owner
+    decision 2026-10-26, R5): "Graded for Holt-Oram syndrome as a whole
+    syndrome; in scope on its curation by ClinGen's Syndromic Disorders Gene
+    Curation Expert Panel." Ten genes are graded at their headline for such a
+    syndrome and their cards said nothing. Which terms are syndromes is the
+    curated `ScopeEntry.syndrome` mark, because nothing else says it: ZIC3 and
+    NODAL are graded for "congenital heart disease with heterotaxy syndrome",
+    which is CHD itself. Rendered only when **every** headline disease is a
+    marked term an authority of a ClinGen class scoped, for the reason the
+    Orphanet line needs all of them.
+
+    **The reason clause is not the owner's "because <panel> curates it"**,
+    which reads as sufficient and is not: measured 2026-10-26 on the ClinGen
+    mirror, the Syndromic Disorders panel curates 176 disease terms and 3 are
+    in scope, Hearing Loss 63 and 1. What `admitted_by` records, and SCP005
+    checks against the mirror, is that the term is listed on that panel's
+    curation of it -- so the line says it is in scope *on* that curation. The
+    authority is the term's `attributed_to`, verbatim, after "ClinGen's".
+
+    **That panel need not be the one that graded this gene** (review,
+    2026-10-27). `attributed_to` names the panel whose curation scopes the
+    *term*. EVC2's grade for Ellis-van Creveld syndrome is the Skeletal
+    Disorders panel's, and the term is scoped on the Kidney Cystic and
+    Ciliopathy Disorders panel's curation of it for EVC; "in scope on its
+    curation by" that panel read as the panel having graded EVC2. Where no
+    ClinGen record of this gene for the term is that panel's, the clause names
+    the genes that panel did grade for it (`panel_graders`, from the validity
+    mirror the build already holds): "in scope on ClinGen's <panel>'s curation
+    of it for EVC." Measured on a build of 5f7161b: 1 of the 10 lines (EVC2);
+    the other nine panels graded the page's own gene. None found is a scope
+    term SCP005 refuses, so it raises rather than inventing a gene.
+
+    **Each disease is paired with its own panel.** With two diseases the
+    clause sorted the panels apart from the diseases and joined the two lists,
+    so Holt-Oram syndrome and TARP syndrome read as curated by the Congenital
+    Heart Disease and the Syndromic Disorders panels -- the reverse of the
+    terms' attributions. Several diseases now get one "ClinGen's <panel>'s
+    curation of <disease>" each, in the order the line names the diseases.
+    Latent: every one of the ten lines names one disease.
     """
     headline = fact.headline_confidence
     if headline is None:
         return ""
-    graded = {record.disease for record in _warrant_records(fact, gene_validity)}
-    if not graded or not graded <= warrants.keys():
+    warranting = _warrant_records(fact, gene_validity)
+    graded = {record.disease for record in warranting}
+    if not graded:
         return ""
     diseases = _graded_diseases(gene_validity, headline)
     noun = "a whole syndrome" if len(diseases) == 1 else "whole syndromes"
-    found = [warrants[disease] for disease in sorted(graded)]
-    recorded_for = (
-        ""
-        if all(warrant.via == "direct" for warrant in found)
-        else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
-    )
-    sentence = (
-        f"Graded for {_and_join(diseases)} as {noun}; in scope because Orphanet records a "
-        f"structural heart malformation in at least 30% of cases{recorded_for}."
-    )
+    if graded <= warrants.keys():
+        found = [warrants[disease] for disease in sorted(graded)]
+        recorded_for = (
+            ""
+            if all(warrant.via == "direct" for warrant in found)
+            else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
+        )
+        reason = (
+            "in scope because Orphanet records a structural heart malformation in at least 30% "
+            f"of cases{recorded_for}"
+        )
+    else:
+        terms = [(scope_terms or {}).get(disease) for disease in sorted(graded)]
+        marked = [
+            term
+            for term in terms
+            if term is not None and term.syndrome and term.admitted_by in _CLINGEN_SCOPES
+        ]
+        if len(marked) != len(terms):
+            return ""
+        labels = {record.disease: record.disease_label for record in warranting}
+        clauses: list[tuple[str, str, tuple[str, ...]]] = []
+        for term in sorted(marked, key=lambda term: (labels[term.id], term.id)):
+            own = {
+                record.gcep
+                for record in gene_validity.records
+                if record.source is ValiditySource.CLINGEN and record.disease == term.id
+            }
+            others: tuple[str, ...] = ()
+            if term.attributed_to not in own:
+                others = (panel_graders or {}).get((term.id, term.attributed_to), ())
+                if not others:
+                    raise ValueError(
+                        f"scope term {term.id} is attributed to {term.attributed_to!r}, which "
+                        f"graded no gene for it in the validity mirror; SCP005 refuses this"
+                    )
+            clauses.append((f"ClinGen's {term.attributed_to}", labels[term.id], others))
+        if len(clauses) == 1:
+            [(panel, _, others)] = clauses
+            reason = (
+                f"in scope on {panel}'s curation of it for {_and_join(others)}"
+                if others
+                else f"in scope on its curation by {panel}"
+            )
+        else:
+            reason = "in scope on " + _and_join(
+                [
+                    f"{panel}'s curation of {label}"
+                    + (f" for {_and_join(others)}" if others else "")
+                    for panel, label, others in clauses
+                ]
+            )
+    sentence = f"Graded for {_and_join(diseases)} as {noun}; {reason}."
     return f'<p class="card-scope">{html.escape(sentence)}</p>'
 
 
@@ -1332,17 +1745,22 @@ def _rail(
     publications: Mapping[str, Publication] | None = None,
     warrants: Mapping[str, Warrant] | None = None,
     identity: GeneIdentity | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """The clinician card: the summary column, for every gene whether curated here or not.
 
     **D55: the rail is the card.** Top to bottom: the symbol and the gene's
     identity; the HGNC id and the chips; a definition list (`_card_rows`: the
     warrant, who else lists the gene, its inheritance); the headline grade's
-    gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); the Orphanet
-    line (`_card_scope`); the rare-variant results that survive their own
+    gloss (`_card_gloss`); a disputed-gene line (`_card_dispute`); a
+    no-association line (`_card_no_association`, R6); the Orphanet line
+    (`_card_scope`); the rare-variant results that survive their own
     study's correction (`_card_rare_variants`, D56), each linking to its
-    study's block; the atlas-curation sentence (`_card_curation`); the JSON
-    link.
+    study's block; the atlas-curation sentence (`_card_curation`); and a last
+    line linking the top of `methods.html` as "How to read this page" (P1,
+    2026-10-26) beside the gene's JSON. The nav's link to the same file reads
+    "How to read this atlas"; from the card the question is about this page.
     Every row from data the page already has -- nothing computed.
 
     It replaced a definition list of raw tokens and zero counts -- `validity:
@@ -1427,20 +1845,56 @@ def _rail(
         f"{definition_list(_card_rows(fact, gene_validity))}"
         f"{_card_gloss(fact)}"
         f"{_card_dispute(fact, gene_validity)}"
-        f"{_card_scope(fact, gene_validity, warrants or {})}"
+        f"{_card_no_association(fact, gene_validity)}"
+        f"{_card_scope(fact, gene_validity, warrants or {}, scope_terms, panel_graders)}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
-        f'<p><a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
+        '<p><a href="../methods.html">How to read this page</a> &middot; '
+        f'<a href="../{html.escape(bundle)}">this gene as JSON</a></p></aside>'
     )
 
 
-def _validity_row(record: ValidityRecord) -> Row:
+# GenCC's `report_url` for every PanelApp Australia submission: the site's bare
+# homepage, on all 5,478 of them in the mirror (measured 2026-10-26), so the
+# validity table's "open" link landed on a page that does not name the gene.
+_PANELAPP_AUSTRALIA: Final = "PanelApp Australia"
+_PANELAPP_AUSTRALIA_HOME: Final = "https://panelapp-aus.org"
+
+
+def _report_url(record: ValidityRecord, symbol: str | None) -> str | None:
+    """Where a validity row's report link goes: GenCC's URL, with one exception (R8).
+
+    Owner decision 2026-10-26. A PanelApp Australia record whose `report_url`
+    is exactly the bare homepage links that site's page for the gene instead,
+    `https://panelapp-aus.org/panels/entities/<HGNC symbol>`: verified
+    2026-10-26 to answer 200 for TBX5, whose PanelApp Australia API record
+    lists it on 11 panels. **The one report URL this atlas builds rather than
+    republishes** (the identity links are built too, from ids, by
+    `identity.external_links`), because the one GenCC supplies names no gene and so cannot
+    lead to the record the row reports. Every other submitter's URL, and a
+    PanelApp Australia URL that is anything but the homepage, is GenCC's as
+    given; the mirror and the bundle keep GenCC's value. The symbol is the gene
+    registry's, percent-encoded; a gene the registry does not name keeps the
+    homepage rather than a URL built on its HGNC id.
+    """
+    if (
+        record.source is ValiditySource.GENCC
+        and record.submitter == _PANELAPP_AUSTRALIA
+        and record.report_url == _PANELAPP_AUSTRALIA_HOME
+        and symbol
+    ):
+        return f"{_PANELAPP_AUSTRALIA_HOME}/panels/entities/{quote(symbol, safe='')}"
+    return record.report_url
+
+
+def _validity_row(record: ValidityRecord, symbol: str | None = None) -> Row:
     """One mirrored classification as a row, in the section's one vocabulary.
 
     `classification_term` is what the authority published, not the rung it maps
     onto: GenCC's `Supportive` maps to no rung at all, and a table showing the
     mapped value would render that submitter's row as blank or, worse, as a
-    grade nobody gave.
+    grade nobody gave. `symbol` is the gene's registry symbol, for
+    `_report_url`.
     """
     curator = record.gcep if record.source is ValiditySource.CLINGEN else record.submitter
     return Row(
@@ -1450,12 +1904,14 @@ def _validity_row(record: ValidityRecord) -> Row:
             _inheritance(record.moi),
             record.classification_term,
             _date(_record_date(record)),
-            _report_link(record.report_url, record.sop),
+            _report_link(_report_url(record, symbol), record.sop),
         )
     )
 
 
-def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
+def _validity_section(
+    gene_validity: GeneValidity, notes: str = "", symbol: str | None = None
+) -> str:
     """The mirrored classifications: the expert panel's first, then everyone else's. D51.
 
     `notes` (the Orphanet scope notes) is placed after the intro and before the
@@ -1491,8 +1947,8 @@ def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
     panel = [r for r in gene_validity.records if r.source is ValiditySource.CLINGEN]
     submitted = [r for r in gene_validity.records if r.source is ValiditySource.GENCC]
     listed = [r for r in submitted if not _repeats_the_panel(r, panel)]
-    panel_rows = [_validity_row(record) for record in panel]
-    listed_rows = [_validity_row(record) for record in listed]
+    panel_rows = [_validity_row(record, symbol) for record in panel]
+    listed_rows = [_validity_row(record, symbol) for record in listed]
     folded = len(listed) < len(submitted)
     clingen_listed = any(record.submitter == "ClinGen" for record in listed)
     return (
@@ -1625,8 +2081,14 @@ def _evidence_section(
                 )
             )
         )
+    # The section's link to `methods.html#curated-evidence` (owner decision
+    # 2026-10-26, E3), in the pattern of the other sections' one-line intros.
+    # "above" is true in this position: the validity table renders first.
     return (
         "<h2>Curated evidence</h2>"
+        "<p>Each lesion assertion below is this atlas's own curation, and changes no "
+        'classification above. <a href="../methods.html#curated-evidence">How to read '
+        "curated evidence</a>.</p>"
         + "".join(blocks)
         + "<h2>Publications</h2>"
         + data_table(_CITATION_HEADERS, citations)
@@ -1647,7 +2109,7 @@ def _study_label(pmid: str, publications: Mapping[str, Publication]) -> str:
     # `Publication.authors` constrains the *list* to `min_length=1`, not its
     # elements, so a whitespace-only first author passes every validator and
     # renders "    et al. 2026" -- a study heading naming nobody. Same defect
-    # `runner.py::_cell` exists to catch on the mirror side, reaching a page for
+    # `tables.cell_text` exists to catch on the mirror side, reaching a page for
     # the first time here: `authors[0]` was previously read only by `search.py`.
     author = publication.authors[0].strip()
     if not author:
@@ -1842,7 +2304,7 @@ def _burden_section(
     if not rows:
         return ""
 
-    overlaps = shared_cohorts(rows)
+    overlaps = shared_cohorts(rows, cohorts)
     studies = sorted({row.study for row in rows})
     # One block per study, and each block's heading is the card's link target
     # (D55): two studies sharing an anchor would send one study's caveats link
@@ -1888,11 +2350,16 @@ def _burden_section(
         # the reason every other loop here is sorted.
         placed = [row for row in study_rows if _plottable(row)]
         measures = sorted({row.effect_measure for row in placed if row.effect_measure is not None})
+        # Every (stratum, consequence) cell this study published for this gene,
+        # plotted or not: what a panel's unsplit-union line reads to say a
+        # missing component was never published rather than not drawn.
+        cells = frozenset((row.cohort_stratum, row.consequence_class) for row in study_rows)
         forests = "".join(
             _forest(
                 [row for row in placed if row.effect_measure == measure],
                 measure,
                 _study_label(study, publications),
+                cells,
             )
             for measure in measures
         )
@@ -1932,12 +2399,8 @@ def _burden_section(
         )
 
     shared = "".join(
-        f'<p class="notice-inline"><strong>These two studies are not independent.</strong> '
-        f"{html.escape(_study_label(left, publications))} and "
-        f"{html.escape(_study_label(right, publications))} both draw on "
-        f"{html.escape(_names(common, cohorts))}, so their results describe partly "
-        f"the same people and must not be combined.</p>"
-        for (left, right), common in overlaps.items()
+        _overlap_notice(left, right, overlap, publications, cohorts)
+        for (left, right), overlap in overlaps.items()
     )
 
     # The pooling sentence is conditional. Rendered unconditionally it asserted
@@ -1947,6 +2410,8 @@ def _burden_section(
     pooling = _POOLING_NOTICE if len({row.study for row in rows}) > 1 else ""
 
     matrix = _evidence_matrix(rows, families, axes, publications)
+    # The card lists a row exactly when one survives (`_card_rare_variants`).
+    lead_differs = any(survives_own_correction(row) for row in rows)
 
     # THE FOLD RULE. A caveat may fold if it is *general* -- true on every gene
     # page, teaching how to read the table. It must stay visible if it is
@@ -1979,8 +2444,9 @@ def _burden_section(
         # belongs directly beneath the matrix rather than four paragraphs above
         # it. Rendered whenever there is a matrix, because the matrix is what it
         # qualifies -- unlike its previous home, where it was conditional on
-        # there being more than one study to pool.
-        + (_POOLING_NOTICE if matrix else pooling)
+        # there being more than one study to pool. The lead note beside it is
+        # conditional on the card listing a surviving row; see its constant.
+        + (_POOLING_NOTICE + (_MATRIX_LEAD_NOTE if lead_differs else "") if matrix else pooling)
         + shared
         + "".join(blocks)
         + _cohort_notes(rows, cohorts)
@@ -2027,15 +2493,24 @@ def _disclosure(study: str, publications: Mapping[str, Publication]) -> str:
     false where it sits: measured on a build of 4233eca, 113 of the 190 own-lab
     study blocks also carry the atlas's own Bonferroni arithmetic
     (`_method_line`'s `0.05 / tests_reported`) and a forest plot the atlas drew
-    from the study's rows. It keeps the hedge the sentence it replaced had: no
-    *assessment* added.
+    from the study's rows.
+
+    **"no assessment added" went too (review, 2026-10-27).** The same day,
+    `methods.html#rare-variants` began stating the one rule the atlas applies
+    to every study's rows (owner decision W2): which support the gene and
+    which survive their study's correction, the rule the card, the matrix and
+    the forest fill read. A block saying the atlas added no assessment
+    contradicted that page on all 190 own-lab blocks. The sentence says what
+    is true instead: the rule is applied, and it is the same rule
+    (`concordance.survives_own_correction` reads no `own_lab`).
     """
     publication = publications.get(study)
     if publication is None or not publication.own_lab:
         return ""
     return (
         '<p class="disclosure">Declaration: this study is by an author of this atlas; '
-        "republished as published, no assessment added.</p>"
+        "its results are republished as published and read by the same rule as every other "
+        "study's.</p>"
     )
 
 
@@ -2130,10 +2605,11 @@ def _method_line(rows: Sequence[BurdenRow], publication: Publication | None) -> 
     #
     # **The count is shown only where the reader must apply it** (2026-10-26).
     # Both branches opened "This study reported N comparisons in all", and
-    # `tests_reported` does not always count comparisons: PMID:40127276's 248 is
-    # its panel *genes* (`curation/publications.yaml` says so), each tested in
-    # two arms over three consequence classes, so the sentence was false on all
-    # 36 pages carrying that study. Where a study corrected every row the reader
+    # `tests_reported` did not always count comparisons: PMID:40127276's was
+    # 248, its panel *genes*, each tested in two arms over three consequence
+    # classes, so the sentence was false on all 36 pages carrying that study.
+    # (Its `tests_reported` is null since owner decision 2026-10-26, W1, and
+    # the 248 is `correction_genes`.) Where a study corrected every row the reader
     # applies no threshold of their own, so no count is needed, and none is
     # stated; where it did not, the count is the Bonferroni denominator the
     # sentence after it uses -- true of PMID:42230622, whose 138,609 is one
@@ -2246,8 +2722,9 @@ def _strip_notes(
     """Each curated `Publication.summary_caveat` of a study the strips name, once.
 
     The strips summarise every study's result for every gene -- PMID:34324492
-    sits in a family on all of them, and "enriched, and survives that study's
-    own correction" is a stronger summary than any count -- so the caveat the
+    sits in a family on all of them, and a hover reading "PMID:34324492:
+    enriched, and survives this study's own correction" is a stronger summary
+    than any count -- so the caveat the
     gene page's card prints beside that study's counts is printed here too,
     under the legend, in study-id order. The page has no study blocks to link
     to, so each note names its study by label and PMID.
@@ -2282,19 +2759,30 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
     **Fill encodes the correction**, so a single glyph carries two facts a
     reader would otherwise need two columns for: that a dataset showed
     enrichment, and whether that survived the study's own correction. TAB2 is
-    the case it was designed against -- three families all pointing the same
-    way, of which only one survives correction.
+    the case it was designed against -- every family pointing the same way,
+    and fewer surviving correction: it read "3 of 3 tested · 1 corrected"
+    over three families until owner decision 2026-10-27 (I3) made two of its
+    three studies one family, and reads "2 of 2 tested · 1 corrected" since.
 
     The tally counts *tested* families and says both numbers, because either
-    alone misleads. `3 of 3` hides that two do not survive correction;
+    alone misleads. `2 of 2` hides that one does not survive correction;
     `1 corrected` hides that PMID:42230622 publishes no correction on any row
     and so can never earn one.
 
     A family that did not test the gene gets its own glyph and is excluded from
     the denominator. That is not presentation: KDM6A is ClinGen definitive and
-    shows nothing in either dataset that tested it, and "0 of 3" beside a green
-    chip reads as the data contradicting the classification, where "0 of 2
-    tested" reads as what it is.
+    shows nothing in either dataset that tested it, and a denominator that also
+    counted a family which never looked would add one more dataset to those
+    finding nothing, beside a green chip. KLF13, which one of the two families
+    tested, reads "1 of 1 tested" (measured on a build of 5f7161b).
+
+    **The hover names each study with its own state** (`members`, review
+    2026-10-27). The glyph and the tally are the family's; the `title` is
+    where a reader asks which study said what, and it built "<studies>:
+    <family state>" until then, which attributed a family's state to every
+    study in it -- "enriched, and survives this study's own correction" of a
+    study that publishes no corrected p, and a state at all of a study with no
+    row for the gene. A family of two or more says it is one, counted once.
     """
     families = concordance.get("families") or ()
     if not isinstance(families, Sequence):
@@ -2304,9 +2792,16 @@ def _dot_strip(concordance: Mapping[str, Json]) -> str:
         if not isinstance(entry, Mapping):
             continue
         state = str(entry.get("state", ""))
-        studies = entry.get("studies") or ()
-        names = ", ".join(str(study) for study in studies) if isinstance(studies, Sequence) else ""
-        title = f"{names}: {_STATE_TITLE.get(state, state)}"
+        members = entry.get("members") or ()
+        said = [
+            f"{member.get('study', '')}: "
+            f"{_STATE_TITLE.get(str(member.get('state', '')), str(member.get('state', '')))}"
+            for member in (members if isinstance(members, Sequence) else ())
+            if isinstance(member, Mapping)
+        ]
+        # ". " between studies, not "; ": the `nominal` state's own sentence
+        # carries a semicolon.
+        title = ". ".join(said) + (". One cohort family, counted once." if len(said) > 1 else "")
         glyph = _STATE_GLYPH.get(state, "untested")
         body = "&ndash;" if glyph == "untested" else ""
         glyphs.append(f'<span class="dot {glyph}" title="{html.escape(title)}">{body}</span>')
@@ -2356,6 +2851,15 @@ def _evidence_matrix(
     its state is not true of. Where a cell holds more than one row the count is
     stated, so a reader knows the cell summarises and the table below is the
     record.
+
+    **In a family of two or more studies, a study with no row for this gene is
+    marked in the row's label** ("(no row for this gene)"), because the
+    family's cells cannot say which of its studies they come from. Until
+    review (2026-10-27) the label joined every member's name, so 46 of the 118
+    pages with a matrix (measured on a build of 5f7161b) named a study as part
+    of the row whose cells it contributes nothing to, and which has no block
+    on the page. A one-study family is not marked: its cells already say
+    `not tested` in every column.
     """
     if not rows or not families or not axes:
         return ""
@@ -2374,7 +2878,11 @@ def _evidence_matrix(
     body: list[str] = []
     for family in families:
         members = [row for study in sorted(family) for row in by_study.get(study, ())]
-        label = " + ".join(_study_label(study, publications) for study in sorted(family))
+        label = " + ".join(
+            _study_label(study, publications)
+            + (" (no row for this gene)" if len(family) > 1 and study not in by_study else "")
+            for study in sorted(family)
+        )
         cells: list[str] = []
         for variant, comparator in axes:
             in_cell = [
@@ -2617,9 +3125,9 @@ def _union_kinds(rows: Sequence[BurdenRow]) -> tuple[bool, bool]:
 
     **This answers for the panel, and a tag is worn by a row.** A panel can
     turn a union on for one consequence and then hang the tag on a row whose
-    own components are not all drawn -- 10 panels do. `_fully_split` is what
-    asks the per-row question, and `_forest_caption` is where the answer
-    changes what the key promises.
+    own components are not all drawn -- 10 panels do. `_missing_components`
+    is what asks the per-row question, and `_unsplit_line` is where the answer
+    reaches the panel's visible line.
     """
     composite, parts = _CONSEQUENCE_UNION
     consequence = any(row.consequence_class == composite for row in rows) and any(
@@ -2640,8 +3148,17 @@ def _is_union(row: BurdenRow, kinds: tuple[bool, bool]) -> bool:
     )
 
 
-def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, bool]) -> bool:
-    """Whether **every** row this union contains is itself drawn on this panel.
+def _missing_components(
+    row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, bool]
+) -> list[tuple[str, str]]:
+    """The `(stratum, consequence)` cells this union contains and `rows` does not draw.
+
+    Empty when **every** row this union contains is itself drawn on this
+    panel, and for a row that is not a union on it. It was `_fully_split`, a
+    `bool`, until review (2026-10-27) asked the panel's visible line to name
+    what is missing (`_unsplit_line`). In reading order: the consequence
+    union's parts, then the stratum union's, each in its `_..._UNION` tuple's
+    order.
 
     `_union_kinds` asks its question of the panel; a tag is worn by a row, and
     the two are not the same question. A panel carrying `all cases · missense`
@@ -2661,25 +3178,87 @@ def _fully_split(row: BurdenRow, rows: Sequence[BurdenRow], kinds: tuple[bool, b
     damaging-missense rows **for `all cases`**, not for any stratum.
     """
     consequence, stratum = kinds
+    missing: list[tuple[str, str]] = []
     if consequence and row.consequence_class == _CONSEQUENCE_UNION[0]:
-        drawn = {
-            other.consequence_class
-            for other in rows
-            if other.cohort_stratum == row.cohort_stratum
-            and other.consequence_class in _CONSEQUENCE_UNION[1]
-        }
-        if drawn != set(_CONSEQUENCE_UNION[1]):
-            return False
+        same_stratum = [other for other in rows if other.cohort_stratum == row.cohort_stratum]
+        drawn = {other.consequence_class for other in same_stratum}
+        parts = _CONSEQUENCE_UNION[1]
+        missing += [(row.cohort_stratum, part) for part in parts if part not in drawn]
     if stratum and row.cohort_stratum == _STRATUM_UNION[0]:
-        drawn = {
-            other.cohort_stratum
-            for other in rows
-            if other.consequence_class == row.consequence_class
-            and other.cohort_stratum in _STRATUM_UNION[1]
-        }
-        if drawn != set(_STRATUM_UNION[1]):
-            return False
-    return True
+        same_class = [other for other in rows if other.consequence_class == row.consequence_class]
+        drawn = {other.cohort_stratum for other in same_class}
+        strata = _STRATUM_UNION[1]
+        missing += [(part, row.consequence_class) for part in strata if part not in drawn]
+    return missing
+
+
+def _forest_label(stratum: str, consequence: str) -> str:
+    """A forest row's name, as its label and the panel's visible line both print it."""
+    stratum_label = _STRATUM_LABEL.get(stratum, stratum)
+    return f"{stratum_label} · {_CONSEQUENCE_LABEL.get(consequence, consequence)}"
+
+
+def _unsplit_line(
+    rows: Sequence[BurdenRow], kinds: tuple[bool, bool], published: Collection[tuple[str, str]]
+) -> str:
+    """One sentence naming each `union`-tagged row whose components are not all drawn.
+
+    On the panel's visible line, where it fires (owner decision 2026-10-26,
+    E1). It read "A row tagged union here is not fully split: at least one of
+    the rows it contains is not plotted; the table below carries every row
+    this study published for this gene" until review (2026-10-27), which
+    pointed a reader at the table for a row that is in no table: on all 10
+    panels it fires on (measured on a build of ad03128) the missing component
+    is a cell the study never published for the gene, and TBX5's panel tags
+    three rows of which only `all cases · loss-of-function` is unsplit. So it
+    names the row, and what is missing from it, and says which of two things
+    the absence is: `published` holds the cells of every row this study
+    published for this gene, plotted or not, so a component the study
+    published and this panel does not draw -- no effect to place, or another
+    effect measure -- is said to be "not plotted here", never unpublished.
+    Latent today: on none of the 10 panels is a missing component published.
+
+    Several such rows share one sentence, "The A and B rows are unions, and
+    this study published no C or D row for this gene", each component named
+    once, in panel order: the 10 published panels each have one, and the
+    forest key's fixture, with four, reads as a list rather than as four
+    repetitions of one sentence.
+    """
+    unions: list[str] = []
+    absent: list[str] = []
+    undrawn: list[str] = []
+    for row in rows:
+        if not _is_union(row, kinds):
+            continue
+        missing = _missing_components(row, rows, kinds)
+        if not missing:
+            continue
+        # Escaped: an unknown token renders as itself (`_STRATUM_LABEL.get`).
+        label = html.escape(_forest_label(row.cohort_stratum, row.consequence_class))
+        unions.append(f"<strong>{label}</strong>")
+        for cell in missing:
+            name = html.escape(_forest_label(*cell))
+            named = undrawn if cell in published else absent
+            if name not in named:
+                named.append(name)
+    if not unions:
+        return ""
+    several = len(unions) > 1
+    clauses: list[str] = []
+    if absent:
+        names = absent[0] if len(absent) == 1 else f"{', '.join(absent[:-1])} or {absent[-1]}"
+        clauses.append(f"this study published no {names} row for this gene")
+    if undrawn:
+        plural = len(undrawn) > 1
+        clauses.append(
+            f"the {_and_join(undrawn)} row{'s' if plural else ''} "
+            f"{'they contain' if several else 'it contains'} "
+            f"{'are' if plural else 'is'} not plotted here"
+        )
+    subject = (
+        f"The {_and_join(unions)} rows are unions" if several else f"The {unions[0]} row is a union"
+    )
+    return f" {subject}, and {', and '.join(clauses)}."
 
 
 def _survived_correction(row: BurdenRow) -> bool:
@@ -2970,10 +3549,7 @@ def _forest_estimate(row: BurdenRow, y: float, scale: LogScale) -> str:
 def _forest_row(row: BurdenRow, index: int, scale: LogScale, *, union: bool) -> str:
     """One burden row: its name, its interval, its estimate and its statistics."""
     y = _FOREST_TOP + index * _FOREST_ROW
-    label = (
-        f"{_STRATUM_LABEL.get(row.cohort_stratum, row.cohort_stratum)} · "
-        f"{_CONSEQUENCE_LABEL.get(row.consequence_class, row.consequence_class)}"
-    )
+    label = _forest_label(row.cohort_stratum, row.consequence_class)
     # A `<tspan>` rather than a second `<text>` at a computed x: the label's
     # width depends on the reader's font, which this build cannot measure, and
     # a tag positioned by arithmetic would land on top of the longest labels.
@@ -2989,7 +3565,11 @@ def _forest_row(row: BurdenRow, index: int, scale: LogScale, *, union: bool) -> 
 
 
 def _forest_caption(
-    rows: Sequence[BurdenRow], measure: str, bounds: tuple[float, float], kinds: tuple[bool, bool]
+    rows: Sequence[BurdenRow],
+    measure: str,
+    bounds: tuple[float, float],
+    kinds: tuple[bool, bool],
+    published: Collection[tuple[str, str]],
 ) -> str:
     """The key. Every clause names a mark that is actually on this panel.
 
@@ -2999,16 +3579,21 @@ def _forest_caption(
     sight: the measure, its range, and what 1 means for that measure. Every
     other clause folds under "How to read this chart", which closes on a link
     to `methods.html#rare-variants`, where the key is stated once in general.
-    **Not every folded clause is the same wherever it renders.** The mark
-    clauses are: each says what a mark means in words that do not change with
-    the panel. The not-fully-split clause is not -- it is a warning about this
-    panel, that a tagged row's components are not all drawn on it -- and it
-    folds too, as the approved D57 spec places it; measured 2026-10-26 on a
-    real build, it is folded on 10 panels on 10 pages (TBX5, TBX20, ZEB2,
-    CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL). This docstring said "only
-    the axis clause is particular to its panel" until then. **The fold
-    changed no clause's condition**: each still renders only where it is
-    true, inside the toggle. The muted clause alone was reworded, to name the
+    **Not every clause is the same wherever it renders.** The mark clauses
+    are: each says what a mark means in words that do not change with the
+    panel. The not-fully-split clause is not -- it is a warning about this
+    panel, that a tagged row's components are not all drawn on it. It folded
+    with the rest as the approved D57 spec placed it, on 10 panels on 10 pages
+    (TBX5, TBX20, ZEB2, CHD7, ZFPM1, GATA6, FLNA, FLT4, KMT2D, NODAL, measured
+    2026-10-26), and **the owner moved it to the visible line the same day
+    (E1)**, in a short form that names the `union` tag itself, since the
+    clause explaining the tag stays folded. The owner's draft said "some rows
+    it contains are not plotted; the table below has every row": on every one
+    of those 10 panels exactly one component is missing, and it is a cell the
+    study never published, so it is in no table either -- the clause says "at
+    least one" and "every row this study published for this gene". **Neither
+    move changed a clause's condition**: each still renders only where it is
+    true. The muted clause alone was reworded, to name the
     row's role ("its negative control") instead of linking the section the
     toggle already links -- and again the same day, to "one of this study's
     synonymous rows", because each of the 113 panels that draws one draws
@@ -3135,13 +3720,6 @@ def _forest_caption(
             "A row tagged <strong>union</strong> contains at least one other row in this panel "
             "and is not an independent finding: " + "; ".join(reasons) + ". "
         )
-        if any(_is_union(row, kinds) and not _fully_split(row, rows, kinds) for row in rows):
-            parts.append(
-                "Here a tagged row is <strong>not fully split</strong>: at least one of the "
-                "rows it contains is not itself plotted, so what sits under a union on this "
-                "panel is part of it and not all of it. The table below carries every row "
-                "this study published for this gene. "
-            )
     if any(row.consequence_class == "synonymous" for row in rows):
         # What this clause owes the reader is what the *muting* means, which
         # nothing else on the panel says, and the row's role, in two words.
@@ -3158,9 +3736,14 @@ def _forest_caption(
         )
     # The axis clause is first and unconditional, and the pooling clause is
     # unconditional too, so `rest` is never empty.
+    # Particular to this panel, so on the visible line beside the axis and only
+    # where it fires (owner decision 2026-10-26, E1); the union clause it
+    # qualifies stays folded, and this names the row and the tag itself so it
+    # reads without it. See `_unsplit_line`.
+    split = _unsplit_line(rows, kinds, published)
     axis, rest = parts[0], "".join(parts[1:]).strip()
     return (
-        f"<figcaption><p>{axis.strip()}</p>"
+        f"<figcaption><p>{axis.strip()}{split}</p>"
         '<details class="chart-notes"><summary>How to read this chart</summary>'
         f"<p>{rest}</p>"
         '<p><a href="../methods.html#rare-variants">How to read rare-variant results</a></p>'
@@ -3168,7 +3751,12 @@ def _forest_caption(
     )
 
 
-def _forest(rows: Sequence[BurdenRow], measure: str, study_label: str) -> str:
+def _forest(
+    rows: Sequence[BurdenRow],
+    measure: str,
+    study_label: str,
+    published: Collection[tuple[str, str]],
+) -> str:
     """One study's rows for one effect measure, as effect and interval.
 
     **One panel per (study, effect measure), never one per study.** 779 of the
@@ -3227,7 +3815,7 @@ def _forest(rows: Sequence[BurdenRow], measure: str, study_label: str) -> str:
     )
     return (
         f'<figure class="forest" data-effect-measure="{html.escape(measure)}">'
-        f"{figure}{_forest_caption(ordered, measure, bounds, kinds)}</figure>"
+        f"{figure}{_forest_caption(ordered, measure, bounds, kinds, published)}</figure>"
     )
 
 
@@ -3362,15 +3950,22 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
     2026-10-26), which lists every cohort in the registry. Only this gene's
     cohorts are here; the full list is a second place a caveat reaches, never
     a replacement for this one (CLAUDE.md section 9).
+
+    **A record's open question follows its description here too** (owner's
+    standing rule, 2026-10-27): its status's label and the curator's note,
+    escaped, by `render.review_status_note`, the function the methods page's
+    list uses. It reaches the same pages the description does, and a
+    collection with no question recorded gets nothing.
     """
     cited = sorted(
         {identifier for row in rows for identifier in (*row.case_cohorts, *row.control_cohorts)}
     )
     items = [
-        f"<li><strong>{html.escape(cohorts[identifier].name)}</strong> &mdash; "
-        f"{html.escape(cohorts[identifier].description)}</li>"
+        f"<li><strong>{html.escape(cohort.name)}</strong> &mdash; "
+        f"{html.escape(cohort.description)}"
+        f"{review_status_note(cohort.id, cohort.review_status, cohort.review_note)}</li>"
         for identifier in cited
-        if identifier in cohorts
+        if (cohort := cohorts.get(identifier)) is not None
     ]
     if not items:
         return ""
@@ -3379,6 +3974,48 @@ def _cohort_notes(rows: Sequence[BurdenRow], cohorts: Mapping[str, Cohort]) -> s
         "recorded for them</summary><ul>"
         + "".join(items)
         + '</ul><p><a href="../methods.html#cohorts">Every cohort in this atlas</a></p></details>'
+    )
+
+
+def _overlap_notice(
+    left: str,
+    right: str,
+    overlap: Overlap,
+    publications: Mapping[str, Publication],
+    cohorts: Mapping[str, Cohort],
+) -> str:
+    """Why two studies on one page are not independent, the way the page names a shared one.
+
+    A shared collection reads as it always has: both "draw on" it, so their
+    results "describe partly the same people". A declared overlap (owner
+    decision 2026-10-27, I3; `Cohort.overlaps_with`) is two collections, one
+    per study, so it says which each draws on, that this atlas records them as
+    overlapping, and "may describe", because the registry records a likely
+    overlap, not a counted one: PMID:34324492's author answered that its case
+    set does or likely does include DDD participants. Measured on a real build
+    the day it was written: 72 pages carry both PMID:34324492 and PMID:42230622,
+    and each now carries this notice once.
+    """
+    first = html.escape(_study_label(left, publications))
+    second = html.escape(_study_label(right, publications))
+    clauses = []
+    if overlap.shared:
+        clauses.append(
+            f"{first} and {second} both draw on {html.escape(_names(overlap.shared, cohorts))}"
+        )
+    if overlap.declared:
+        mine = sorted({collection for collection, _ in overlap.declared})
+        theirs = sorted({collection for _, collection in overlap.declared})
+        clauses.append(
+            f"{first} draws on {html.escape(_names(mine, cohorts))} and {second} on "
+            f"{html.escape(_names(theirs, cohorts))}, collections this atlas records as "
+            "overlapping"
+        )
+    verb = "describe" if overlap.shared else "may describe"
+    return (
+        '<p class="notice-inline"><strong>These two studies are not independent.</strong> '
+        f"{', and '.join(clauses)}, so their results {verb} partly the same people and "
+        "must not be combined.</p>"
     )
 
 
@@ -3492,38 +4129,36 @@ _NOT_CURATED_EXPRESSION: Final = (
 # needed more here: that layer leaves a gap as an absence, while this one turns
 # a low number into a sentence, which is the more persuasive -- and more
 # dangerous -- thing to get wrong.
-_BULK_DILUTION_NOTICE: Final = (
-    '<p class="notice-inline"><strong>Every measurement below is from whole, bulk '
-    "tissue, never a single cell type.</strong> A whole embryonic heart is "
-    "cardiomyocytes alongside endocardium, epicardium, cardiac neural crest, cushion "
-    "mesenchyme and blood, and many congenital heart disease genes act in one rare "
-    "lineage &mdash; the cardiac neural crest and outflow tract, the second heart "
-    "field, the conduction system. A gene expressed intensely in one such lineage can "
-    "still read low, or fall below the detection floor, once diluted across the whole "
-    "organ: a low or absent bulk figure is not evidence that a gene is unimportant to "
-    "heart development.</p>"
+#
+# The spec's short form since 2026-10-26 (D50, spec section 5), one of the ten
+# caveats it keeps visible: the claim a reader acts on -- bulk tissue, and a low
+# or absent figure is not evidence the gene is unimportant to heart development
+# -- and a link. The dilution argument, which lineages a heart sample averages
+# over, is on `methods.html#expression` in full (`methods._EXPRESSION`). The
+# short form drops "never a single cell type", which "bulk tissue" already
+# says, and "bulk" before "figure", which the bold clause before it already
+# scopes. "below" stays true in this position: the notice opens the section,
+# above every dataset block.
+#
+# "whole, bulk tissue" until the owner's decision of 2026-10-26 (E2): the
+# dataset's own curation record sets the Expression Atlas's organ tokens
+# (forebrain, hindbrain) against the paper's (brain, cerebellum), so "whole"
+# need not hold of every organ and stage, and the dilution argument rests on
+# bulk -- mixed cell types -- alone.
+#
+# Named `_BULK_DILUTION_NOTICE` until review (2026-10-26): the one line it keeps
+# says nothing of dilution, so the name described text that had left it.
+_BULK_TISSUE_NOTICE: Final = (
+    '<p class="notice-inline"><strong>Every measurement below is from bulk '
+    "tissue</strong>: a low or absent figure is not evidence a gene is unimportant to "
+    'heart development. <a href="../methods.html#expression">How to read these '
+    "figures</a>.</p>"
 )
 
-_EXPRESSION_READING_NOTES: Final = (
-    "<p>Each organ's median abundance is placed against that organ's own percentile "
-    "grid for that dataset and developmental stage, and the number of genes measured "
-    "travels with every percentile shown below. No percentile is published below a "
-    "dataset's own detection floor, because the rank of an unreliable measurement is "
-    "not itself a measurement.</p>"
-)
-
-# Conditional on the section actually showing more than one placement.
-# Rendered on a page with at most one, this would warn a reader against
-# comparing figures the page does not even lay out side by side -- the same
-# reason `_composite_note` is (and `_SYNONYMOUS_NOTICE` was) conditional on a row
-# that could earn them actually being on the page.
-_PERCENTILE_COMPARABILITY_NOTICE: Final = (
-    "<p>Percentiles on this page are <strong>not comparable across organs or across "
-    "developmental stages</strong>: each organ transcribes a different fraction of the "
-    "whole gene set, and the reference distribution itself changes shape as the heart "
-    "matures. A high percentile shown for one organ or stage says nothing about a "
-    "lower one shown elsewhere on this page.</p>"
-)
+# `_EXPRESSION_READING_NOTES` and `_PERCENTILE_COMPARABILITY_NOTICE` sat here
+# until 2026-10-26: the reading notes every gene page folded under "How to read
+# these figures". They moved, with their histories, to `methods._EXPRESSION`
+# (D50).
 
 
 def _phase_sentence(phase: PhaseInfo) -> str:
@@ -3620,16 +4255,25 @@ def _specificity_sentence(spec: Specificity, cardiac_tissues: frozenset[str]) ->
     return f'<p class="method">{base} {peak}</p>'
 
 
-def _specificity_gap_sentence(reason: str | None, floor: float | None) -> str:
+def _specificity_gap_sentence(reason: str | None, floor: float | None, unit: str) -> str:
     """Why tau is absent for a stage, in the same voice as `_specificity_sentence`.
 
     `peak_below_detection_floor` is kept out of `_SPECIFICITY_GAP_CLAUSE`
     because it is the one reason with a number to show: the floor value, named
     for the same reason rule 5 requires it beside a tissue's own placement gap
     -- a reader told a figure is missing because of a floor is owed the floor.
+
+    **And its unit (2026-10-26).** It read "(detection floor 1)" in 115 stage
+    blocks on 28 pages of a build of 0fc451a, directly above table cells
+    quoting the same floor as "(detection floor 1 tpm)" -- the `_count`/
+    `count_unit` defect in a new place. `unit` is the stage's own (`_stage_block`
+    reads it off the stage's measurements, as each cell reads its own); where
+    there is none to read, the number stands alone rather than beside a
+    dangling space.
     """
     if reason == ProfileGap.PEAK_BELOW_DETECTION_FLOOR.value:
-        qualifier = f" (detection floor {_fmt(floor)})" if floor is not None else ""
+        measured = f" {html.escape(unit)}" if unit else ""
+        qualifier = f" (detection floor {_fmt(floor)}{measured})" if floor is not None else ""
         return (
             "τ is not available: every organ sampled at this stage is below the "
             f"detection floor{qualifier}."
@@ -3673,7 +4317,7 @@ def _percentile_cell(tissue: TissueProfileEntry, floor: float | None) -> str:
         qualifier = (
             f" (detection floor {_fmt(floor)} {tissue['unit']})" if floor is not None else ""
         )
-        return f"below the detection floor in whole {tissue['tissue']} at this stage{qualifier}"
+        return f"below the detection floor in {tissue['tissue']} at this stage{qualifier}"
     fallback = "no percentile is available for this measurement"
     return _PLACEMENT_GAP_CLAUSE.get(reason or "", fallback)
 
@@ -3683,8 +4327,9 @@ def _tissue_table(tissues: Sequence[TissueProfileEntry], floor: float | None) ->
 
     Rows, not columns: laying organs out side by side would itself be the
     layout rule 8 warns against, since a table invites a reader's eye to
-    compare adjacent cells. `_PERCENTILE_COMPARABILITY_NOTICE` is what a list
-    alone cannot say, and is rendered beside it where it applies.
+    compare adjacent cells. What a list alone cannot say -- that percentiles
+    are not comparable across organs or stages -- was rendered beside it until
+    2026-10-26 and is stated once on `methods.html#expression` since (D50).
     """
     rows = [
         Row(cells=(tissue["tissue"], _abundance(tissue), _percentile_cell(tissue, floor)))
@@ -3702,7 +4347,12 @@ def _stage_block(
     if spec is not None:
         specificity_html = _specificity_sentence(spec, cardiac_tissues)
     else:
-        gap = _specificity_gap_sentence(stage["specificity_unavailable_reason"], floor)
+        # The first unit the stage's own measurements carry. One dataset quotes
+        # every organ in one unit because validation makes it: PRF008 is an
+        # ERROR for a dataset whose `profiles.median_abundance` comes in more
+        # than one unit, and the build refuses a corpus with any error.
+        unit = next((cell["unit"] for cell in stage["tissues"] if cell["unit"]), "")
+        gap = _specificity_gap_sentence(stage["specificity_unavailable_reason"], floor, unit)
         specificity_html = f'<p class="method">{gap}</p>'
     return (
         f"<h4>{label}</h4>"
@@ -3995,7 +4645,8 @@ def _phase_bands(entry: DatasetProfileEntry, phases: CardiacPhaseFile | None, co
     concurrently at 6 wpc. Overlapping bands share one fill and merge into a
     single shaded region marking the morphogenetic window; the caption below
     the figure is what names each of them in text, which is also what a reader
-    who cannot hover gets.
+    who cannot hover gets -- inside its "How to read this chart" toggle since
+    2026-10-26 (D57, `_band_caption`).
     """
     edge = _half_step(count)
     rects = []
@@ -4015,8 +4666,9 @@ def _other_gap_clause(reasons: frozenset[str]) -> str:
     """Every gap reason *except* the detection floor's, spelled out.
 
     The floor is excluded because it is the one reason with its own required
-    wording -- `_percentile_cell`'s rule 5, and the same sentence
-    `_band_caption` and `_spark_caption` each carry in full. Everything else
+    wording -- `_percentile_cell`'s rule 5, the sentence `_spark_caption`
+    carries in its fold, and the short form `_band_caption` carries on its
+    visible line (E1). Everything else
     resolves through `_PLACEMENT_GAP_CLAUSE`, so a caption and the table cell
     three lines below it cannot spell one gap two ways.
 
@@ -4046,6 +4698,26 @@ def _other_gap_clause(reasons: frozenset[str]) -> str:
     return "; ".join(
         _PLACEMENT_GAP_CLAUSE.get(reason, "no reason was recorded for this gap")
         for reason in others
+    )
+
+
+def _chart_notes(notes: str) -> str:
+    """An expression chart's folded key, under "How to read this chart" (D57).
+
+    One implementation for the trajectory and the small multiples, so the two
+    toggles on one page cannot word their summary or their link two ways. The
+    link names its section, as the forest's toggle names `#rare-variants`: the
+    nav's "How to read this atlas" and the gene card's "How to read this page"
+    are the two texts that open the top of `methods.html`.
+    Both paragraphs are `method`, because unlike the forest's these sit outside
+    a `<figcaption>`, and a bare `<p>` would render at body size under the
+    caption line it continues.
+    """
+    return (
+        '<details class="chart-notes"><summary>How to read this chart</summary>'
+        f'<p class="method">{notes}</p>'
+        '<p class="method"><a href="../methods.html#expression">How to read expression '
+        "figures</a></p></details>"
     )
 
 
@@ -4096,9 +4768,36 @@ def _band_caption(
     differ on exactly the genes where the wording matters most. `_axis_bounds`
     widens a flat series by half a decade either side, because `LogScale`
     refuses a zero-span axis; 3 of the 85 charted genes are flat (TFAP2B and
-    MMP21 at 1 tpm, FOXH1 at 2), and "median abundance in whole heart, 0.316
-    to 3.16 tpm" would attribute to their medians a spread neither end of
+    MMP21 at 1 tpm, FOXH1 at 2), and "median abundance in heart, 0.316 to
+    3.16 tpm" would attribute to their medians a spread neither end of
     which anyone measured.
+
+    **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
+    caption was one paragraph of four or five sentences, 108 to 151 words,
+    under the trajectory on 112 pages; the visible line is 61 on every one of
+    them (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 107 to 149 and 60. The two axis
+    sentences stay in sight: they say what every point on the figure is, and
+    the second is particular to this gene. The floor, tick and no-row clauses
+    and the shaded phases fold under "How to read this chart", which closes on
+    a link to `methods.html#expression`, where the axes are stated once in
+    general; the link reads "How to read expression figures", for the reason
+    the forest's names its section rather than the nav's "How to read this
+    atlas". **The fold changed no clause's condition.**
+
+    **The floor clause came back out of the fold (owner decision 2026-10-26,
+    E1)**, in a short form on the visible line and only where it fires. It is
+    particular to this gene -- a tick is drawn because a stage of this organ
+    reads below the floor -- and measured on a build of 3b766ba it fired on 32
+    of the 112 trajectory pages, inside the toggle on every one. The owner's
+    draft said "Ticks under the axis"; a tick is a `marker` centred on the axis
+    line, so it says "on the axis", and it keeps "beneath the foot of the
+    scale rather than at a value on it", which stops a reader reading a tick as
+    a measurement. The no-row clause's first spelling read "different again" while the floor
+    clause sat before it in this paragraph; it reads "different" now, a
+    contrast with the tick the visible line has just explained.
     """
     named = ", ".join(html.escape(phase.label) for phase, _, _ in _banded_phases(entry, phases))
     attribution = html.escape(phases.attributed_to) if phases is not None else ""
@@ -4110,33 +4809,53 @@ def _band_caption(
     # that interrupt a *line*: a leading or trailing unplaced stage draws a
     # tick and breaks nothing, and it still needs explaining.
     ticked = frozenset(point.gap or "" for point in series if point.value is None)
-    floor_clause = (
-        f" Below this dataset's detection floor ({_fmt(floor)} {unit}) no percentile is "
-        "published and the stage is ticked on the axis instead &mdash; below the foot of "
-        "the scale, not at a value on it."
-        if floor is not None and ProfileGap.BELOW_DETECTION_FLOOR.value in ticked
-        else ""
-    )
+    # Visible, on the line above the toggle, and only where it fires (E1). A
+    # tick is a `marker` centred on the axis line, 8 px (`_FLOOR_GAP`) below
+    # the foot of the value scale: "on the axis", never "under" it.
+    #
+    # **Where a tick also stands for another reason, the visible line names it
+    # too** (review, 2026-10-27). "Ticks on the axis mark stages below this
+    # dataset's detection floor" is universal, and beside a tick drawn because
+    # no percentile grid was published it is false of that tick, while the
+    # qualifier ("A tick can mean something else too") sat in the fold. So
+    # with both reasons present the sentence is a disjunction that is true of
+    # every tick, and the fold no longer repeats the other reason. Latent: all
+    # 2,830 unplaced cells in the published bundles are below the floor
+    # (measured 2026-10-27 on a build of this change), so no published page
+    # takes this form, and the fixture is its only measurement.
     other_clause = _other_gap_clause(ticked)
+    floor_clause = ""
     tick_clause = ""
-    if other_clause:
+    below_floor = ProfileGap.BELOW_DETECTION_FLOOR.value in ticked
+    if floor is not None and below_floor and other_clause:
+        floor_clause = (
+            " Ticks on the axis, beneath the foot of the scale rather than at a value on it, "
+            f"mark stages below this dataset's detection floor ({_fmt(floor)} {unit}) or "
+            f"where {other_clause}."
+        )
+    elif floor is not None and below_floor:
+        floor_clause = (
+            f" Ticks on the axis mark stages below this dataset's detection floor "
+            f"({_fmt(floor)} {unit}), beneath the foot of the scale rather than at a value on it."
+        )
+    elif other_clause:
         tick_clause = (
-            f" A tick can mean something else too: {other_clause}. The mark says only that "
-            "this atlas did not place the stage, never that the gene reads low there."
-            if floor_clause
-            else f" A ticked stage is one this atlas did not place: {other_clause}. The mark "
+            f" A ticked stage is one this atlas did not place: {other_clause}. The mark "
             "says nothing about how high the gene reads there."
         )
     _, no_row = _line_breaks(series)
-    # Two spellings, because the sentence contrasts itself with the clause
-    # above it and that clause is not always there. "A break with no tick
-    # under it is different again" on a figure drawing no tick at all sends a
-    # reader hunting for one -- the defect this whole caption was rewritten
-    # for, reintroduced one sentence later (CLAUDE.md section 4.27).
+    # Two spellings, because the sentence contrasts itself with the floor
+    # clause and that clause is not always there. "A break with no tick under
+    # it is different" on a figure drawing no tick at all sends a reader
+    # hunting for one -- the defect this whole caption was rewritten for,
+    # reintroduced one sentence later (CLAUDE.md section 4.27). It read
+    # "different again" while the floor clause sat before it in this
+    # paragraph; since E1 that clause is on the visible line above the toggle,
+    # so the contrast is with a tick, which that line has just explained.
     gap_clause = ""
     if lined and no_row:
         gap_clause = (
-            " A break in the line with no tick under it is different again: this dataset has "
+            " A break in the line with no tick under it is different: this dataset has "
             "<strong>no row for this organ at that stage</strong>, so there is no measurement "
             "to place, low or otherwise."
             if floor_clause
@@ -4150,14 +4869,17 @@ def _band_caption(
         if stages
         else "this dataset's stages"
     )
-    return (
+    visible = (
         f'<p class="method">Left to right: {span} in curated developmental '
         "order, evenly spaced &mdash; the axis is <strong>order, not elapsed time</strong>. "
-        f"Vertical: median abundance in whole {html.escape(tissue)}, {unit}, on a log scale; "
+        f"Vertical: median abundance in {html.escape(tissue)}, {unit}, on a log scale; "
         f"the axis runs {_fmt(low)} to {_fmt(high)} and is fitted to <strong>this gene</strong>, "
-        "so a curve's height compares nothing to another gene's."
-        f"{floor_clause}{tick_clause}{gap_clause} Shaded: {named} ({attribution}).</p>"
+        f"so a curve's height compares nothing to another gene's.{floor_clause}</p>"
     )
+    # Never empty: `_trajectory` draws nothing without a band, so there is
+    # always a phase to name.
+    notes = f"{tick_clause}{gap_clause} Shaded: {named} ({attribution}).".strip()
+    return visible + _chart_notes(notes)
 
 
 def _adjacent_runs(
@@ -4300,7 +5022,7 @@ def _trajectory(
     floor = dataset.detection_floor if dataset is not None else None
     floor_words = f", above a detection floor of {_fmt(floor)} {unit}" if floor is not None else ""
     title = (
-        f"Median abundance in whole {tissue}, {series[0].label} to {series[-1].label}: "
+        f"Median abundance in {tissue}, {series[0].label} to {series[-1].label}: "
         f"{len(placed)} of {len(series)} sampled developmental stages placed against this "
         f"dataset's percentile grid{floor_words}, banded by this atlas's own curated "
         "cardiac phases."
@@ -4334,7 +5056,7 @@ def _sampled_cardiac(entry: DatasetProfileEntry, cardiac: frozenset[str]) -> lis
 
 
 def _sampled_organs_clause(sampled: Sequence[tuple[str, int]]) -> str:
-    """ "whole heart (19 stages sampled)" -- the organ clause both refusals open with.
+    """ "heart (19 stages sampled)" -- the organ clause both refusals open with.
 
     One implementation, because the two sentences name the same organs for
     two different reasons and a reader who sees one never sees the other; two
@@ -4346,7 +5068,7 @@ def _sampled_organs_clause(sampled: Sequence[tuple[str, int]]) -> str:
     lapsing in the one place nothing was reading.
     """
     return ", ".join(
-        f"whole {html.escape(tissue)} ({count} stage{'' if count == 1 else 's'} sampled)"
+        f"{html.escape(tissue)} ({count} stage{'' if count == 1 else 's'} sampled)"
         for tissue, count in sampled
     )
 
@@ -4407,10 +5129,15 @@ def _no_trajectory_sentence(
     USP44, DAW1, FGF8, GDF1, NODAL. Their headline grades are `definitive`
     (ZIC3, NODAL), `moderate` (DAW1, FGF8), `limited` (USP44) and none at all
     (SEMA3E, GDF1). They are laterality and outflow-tract genes acting in rare
-    lineages, which is exactly the dilution `_BULK_DILUTION_NOTICE` describes.
-    An empty chart beside a definitive chip asserts the thing that caption
-    denies, so this tier states the fact and repeats the caveat rather than
-    showing a frame with nothing in it.
+    lineages, which is exactly the dilution `methods.html#expression` states
+    in full. `_BULK_TISSUE_NOTICE`, the line above every dataset block, has
+    said nothing of dilution since 2026-10-26 (bulk tissue, and a low figure
+    is not evidence the gene is unimportant, then the link), so on these
+    pages this sentence is the only statement of the mechanism: measured on a
+    build of 802d694, "diluted" appears on 7 gene pages, these seven, once
+    each, all in this sentence. An empty chart beside a definitive chip
+    asserts the thing that caveat denies, so this tier states the fact and
+    the mechanism rather than showing a frame with nothing in it.
 
     **Two branches, because "nothing placed" is not one fact.** All seven of
     those genes are below the floor, and that is what earns the dilution
@@ -4458,7 +5185,7 @@ def _no_trajectory_sentence(
         )
     # The floor's own value is a separate sentence rather than a parenthesis
     # inside the first, because the organ clause already ends in one -- "in
-    # whole heart (19 stages sampled) (detection floor 1 tpm)" is what nesting
+    # heart (19 stages sampled) (detection floor 1 tpm)" is what nesting
     # them produced, and a reader stops reading at the second bracket.
     qualifier = (
         f" This dataset's detection floor is {_fmt(floor)} "
@@ -4471,9 +5198,9 @@ def _no_trajectory_sentence(
         f"floor at every stage sampled</strong> in {organs}, so there is no trajectory to "
         f"draw.{qualifier} That is "
         "<strong>not evidence that</strong> the gene is unimportant to heart development, and it "
-        "is not a measured zero: every figure here is a whole-organ median, and a gene "
+        "is not a measured zero: every figure here is a median over bulk tissue, and a gene "
         "transcribed intensely in one rare cardiac lineage still reads below a bulk floor once "
-        "diluted across the whole organ. Every per-stage figure is in the table below.</p>"
+        "diluted across the sample. Every per-stage figure is in the table below.</p>"
     )
 
 
@@ -4637,7 +5364,7 @@ def _small_multiples(entry: DatasetProfileEntry, dataset: Dataset | None) -> str
             ", this atlas's declared cardiac tissue for this dataset" if tissue in cardiac else ""
         )
         title = (
-            f"Median abundance in whole {tissue}{role}: {len(placed)} of "
+            f"Median abundance in {tissue}{role}: {len(placed)} of "
             f"{sampled_at[tissue]} sampled developmental stages placed, on the abundance "
             "axis every organ here shares."
         )
@@ -4697,6 +5424,22 @@ def _spark_caption(
     because "this atlas calls heart the cardiac tissue and placed nothing
     there" is the fact, and dropping the sentence would leave a reader to
     conclude the atlas never declared one.
+
+    **One visible line, and the rest behind a toggle (D57, 2026-10-26).** The
+    caption was one paragraph of five or six sentences, 133 to 175 words,
+    under the grid on 118 pages; the visible line is 41 on every one of them
+    (measured on builds of 0fc451a and of this change, as the
+    whitespace-separated words of the rendered text: tags stripped, entities
+    unescaped). The gene-page budget's tokeniser, which drops a token with no
+    letter, digit, τ or ∞ (a bare dash), reads 131 to 174 and 40. What stays in sight
+    is what every panel is: one per organ with a placed measurement, in stage
+    order, all on one abundance axis whose range is printed. Why the axis is
+    shared, the highlight, the breaks and the organs with no panel fold under
+    "How to read this chart" (`_chart_notes`, the trajectory's toggle too).
+    The fold changed no clause's condition. The opening clause stays the one
+    the paragraph above explains: it is true of a grid that drops an organ, so
+    the folded sentence naming the dropped organ adds to it rather than
+    correcting it.
     """
     unit = html.escape(_dominant_unit(entry, set(drawn)))
     interrupted = [_line_breaks(wholes[tissue]) for tissue in drawn]
@@ -4748,15 +5491,19 @@ def _spark_caption(
         )
     else:
         missing = ""
-    return (
+    visible = (
         '<p class="method">One panel per organ with a placed measurement for this gene, each '
         "drawn left to right in curated developmental order &mdash; the horizontal axis is "
         "<strong>order, not elapsed time</strong>. <strong>Every panel shares one abundance "
-        f"axis</strong> ({_fmt(low)} to {_fmt(high)} {unit}, log scale), which is what makes "
-        "a gene concentrated in one organ look different from a broadly expressed one; a "
-        "per-organ axis would rescale every line to its own range and hide exactly that "
-        f"difference.{highlight}{breaks}{missing} Every figure is in the table below.</p>"
+        f"axis</strong> ({_fmt(low)} to {_fmt(high)} {unit}, log scale).</p>"
     )
+    notes = (
+        "A shared axis is what makes a gene concentrated in one organ look different from a "
+        "broadly expressed one; a per-organ axis would rescale every line to its own range "
+        f"and hide exactly that difference.{highlight}{breaks}{missing} Every figure is in "
+        "the table below."
+    )
+    return visible + _chart_notes(notes)
 
 
 def _dataset_block(
@@ -4850,21 +5597,6 @@ def _dataset_block(
     return heading + lede + sparks + folded
 
 
-def _placement_count(entries: Sequence[DatasetProfileEntry]) -> int:
-    """How many organ/stage/dataset cells actually carry a percentile.
-
-    What `_PERCENTILE_COMPARABILITY_NOTICE` is conditioned on: a page with at
-    most one placement has nothing side by side for a reader to compare.
-    """
-    return sum(
-        1
-        for entry in entries
-        for stage in entry["stages"]
-        for tissue in stage["tissues"]
-        if tissue["placement"] is not None
-    )
-
-
 def _expression_section(
     profile: ExpressionProfile,
     datasets: Mapping[str, Dataset],
@@ -4889,6 +5621,17 @@ def _expression_section(
     mapping is the caller's job to default to `EMPTY_EXPRESSION_PROFILE`,
     matching `bundles._expression_profile`'s own fallback, so the page and the
     bundle cannot disagree about which genes carry data.
+
+    **The reading notes left on 2026-10-26 (D50).** They were folded under
+    "How to read these figures" on all 119 gene pages -- how a median is
+    placed and why none is placed below the floor, and, where the section laid
+    out more than one placement (118 pages, measured on a build of 0fc451a),
+    that percentiles are not comparable across organs or stages. Both teach
+    how to read the figures and say nothing about this gene, so both are on
+    `methods.html#expression`, where the conditional went too: stated once in
+    general, the comparability sentence has no position to be false in. What
+    stays is `_BULK_TISSUE_NOTICE`'s short form, visible and unconditional,
+    which links there.
     """
     entries = profile["datasets"]
     if not entries:
@@ -4897,14 +5640,7 @@ def _expression_section(
     blocks = "".join(
         _dataset_block(entry, datasets.get(entry["dataset"]), phases) for entry in entries
     )
-    notes = _EXPRESSION_READING_NOTES
-    if _placement_count(entries) > 1:
-        notes += _PERCENTILE_COMPARABILITY_NOTICE
-    reading = (
-        '<details class="reading-notes"><summary>How to read these figures</summary>'
-        f"{notes}</details>"
-    )
-    return "<h2>Developmental expression</h2>" + _BULK_DILUTION_NOTICE + reading + blocks
+    return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
 
 
 def build_gene_pages(
@@ -4926,6 +5662,7 @@ def build_gene_pages(
     scope_warrants: Mapping[str, Warrant] | None = None,
     scope_labels: Mapping[str, str] | None = None,
     identities: Mapping[str, GeneIdentity] | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -4938,7 +5675,7 @@ def build_gene_pages(
     `build_landing` take; a gene absent from it reads as its own HGNC id, the
     same registry fallback those two apply.
 
-    `identities` is `runner._gene_identities`' return (D52). Given a mapping,
+    `identities` is `identity.read_gene_identities`' return (D52). Given a mapping,
     every gene must carry the ids its required links are keyed on: a gene
     absent from it gets `EMPTY_IDENTITY`, which `external_links` refuses. `None`
     renders no identity block at all -- the unit suites that do not exercise
@@ -4979,6 +5716,7 @@ def build_gene_pages(
     combined_by_gene = combined or {}
     warrants = scope_warrants or {}
     labels = scope_labels or {}
+    graders = _panel_graders(validity, symbols)
     for gene in sorted(facts):
         fact = facts[gene]
         symbol = symbols.get(gene, gene)
@@ -4997,6 +5735,8 @@ def build_gene_pages(
                 publications=publications,
                 warrants=warrants,
                 identity=identity,
+                scope_terms=scope_terms,
+                panel_graders=graders,
             )
             + "<div>"
             + _SCOPE_SHORT
@@ -5006,7 +5746,9 @@ def build_gene_pages(
             # pages' notes the disease has no GenCC row), and a note placed
             # under one group read as qualifying only that group's rows.
             + _validity_section(
-                gene_validity, notes=_orphanet_notes(gene_validity, warrants, labels)
+                gene_validity,
+                notes=_orphanet_notes(gene_validity, warrants, labels),
+                symbol=symbols.get(gene),
             )
             # The atlas's own curated evidence, for a curated gene. An uncurated
             # gene's page says so on the card (`_card_curation`, D55), not here:

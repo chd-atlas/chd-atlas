@@ -11,7 +11,9 @@ from chd_atlas.build.render import (
     data_table,
     definition_list,
     document,
+    review_status_note,
 )
+from chd_atlas.models.review import ReviewStatus
 
 
 def test_the_research_use_notice_is_the_owner_s_sentence_character_for_character() -> None:
@@ -165,6 +167,20 @@ def test_an_attribute_name_that_is_not_a_bare_word_is_refused() -> None:
             headers=["gene"],
             rows=[Row(cells=("TBX5",), attributes=(("x onmouseover=alert(1) y", "v"),))],
         )
+
+
+def test_a_review_status_without_its_note_is_refused_rather_than_rendered_bare() -> None:
+    """A guard on a bypassed gate (owner's standing rule, 2026-10-27).
+
+    `models/review.py` refuses a status with no note when the file loads, so
+    reaching this means a record was built some other way. Rendering it would
+    print "Pending review:" with nothing after it: a question and no
+    statement of what it is, which is what the rule exists to prevent. With no
+    status there is nothing to say.
+    """
+    with pytest.raises(ValueError, match="no review_note to render"):
+        review_status_note("pmid22969434_cases", ReviewStatus.PENDING_REVIEW, None)
+    assert review_status_note("cnchd", None, None) == ""
 
 
 def test_a_table_with_no_rows_still_renders_its_header() -> None:

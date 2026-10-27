@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from chd_atlas.build.identity import read_gene_identities
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.corpus import Corpus, load_curation, unexpected_curation_entries
 from chd_atlas.genes import GeneRegistry
@@ -14,6 +15,7 @@ from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import (
+    CHD_CASE_SPLITS,
     PROFILE_QUANTILES,
     PROFILES,
     TABLE_SCHEMAS,
@@ -29,7 +31,7 @@ from chd_atlas.validate.burden import (
     validate_burden_combined_references,
     validate_burden_references,
 )
-from chd_atlas.validate.genes import validate_mirror_symbols
+from chd_atlas.validate.genes import validate_identity_ids, validate_mirror_symbols
 from chd_atlas.validate.ids import load_id_registry, validate_ids
 from chd_atlas.validate.ontology import (
     OntologyRegistry,
@@ -112,7 +114,14 @@ class ValidationReport:
 
 
 def _used_sources(root: Path) -> dict[str, set[str]]:
-    """Collect the distinct ``source`` values each mirror table relies on."""
+    """Collect the distinct ``source`` values each mirror table relies on.
+
+    The burden mirror relies on one more for each study in `CHD_CASE_SPLITS`
+    whose rows carry `n_chd_case_carriers`: the file that column is transcribed
+    from, which no row's `source` names (owner decision R2). Collected here so
+    it is held to the registry like every other, and the table a gene page's
+    card cites is one whose licence is recorded and permits redistribution.
+    """
     used: dict[str, set[str]] = {}
     for path, schema_name in mirror_paths(root):
         schema = TABLE_SCHEMAS[schema_name]
@@ -122,6 +131,14 @@ def _used_sources(root: Path) -> dict[str, set[str]]:
         if frame is None or "source" not in frame.columns:
             continue
         values = {str(value) for value in frame["source"].to_list() if value is not None}
+        if {"study", "n_chd_case_carriers"} <= set(frame.columns):
+            values |= {
+                CHD_CASE_SPLITS[study].source
+                for study, chd in zip(
+                    frame["study"].to_list(), frame["n_chd_case_carriers"].to_list(), strict=True
+                )
+                if chd is not None and study in CHD_CASE_SPLITS
+            }
         if values:
             used[str(path)] = values
     return used
@@ -674,6 +691,8 @@ def validate_repository(root: Path) -> ValidationReport:
         # `test_prf_references_run_on_both_scope_branches` pins that this
         # single call site is in fact reached on both the mirror-readable and
         # mirrors-missing (TBL012) branches.
+        # The gate's population, once, for PRF009 and GEN004 below.
+        published = _gate_published_genes(root, corpus)
         issues.extend(
             validate_profile_references(
                 root,
@@ -686,8 +705,27 @@ def validate_repository(root: Path) -> ValidationReport:
                 # the first profiles mirror landed; the unit test passed `None`
                 # explicitly and so never exercised this call site.
                 known_genes=known_genes or None,
-                published_genes=_gate_published_genes(root, corpus),
+                published_genes=published,
                 phases=corpus.cardiac_phases,
+            )
+        )
+        # GEN004 (owner decision 2026-10-26, R13): the identity ids every
+        # published gene page links by, read by the rule the build refuses a
+        # page on, through the reader the build uses (`read_gene_identities`).
+        # In this branch because the published population is the gate's,
+        # computed from the curated scope a failed corpus load empties.
+        #
+        # It passed `_gene_identities(root) or None` until review (2026-10-27),
+        # so that a header-only registry -- which reads, as empty, and which
+        # TBL008 does not report -- would not report all 119 published genes'
+        # ids missing. That also switched the check off: with no curated
+        # assertion to raise REF001, such a registry validated with 0 errors
+        # and `build_site` raised from `external_links` after writing 133
+        # files (measured on a copy of 5f7161b). An empty registry is now one
+        # GEN004 naming the file, from `validate_identity_ids`.
+        issues.extend(
+            validate_identity_ids(
+                read_gene_identities(root), published, str(root / "mirrors" / "genes.tsv")
             )
         )
 

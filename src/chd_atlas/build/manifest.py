@@ -418,7 +418,51 @@ from chd_atlas.corpus import Corpus
 #
 # It also publishes `methods.html`, the site's reading notes: an HTML page,
 # additive in the sense 2.2 records, so no bump of its own.
-SCHEMA_VERSION: Final = "2.18"
+#
+# 2.19 (owner decisions of 2026-10-26, one bump for the batch). MINOR, every
+# change additive or a population change in an existing field:
+#
+# * The structural set Orphanet scoping reads gains six lesions HPO files
+#   outside Abnormal heart morphology (`orphanet_scope.ADDED_BRANCHES`). No
+#   field changes; ten `scope.json` warrants gain pulmonic stenosis among their
+#   `phenotypes`, and no term or gene enters or leaves scope.
+# * Every record of `publications.json` (and `featured.json`'s embedded ones)
+#   gains `correction_genes` and `genome_wide_threshold`, `null` where not
+#   curated: the gene count a study's own correction ran over, and the p it
+#   states for genome-wide significance. PMID:40127276's `tests_reported` goes
+#   from 248 to `null`, because 248 counted its panel genes, not comparisons.
+# * Every `scope.json` term gains `syndrome`, a curated boolean, `true` on the
+#   nine ClinGen-scoped syndromes published genes are graded for.
+# * `counts` gains `burden_surviving_genes`: the published genes with a row
+#   surviving its own study's correction, the genes whose card lists one.
+# * Every `sources.json` entry gains `file_version` and `file_date`, what the
+#   file states about itself, `null` but for the two Orphadata products.
+# * Every `cohorts.json` record gains `overlaps_with`, the declared overlaps
+#   (`ddd` and `decipher`), `[]` elsewhere. A population change too: the two
+#   studies citing them become one cohort family, so `counts.cohort_families`
+#   and every bundle's `independent_datasets.families` go from 3 to 2.
+# * Every `independent_datasets.families` entry (bundle and `genes/index.json`
+#   row) gains `members`: one `{study, state}` per study in the family, sorted
+#   by study, each study's own state by the family rule over its rows alone. A
+#   family of two studies made the family's state no longer every member's.
+# * `cohorts.json` gains seven records (owner decision R12, 2026-10-26): the
+#   CHD case series PMID:34324492's S2 Table identifies by PMID with 50 or more
+#   cases, which every one of that study's rows now names in `case_cohorts`.
+#   A population change: `counts.cohorts` goes from 13 to 20, and
+#   `counts.cohort_families` stays 2, since no other study names one of them.
+# * Every object of a bundle's `burden` array gains `n_chd_case_carriers`
+#   (owner decision R2, 2026-10-26): how many of `n_case_carriers` are CHD
+#   cases, where a study whose case set also holds another condition counted
+#   them apart; `null` elsewhere. Only PMID:34324492's S8 Table gives one, on
+#   the 12 mirrored rows (10 published) for the genes it lists.
+# * Every `cohorts.json` record and every `scope.json` term gains
+#   `review_status` and `review_note` (owner's answer, 2026-10-27), both `null`
+#   where none is recorded: `pending_review`, a question about the record that
+#   this atlas leaves open for an expert (on the two cohorts marked, the
+#   sources they rest on conflict; on the two scope terms, a clinical
+#   judgement), or `not_accessible`, a source the record rests on could not be
+#   read, with a note stating what is unresolved (`models/review.py`).
+SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is
@@ -531,8 +575,8 @@ def write_manifest(
     corpus_counts = {
         "assertions": len(corpus.assertions),
         # The registry `cohorts.json` publishes entire, not the subset the
-        # published rows cite. Those are 13 and 13 today; the key is named for
-        # the file so the two cannot be confused if they ever part.
+        # published rows cite. Those were 20 and 20 on 2026-10-27; the key is
+        # named for the file so the two cannot be confused if they ever part.
         "cohorts": len(corpus.cohorts),
         "datasets": len(corpus.datasets),
         "featured": len(corpus.featured),
