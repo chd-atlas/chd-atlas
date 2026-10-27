@@ -418,7 +418,15 @@ from chd_atlas.corpus import Corpus
 #
 # It also publishes `methods.html`, the site's reading notes: an HTML page,
 # additive in the sense 2.2 records, so no bump of its own.
-SCHEMA_VERSION: Final = "2.18"
+#
+# 2.19 (owner decisions of 2026-10-26, one bump for the batch). MINOR, every
+# change additive or a population change in an existing field:
+#
+# * The structural set Orphanet scoping reads gains six lesions HPO files
+#   outside Abnormal heart morphology (`orphanet_scope.ADDED_BRANCHES`). No
+#   field changes; ten `scope.json` warrants gain pulmonic stenosis among their
+#   `phenotypes`, and no term or gene enters or leaves scope.
+SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from
 # the corpus, unlike every field in `counts`: there is no measurement of "is

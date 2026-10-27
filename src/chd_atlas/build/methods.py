@@ -137,6 +137,18 @@ from chd_atlas.models.cohort import Cohort
 #   methods_html_states` (`test_orphanet_scope.py`) ties every term named here
 #   to the set the build computes, so changing the rule where this names it
 #   fails there until this is reworded.
+#
+# Widened by owner decision 2026-10-26 (R1): pulmonic stenosis, aortic valve
+# stenosis, supravalvular aortic stenosis, truncus arteriosus, an interrupted
+# aortic arch and anomalous pulmonary venous return joined coarctation and the
+# ductus (`orphanet_scope.ADDED_BRANCHES`), so the clause that named three of
+# them "not counted" now lists all eight. Two clauses are narrower than the
+# owner's preview, each measured that day on the pinned release: the set still
+# leaves lesions out -- peripheral pulmonary artery stenosis (HP:0004969) and an
+# aortopulmonary window (HP:0011604) are filed elsewhere and not added -- so the
+# sentence names two rather than implying every lesion now counts; and aortic
+# valve stenosis is not always a malformation, which the sentence says beside
+# the calcified valve.
 SCOPE_RULE: Final = (
     '<p class="scope-rule">A gene is published here when an external authority already '
     "treats it as a congenital heart disease gene: either a <strong>ClinGen expert "
@@ -150,11 +162,14 @@ SCOPE_RULE: Final = (
     "qualify is not in scope until it is listed. Here a structural heart malformation is a "
     "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
     "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
-    "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
-    "ductus arteriosus. The branches kept still hold some findings that are not "
-    "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
-    "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
-    "arch, are not counted. "
+    "tumours, the pericardium and the like), plus eight lesions the ontology files "
+    "elsewhere, each with its subtypes: coarctation of the aorta, a patent ductus "
+    "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
+    "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
+    "The findings counted still include some that are not malformations, such as a "
+    "calcified or prolapsing valve, and aortic valve stenosis can be acquired; other "
+    "lesions the ontology files elsewhere, among them peripheral pulmonary artery "
+    "stenosis and an aortopulmonary window, are not counted. "
     "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
     "is any gene: every scope term names the authority it came from "
     "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "

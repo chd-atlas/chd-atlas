@@ -58,7 +58,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.18",
+  "schema_version": "2.19",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -240,6 +240,9 @@ wrong by the next one.
   [`publications.json`](#publicationsjson) and so to `featured.json`'s
   embedded publications, `null` where none is curated, and added
   [`methods.html`](#methodshtml), the site's reading notes. Additive.
+  `2.19` widened the structural heart phenotypes [`scope.json`](#scopejson)'s
+  Orphanet warrants are read against by six lesions; ten warrants gained
+  pulmonic stenosis, and no term or gene entered or left scope.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -2156,8 +2159,14 @@ structural CHD is frequent but not part of the diagnosis.
   rule the validator `SCP006` refuses a nomination on, so it cannot drift from
   what Orphanet records. "Structural" is HPO's `Abnormal heart morphology`
   branch minus its cardiomyopathy, cardiomegaly, tumour, pericardium,
-  endocardium and imaging-finding branches, plus coarctation and patent ductus
-  arteriosus, over the pinned HPO release.
+  endocardium and imaging-finding branches, plus eight lesions HPO files
+  elsewhere, each with its subtypes: coarctation of the aorta, patent ductus
+  arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic
+  stenosis, truncus arteriosus, interrupted aortic arch and anomalous pulmonary
+  venous return, over the pinned HPO release. The last six were added in `2.19`,
+  which added pulmonic stenosis to the published phenotypes of ten terms (the
+  cardiofaciocutaneous, Costello and Noonan-with-multiple-lentigines families)
+  and admitted no term by itself: a curator still nominates.
 - **A grade for one of these syndromes is a grade for the syndrome, not for
   heart disease.** A client showing PTPN11's `Definitive` for Noonan syndrome
   should say why Noonan syndrome counts here, which is what this object is

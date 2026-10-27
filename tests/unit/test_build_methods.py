@@ -197,7 +197,7 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
     (2026-10-26). It read "for a disease that an external authority treats as
     congenital heart disease (or in which Orphanet records a structural heart
     malformation in at least 30% of cases)", which reads as a sufficient
-    condition the build does not apply: SCP007 lists 239 unnominated terms
+    condition the build does not apply: SCP007 listed 239 unnominated terms
     that would qualify on Orphanet's frequencies, FLNA's periventricular
     nodular heterotopia among them, and Orphanet's own GenCC submissions name
     Ebstein anomaly, which is not a scope term. So the fragments now include
@@ -224,11 +224,14 @@ def test_scope_states_the_rule_that_admits_a_gene_in_full(page: str) -> None:
         "qualify is not in scope until it is listed. Here a structural heart malformation is a "
         "finding under the Human Phenotype Ontology's <em>Abnormal heart morphology</em> "
         "(HP:0001627), less branches of it excluded as not malformations (cardiomyopathy, "
-        "tumours, the pericardium and the like), plus coarctation of the aorta and a patent "
-        "ductus arteriosus. The branches kept still hold some findings that are not "
-        "malformations, such as a calcified or prolapsing valve; lesions the ontology files "
-        "elsewhere, among them pulmonic stenosis, truncus arteriosus and an interrupted aortic "
-        "arch, are not counted. "
+        "tumours, the pericardium and the like), plus eight lesions the ontology files "
+        "elsewhere, each with its subtypes: coarctation of the aorta, a patent ductus "
+        "arteriosus, pulmonic stenosis, aortic valve stenosis, supravalvular aortic stenosis, "
+        "truncus arteriosus, an interrupted aortic arch and anomalous pulmonary venous return. "
+        "The findings counted still include some that are not malformations, such as a "
+        "calcified or prolapsing valve, and aortic valve stenosis can be acquired; other "
+        "lesions the ontology files elsewhere, among them peripheral pulmonary artery "
+        "stenosis and an aortopulmonary window, are not counted. "
         "<strong>No disease is in scope on this atlas's own judgement</strong>, and neither "
         "is any gene: every scope term names the authority it came from "
         "(<code>scope.json</code>, from <code>curation/chd_scope.yaml</code>), and every gene "
