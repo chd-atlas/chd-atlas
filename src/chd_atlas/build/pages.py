@@ -994,6 +994,48 @@ def _correction_scope(row: BurdenRow, publication: Publication | None) -> str:
     return f" · {_statistic(row)} within its {publication.correction_genes:,}-gene panel"
 
 
+def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
+    """What S8 Table says of the CHD cases among a card's carriers (owner decision R2).
+
+    PMID:34324492's case set includes 777 sporadic thoracic aortic aneurysm
+    probands, and the study's summary caveat beneath its card line says so. For
+    the genes its S8 Table lists, `n_chd_case_carriers` says how many of a
+    row's case carriers are CHD cases. Where that is all of them, no carrier
+    the line counts is an aneurysm proband, and a reader of the card should
+    be told: "For this gene, the study's S8 Table counts every carrier among
+    its CHD cases." It does not retire the caveat: the line's denominator is
+    the case set the study analysed, aneurysm probands among it (S8 Table has
+    a TAA-only carrier for 144 of its 528 genes). Where it is fewer, the
+    sentence gives both counts instead, and never "every".
+    Measured on a build of this tree (2026-10-27): all 10
+    published genes with a card line from that study carry the column and are
+    equal (ELN, TBX1, GATA4, TAB2, EFNB2, SOX7, ROBO4, ETS1, NKX2-5, NR2F2);
+    the one row where it is smaller, ANKRD11's 12 of 13, is on no published
+    page, so the second form is reachable from a fixture only.
+
+    `rows` are the rows the card's lines show, one per line. "S8 Table" is
+    PMID:34324492's table, written here because that study is the only one
+    whose rows carry the column; `test_convert_audain2021` holds the mirror to
+    that, so a second study's split fails there before this names the wrong
+    table. Deduplicated in order, so two lines of one study cannot repeat a
+    sentence.
+    """
+    sentences: list[str] = []
+    for row in rows:
+        chd = row.n_chd_case_carriers
+        if chd is None or row.n_case_carriers == 0:
+            continue
+        sentence = (
+            "For this gene, the study's S8 Table counts every carrier among its CHD cases."
+            if chd == row.n_case_carriers
+            else f"For this gene, the study's S8 Table counts {chd:,} of the "
+            f"{row.n_case_carriers:,} carriers among its CHD cases."
+        )
+        if sentence not in sentences:
+            sentences.append(sentence)
+    return sentences
+
+
 def _genome_wide(row: BurdenRow, publication: Publication | None) -> str:
     """`p <raw p>` where a row clears its study's own genome-wide line, else "" (R3).
 
@@ -1192,16 +1234,26 @@ def _card_rare_variants(
         # A study's curated summary caveat, once per study with a line, in the
         # lines' own study order: it qualifies the counts those lines show, so
         # a study with no line -- a no-correction line shows no counts -- has
-        # nothing here for it to qualify.
+        # nothing here for it to qualify. After it, what the study's own table
+        # says of the CHD cases among the carriers those lines show
+        # (`_chd_only`, owner decision R2): whether the caveat reaches those
+        # carriers, never whether it reaches the denominator.
         notes: list[str] = []
         for study in dict.fromkeys(study for study, _ in sorted(groups)):
             publication = publications.get(study)
-            if publication is None or publication.summary_caveat is None:
+            caveat = publication.summary_caveat if publication is not None else None
+            shown = [
+                sorted(members, key=_sort_key)[0]
+                for (owner, _), members in sorted(groups.items())
+                if owner == study
+            ]
+            text = " ".join([caveat, *_chd_only(shown)] if caveat else _chd_only(shown))
+            if not text:
                 continue
             notes.append(
                 f'<p class="card-note"><a href="#{html.escape(_study_anchor(study))}">'
                 f"{html.escape(_study_label(study, publications))}</a>: "
-                f"{html.escape(publication.summary_caveat)}</p>"
+                f"{html.escape(text)}</p>"
             )
         body = (
             "<p><strong>Rare variants</strong> surviving their own study's correction</p>"

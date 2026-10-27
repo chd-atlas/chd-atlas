@@ -34,6 +34,7 @@ _ROW: dict[str, str] = {
     "count_unit": "individuals",
     "n_case_carriers": "4",
     "n_cases": "1471",
+    "n_chd_case_carriers": "",
     "comparator": "control_cohort",
     "n_control_carriers": "0",
     "n_controls": "45082",
@@ -212,9 +213,15 @@ def test_a_carrier_count_above_its_denominator_is_reported(tmp_path: Path) -> No
     """BUR003. Both numbers are individually valid non-negative integers, so no
     per-column range check can see this -- it is what a column transcribed into
     the wrong slot looks like, which is the single likeliest converter bug.
+
+    The CHD cases among a row's case carriers are a subset of them (owner
+    decision R2, 2026-10-27), so more is the same defect one level in, and as
+    many is the ordinary case: 10 of the 12 rows carrying the column today.
     """
     assert "BUR003" in _codes(tmp_path, {**_ROW, "n_case_carriers": "1472"})
     assert "BUR003" in _codes(tmp_path, {**_ROW, "n_control_carriers": "45083"})
+    assert "BUR003" in _codes(tmp_path, {**_ROW, "n_chd_case_carriers": "5"})
+    assert "BUR003" not in _codes(tmp_path, {**_ROW, "n_chd_case_carriers": "4"})
 
 
 def test_an_inverted_confidence_interval_is_reported(tmp_path: Path) -> None:

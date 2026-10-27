@@ -70,6 +70,10 @@ class BurdenRow:
     by `validate/burden.py`, and reshaping them here into, say, a union type
     would move that check into the build, where a violation raises mid-write
     instead of being reported by the gate.
+
+    `n_chd_case_carriers` sits last, out of the schema's order, only because a
+    field with a default must follow those without; `load_burden` always
+    passes it.
     """
 
     study: str
@@ -100,6 +104,7 @@ class BurdenRow:
     control_cohorts: tuple[str, ...]
     method_note: str | None
     source: str
+    n_chd_case_carriers: int | None = None
 
 
 def _cohorts(value: object) -> tuple[str, ...]:
@@ -212,6 +217,7 @@ def load_burden(root: Path) -> dict[str, list[BurdenRow]]:
             control_cohorts=_cohorts(record["control_cohorts"]),
             method_note=record["method_note"],
             source=str(record["source"]),
+            n_chd_case_carriers=record["n_chd_case_carriers"],
         )
         grouped.setdefault(row.gene, []).append(row)
 
@@ -313,6 +319,10 @@ def burden_payload(rows: Iterable[BurdenRow]) -> list[Json]:
             "count_unit": row.count_unit,
             "n_case_carriers": row.n_case_carriers,
             "n_cases": row.n_cases,
+            # How many of the case carriers are CHD cases, where the study
+            # counted that apart from a case set holding another condition;
+            # `null` elsewhere (owner decision R2, 2026-10-27).
+            "n_chd_case_carriers": row.n_chd_case_carriers,
             "comparator": row.comparator,
             "n_control_carriers": row.n_control_carriers,
             "n_controls": row.n_controls,

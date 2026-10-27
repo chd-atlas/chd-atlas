@@ -7525,6 +7525,15 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     no-correction line, which shows no counts to qualify, and a study whose
     rows all fail their correction shows no counts either. The caveat and
     the study's label are curator-written text, so both are escaped.
+
+    **Then what S8 Table says of the CHD cases among the line's carriers**
+    (owner decision R2, 2026-10-27), from the line's row's
+    `n_chd_case_carriers`: "every carrier" where it equals the row's case
+    carriers (10 of 10 here), the two counts where it is fewer (7 of 10), and
+    nothing where the row carries none -- the Sierant rows here, and 109 of
+    PMID:34324492's 121 mirrored rows. The unequal case is on no published
+    page (ANKRD11's 12 of 13 is the only one, and ANKRD11 is unpublished), so
+    this fixture is the only place "every" is held to equality.
     """
     publications = {
         "PMID:42230622": _PUBLICATION.model_copy(
@@ -7537,7 +7546,7 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
             update={"authors": ["D'Alessandro M"], "summary_caveat": "Counts alleles."}
         ),
     }
-    rows = [_sierant_de_novo(), _sierant(), _audain2021(), _burden_row()]
+    rows = [_sierant_de_novo(), _sierant(), _audain2021(n_chd_case_carriers=10), _burden_row()]
     page = _burden_page(tmp_path, facts_uncurated, rows, publications=publications)
     card = _card_variants(_rail_of(page))
 
@@ -7545,7 +7554,8 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     after = card[card.index("</ul>") + len("</ul>") :]
     assert after == (
         '<p class="card-note"><a href="#study-34324492">Audain E et al. 2021</a>: '
-        "Cases include &lt;777&gt; TAA probands &amp; CHD.</p>"
+        "Cases include &lt;777&gt; TAA probands &amp; CHD. For this gene, the study&#x27;s "
+        "S8 Table counts every carrier among its CHD cases.</p>"
         '<p class="card-note"><a href="#study-40127276">D&#x27;Alessandro M et al. 2025</a>: '
         "Counts alleles.</p>"
         '<p class="card-uncorrected"><a href="#study-42230622">Audain E et al. 2026</a> '
@@ -7560,6 +7570,18 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
         publications=publications,
     )
     assert 'class="card-note"' not in _card_variants(_rail_of(failing))
+
+    fewer = _burden_page(
+        tmp_path / "fewer",
+        facts_uncurated,
+        [_audain2021(n_chd_case_carriers=7)],
+        publications=publications,
+    )
+    assert re.findall(r'<p class="card-note">.*?</p>', _card_variants(_rail_of(fewer))) == [
+        '<p class="card-note"><a href="#study-34324492">Audain E et al. 2021</a>: '
+        "Cases include &lt;777&gt; TAA probands &amp; CHD. For this gene, the study&#x27;s "
+        "S8 Table counts 7 of the 10 carriers among its CHD cases.</p>"
+    ]
 
 
 def test_the_card_says_how_wide_a_survival_is_where_its_study_records_it(

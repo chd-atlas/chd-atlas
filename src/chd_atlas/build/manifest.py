@@ -450,6 +450,11 @@ from chd_atlas.corpus import Corpus
 #   cases, which every one of that study's rows now names in `case_cohorts`.
 #   A population change: `counts.cohorts` goes from 13 to 20, and
 #   `counts.cohort_families` stays 2, since no other study names one of them.
+# * Every object of a bundle's `burden` array gains `n_chd_case_carriers`
+#   (owner decision R2, 2026-10-27): how many of `n_case_carriers` are CHD
+#   cases, where a study whose case set also holds another condition counted
+#   them apart; `null` elsewhere. Only PMID:34324492's S8 Table gives one, on
+#   the 12 mirrored rows (10 published) for the genes it lists.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

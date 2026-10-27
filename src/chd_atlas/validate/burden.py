@@ -157,10 +157,15 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
         # A carrier count above its denominator is arithmetically impossible and
         # means a column was transcribed into the wrong slot -- the failure mode
         # a per-column range check cannot see, because both numbers are
-        # individually valid non-negative integers.
+        # individually valid non-negative integers. The third pair is the same
+        # rule one level in (owner decision R2, 2026-10-27): the CHD cases
+        # among a row's case carriers are a subset of them, and more is the
+        # signature of the wrong band of S8 Table -- its "CHD+TAA" and "only
+        # CHD" `case` columns sit four apart under one header word.
         for carriers, total in (
             ("n_case_carriers", "n_cases"),
             ("n_control_carriers", "n_controls"),
+            ("n_chd_case_carriers", "n_case_carriers"),
         ):
             a, b = row[carriers], row[total]
             if a is not None and b is not None and a > b:

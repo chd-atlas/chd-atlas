@@ -35,6 +35,7 @@ ORDER: tuple[str, ...] = (
     "count_unit",
     "n_case_carriers",
     "n_cases",
+    "n_chd_case_carriers",
     "comparator",
     "n_control_carriers",
     "n_controls",

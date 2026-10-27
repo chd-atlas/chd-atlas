@@ -717,6 +717,17 @@ BURDEN = TableSchema(
         Column("count_unit", pl.String, allowed=_COUNT_UNITS),
         Column("n_case_carriers", pl.Int64, minimum=0),
         Column("n_cases", pl.Int64, minimum=1),
+        # Of `n_case_carriers`, how many are congenital heart disease cases,
+        # where the study's case set also holds cases of a condition outside
+        # this atlas's scope and the study counts its CHD cases' carriers apart
+        # (owner decision R2, 2026-10-27). Empty where it does not. Only
+        # PMID:34324492 does: its cases include 777 sporadic thoracic aortic
+        # aneurysm probands, and its S8 Table gives the "only CHD" case count
+        # for the 528 genes it lists, which `convert_audain2021.py` transcribes.
+        # That table is recorded as `audain2021_s8` in `sources.yaml`; `source`
+        # still names the file the row's statistic came from. Same `count_unit`
+        # as `n_case_carriers`, and never above it (BUR003).
+        Column("n_chd_case_carriers", pl.Int64, nullable=True, minimum=0),
         # The comparator, and the fields each kind requires. `validate_burden`
         # enforces which of the next three must be present and which must be
         # empty; the schema alone cannot express that dependency.

@@ -4,7 +4,12 @@
 Run locally by a curator, never by CI or the build -- design decision D6.
 
     .venv/bin/python scripts/convert_audain2021.py \\
-        local/data/audain2021/s011.xlsx mirrors/burden.tsv
+        local/data/audain2021/s011.xlsx local/data/audain2021/s013.xlsx \\
+        mirrors/burden.tsv
+
+The first workbook is S6 Table, which every row's statistic is transcribed
+from; the second is S8 Table, which gives one more number for the genes it
+lists (see CHD-ONLY CARRIERS below).
 
 Merges beside the rows other studies already contributed rather than replacing
 the file; see `burden_mirror.merge_study`.
@@ -87,6 +92,29 @@ on `CASE_COHORTS`.
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
 
+CHD-ONLY CARRIERS (owner decision R2, 2026-10-27)
+-------------------------------------------------
+S8 Table repeats S6's test for the 528 genes that reached significance and
+splits its case carriers by the case series they came from. Its two header
+rows, quoted (`S8_GROUPS`, `S8_HEADER`): columns 4-7 sit under "CHD+TAA",
+8-11 under "only CHD" and 12-15 under "only TAA", and each band reads `case`,
+`control`, `p_value`, `p_value_adj`. The sheet's "Info" tab defines `case` as
+"number of CNV cases", and its caption says the bands are the 528 genes
+"combining both CHD and TAA cases (CHD+TAA), the contribution of only CHD
+cases (only CHD) and the contribution of only TAA cases (only TAA)". It is a
+gene-level table, one row per gene, like S6's Sheet A.
+
+`n_chd_case_carriers` is the "only CHD" band's `case` (column 8): of the
+row's case carriers, how many are CHD cases rather than aneurysm probands. It
+is transcribed only where S8 lists the gene and is empty elsewhere; S8 is
+not a source of rows. Before it is written, S8's "CHD+TAA" `case` (column 4)
+must equal S6's `case` for every gene S8 lists, or the two tables are not
+the same analysis and the converter stops. Measured 2026-10-27: equal for all
+528, and so are the controls and the corrected p. S8 leaves the CHD-only
+`case` blank for 7 genes, none registered, and a blank is left blank rather
+than read as 0. The workbook's sha256 is recorded as `audain2021_s8` in
+`mirrors/sources.yaml`.
+
 DENOMINATORS
 ------------
 Every row carries 6,746 cases and 14,024 controls, the set the article's
@@ -114,10 +142,34 @@ from pathlib import Path
 from typing import Final
 
 from burden_mirror import merge_study
-from convert_burden import gene_symbols, read_sheet
+from convert_burden import gene_symbols, read_sheet, read_sheet_rows
 
 STUDY: Final = "PMID:34324492"
 SOURCE: Final = "audain2021_s6"
+
+# S8 Table's two header rows, quoted, as far as the bands this reads. Checked
+# before a cell is read, because the column read is chosen by position: a
+# reordered band would otherwise put the TAA-only count under the CHD-only name
+# on a green build.
+S8_GROUPS: Final = (
+    *("",) * 4,
+    "CHD+TAA",
+    *("",) * 3,
+    "only CHD",
+    *("",) * 3,
+    "only TAA",
+    *("",) * 3,
+)
+S8_HEADER: Final = (
+    "symbol",
+    "chr",
+    "start",
+    "end",
+    *("case", "control", "p_value", "p_value_adj") * 3,
+)
+_S8_SYMBOL: Final = 0
+_S8_COMBINED_CASE: Final = 4
+_S8_CHD_ONLY_CASE: Final = 8
 
 # S2/S3 Tables. 11 of S2's 189 case sources are registered, and they hold 6,211
 # of its 7,958 cases (78%). This comment called the rest "~190 single-case PMID
@@ -169,9 +221,56 @@ METHOD_NOTE: Final = (
 )
 
 
-def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]], list[str]]:
-    """Build the mirror rows, and the report lines describing what was dropped."""
+def read_chd_only(path: Path) -> dict[str, tuple[str, str]]:
+    """S8 Table as symbol -> (its "CHD+TAA" `case`, its "only CHD" `case`).
+
+    Refuses a sheet whose header rows are not `S8_GROUPS` and `S8_HEADER`, and
+    a gene listed twice.
+    """
+    rows = read_sheet_rows(path, "S8 Table")
+
+    def first(index: int, width: int) -> tuple[str, ...]:
+        # Padded: a row read from the sheet ends at its last cell, which may
+        # fall short of the bands this reads.
+        cells = rows[index] if index < len(rows) else []
+        return tuple(cell.strip() for cell in (cells + [""] * width)[:width])
+
+    groups, header = first(0, len(S8_GROUPS)), first(1, len(S8_HEADER))
+    if groups != S8_GROUPS or header != S8_HEADER:
+        raise ValueError(
+            f"{path}: S8 Table's header rows are not the ones this converter reads by "
+            f"position: {groups!r} / {header!r}"
+        )
+    split: dict[str, tuple[str, str]] = {}
+    for row in rows[2:]:
+        cells = row + [""] * (len(S8_HEADER) - len(row))
+        symbol = cells[_S8_SYMBOL].strip()
+        if not symbol:
+            continue
+        if symbol in split:
+            raise ValueError(f"{path}: S8 Table lists {symbol} twice")
+        split[symbol] = (cells[_S8_COMBINED_CASE].strip(), cells[_S8_CHD_ONLY_CASE].strip())
+    return split
+
+
+def convert(
+    source: Path, chd_only: Path, symbols: dict[str, str]
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Build the mirror rows, and the report lines describing what was dropped.
+
+    `source` is S6 Table and `chd_only` S8 Table; see CHD-ONLY CARRIERS above.
+    """
     records = read_sheet(source, "Sheet A")
+    split = read_chd_only(chd_only)
+    cases = {record["symbol"]: record["case"] for record in records}
+    disagree = sorted(
+        symbol for symbol, (combined, _) in split.items() if cases.get(symbol) != combined
+    )
+    if disagree:
+        raise ValueError(
+            f"S8 Table's CHD+TAA case count differs from S6 Table's, or S6 lists no such "
+            f"gene, for {len(disagree)} gene(s): {', '.join(disagree)}"
+        )
     rows: list[dict[str, str]] = []
     seen: set[str] = set()
 
@@ -206,6 +305,9 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
                 "count_unit": "individuals",
                 "n_case_carriers": record["case"],
                 "n_cases": str(N_CASES),
+                # S8 Table's "only CHD" `case`, for a gene S8 lists; empty
+                # otherwise, and where S8 leaves the cell blank.
+                "n_chd_case_carriers": split.get(symbol, ("", ""))[1],
                 "comparator": "control_cohort",
                 "n_control_carriers": record["control"],
                 "n_controls": str(N_CONTROLS),
@@ -234,9 +336,17 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
 
     kept = {row["gene"] for row in rows}
     missing = sorted(symbol for symbol, hgnc in symbols.items() if hgnc not in kept)
+    split_rows = [row for row in rows if row["n_chd_case_carriers"]]
+    smaller = sum(
+        1 for row in split_rows if int(row["n_chd_case_carriers"]) < int(row["n_case_carriers"])
+    )
+    blank = sorted(symbol for symbol, (_, chd) in split.items() if not chd)
     report = [
         f"{len(rows)} row(s) for {len(kept)} of the {len(symbols)} registered genes",
         f"{len(seen)} genes tested in the supplement; {len(seen) - len(kept)} out of scope",
+        f"{len(split_rows)} row(s) carry S8 Table's CHD-only case carriers, of {len(split)} "
+        f"genes S8 lists; on {smaller} of them it is below the row's case carriers",
+        f"S8 leaves the CHD-only case count blank for {len(blank)} gene(s): {', '.join(blank)}",
     ]
     if missing:
         report.append(
@@ -252,19 +362,20 @@ def _number(value: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    if not 2 <= len(argv) <= 3:
+    if not 3 <= len(argv) <= 4:
         print(__doc__, file=sys.stderr)
         return 2
-    source, out = Path(argv[0]), Path(argv[1])
-    root = Path(argv[2]) if len(argv) == 3 else Path.cwd()
+    source, chd_only, out = Path(argv[0]), Path(argv[1]), Path(argv[2])
+    root = Path(argv[3]) if len(argv) == 4 else Path.cwd()
 
-    rows, report = convert(source, gene_symbols(root))
+    rows, report = convert(source, chd_only, gene_symbols(root))
     kept, written = merge_study(out, STUDY, rows)
 
     for line in report:
         print(line)
     print(f"wrote {written} row(s) for {STUDY}, keeping {kept} row(s) from other studies")
-    print(f"sha256 of {source.name}: {hashlib.sha256(source.read_bytes()).hexdigest()}")
+    for path in (source, chd_only):
+        print(f"sha256 of {path.name}: {hashlib.sha256(path.read_bytes()).hexdigest()}")
     return 0
 
 

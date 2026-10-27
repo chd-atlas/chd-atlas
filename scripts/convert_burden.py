@@ -115,6 +115,7 @@ _ORDER: Final[tuple[str, ...]] = (
     "count_unit",
     "n_case_carriers",
     "n_cases",
+    "n_chd_case_carriers",
     "comparator",
     "n_control_carriers",
     "n_controls",
@@ -312,6 +313,8 @@ def convert(source: Path, symbols: dict[str, str]) -> tuple[list[dict[str, str]]
                     "count_unit": "individuals",
                     "n_case_carriers": record[carriers],
                     "n_cases": record[denominator],
+                    # Every case is a CHD case, so there is no split to give.
+                    "n_chd_case_carriers": "",
                     "comparator": "control_cohort",
                     "n_control_carriers": record["n_het_controls"],
                     "n_controls": record["n_total_controls"],

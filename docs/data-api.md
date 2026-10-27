@@ -266,7 +266,10 @@ wrong by the next one.
   collections, the series PMID:34324492's S2 Table identifies by PMID with 50
   or more cases, and that study's rows name them in `case_cohorts`:
   `counts.cohorts` went from 13 to 20, and `counts.cohort_families` did not
-  move, since no other study names any of them. Additive.
+  move, since no other study names any of them. And it added
+  [`n_chd_case_carriers`](#the-bundles-burden-array-per-study-never-pooled) to
+  every object of a bundle's `burden` array, `null` but where a study counted
+  the CHD cases among its case carriers apart. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -951,6 +954,7 @@ one commit after the third study shipped.
   "count_unit": "individuals",
   "n_case_carriers": 5,
   "n_cases": 1471,
+  "n_chd_case_carriers": null,
   "comparator": "control_cohort",
   "n_control_carriers": 0,
   "n_controls": 45082,
@@ -1102,6 +1106,20 @@ article's methods say remained after filtering, the set its permutation test was
 run on. The study's S1 Table, which the article cites for the cohort as
 assembled, gives 7,107 cases and 14,040 controls in its deletion column; earlier
 releases published those figures as the rows' denominators.
+
+**`n_chd_case_carriers`** (since `2.19`) says how many of `n_case_carriers` are
+congenital heart disease cases, where the study's case set also holds cases of
+a condition outside this atlas's scope and the study counted the CHD cases'
+carriers apart; it is `null` everywhere else, which is not a count of zero.
+Same unit as `n_case_carriers`, and never above it. Only `PMID:34324492` gives
+one: its cases include 777 sporadic thoracic aortic aneurysm probands (the
+`taa_cases` cohort), and its S8 Table counts the CHD-only carriers for the 528
+genes that reached significance, so the rows for the genes it lists carry that
+count and the rest carry `null`. Every other number on those rows is from S6
+Table, the file the row's `source` names; S8 Table is recorded in
+[`sources.json`](#sourcesjson) as `audain2021_s8`. Where the count equals
+`n_case_carriers`, every carrier the row counts is a CHD case, and a gene
+page's card says so beneath the study's caveat about its aneurysm probands.
 
 ### The bundle's `burden_combined` array: one study's own combination of its arms
 
@@ -1546,7 +1564,13 @@ Top to bottom:
    records either. Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
-   study's block.
+   study's block. After it, where the line's row carries
+   `n_chd_case_carriers`, what that count says of the carriers the line
+   shows: "For this gene, the study's S8 Table counts every carrier among its
+   CHD cases." where it equals the row's case carriers, and both counts where
+   it is fewer. Only PMID:34324492's rows carry it, so only its caveat is ever
+   followed by one. It speaks of the carriers alone: the line's denominator
+   is the case set the study analysed, aneurysm probands among it.
 
    **A study that published no corrected p for the gene gets a line of its
    own**, whether or not another study's results survive: "<study> publishes
