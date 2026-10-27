@@ -158,7 +158,7 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
         # means a column was transcribed into the wrong slot -- the failure mode
         # a per-column range check cannot see, because both numbers are
         # individually valid non-negative integers. The third pair is the same
-        # rule one level in (owner decision R2, 2026-10-27): the CHD cases
+        # rule one level in (owner decision R2, 2026-10-26): the CHD cases
         # among a row's case carriers are a subset of them, so more is
         # impossible. It is a subset invariant and nothing more. It cannot see
         # the wrong band of S8 Table read in place of "only CHD": every band's

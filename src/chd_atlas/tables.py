@@ -720,7 +720,7 @@ BURDEN = TableSchema(
         # Of `n_case_carriers`, how many are congenital heart disease cases,
         # where the study's case set also holds cases of a condition outside
         # this atlas's scope and the study counts its CHD cases' carriers apart
-        # (owner decision R2, 2026-10-27). Empty where it does not. Only the
+        # (owner decision R2, 2026-10-26). Empty where it does not. Only the
         # studies in `CHD_CASE_SPLITS` below may carry it (BUR024), and only
         # PMID:34324492 is one: its case set combines CHD with a series of 777
         # sporadic thoracic aortic aneurysm probands, and its S8 Table gives

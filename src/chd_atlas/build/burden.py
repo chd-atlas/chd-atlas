@@ -321,7 +321,7 @@ def burden_payload(rows: Iterable[BurdenRow]) -> list[Json]:
             "n_cases": row.n_cases,
             # How many of the case carriers are CHD cases, where the study
             # counted that apart from a case set holding another condition;
-            # `null` elsewhere (owner decision R2, 2026-10-27).
+            # `null` elsewhere (owner decision R2, 2026-10-26).
             "n_chd_case_carriers": row.n_chd_case_carriers,
             "comparator": row.comparator,
             "n_control_carriers": row.n_control_carriers,

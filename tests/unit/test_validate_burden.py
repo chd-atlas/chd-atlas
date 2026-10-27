@@ -215,7 +215,7 @@ def test_a_carrier_count_above_its_denominator_is_reported(tmp_path: Path) -> No
     the wrong slot looks like, which is the single likeliest converter bug.
 
     The CHD cases among a row's case carriers are a subset of them (owner
-    decision R2, 2026-10-27), so more is the same defect one level in, and as
+    decision R2, 2026-10-26), so more is the same defect one level in, and as
     many is the ordinary case: 11 of the 12 rows carrying the column when it
     was transcribed (2026-10-27; ANKRD11's 12 of 13 is the twelfth). Fewer
     than none is the schema's to refuse, as TBL006. These are PMID:34324492's

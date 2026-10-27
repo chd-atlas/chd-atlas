@@ -7528,7 +7528,7 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     the study's label are curator-written text, so both are escaped.
 
     **Then what S8 Table says of the CHD cases among the line's carriers**
-    (owner decision R2, 2026-10-27), from the line's row's
+    (owner decision R2, 2026-10-26), from the line's row's
     `n_chd_case_carriers`: "every carrier", and so no aneurysm proband, where
     it equals the row's case carriers (10 of 10 here), the two counts where it
     is fewer (7 of 10), and nothing where the row carries none -- the Sierant

@@ -92,7 +92,7 @@ count; see the comment on `CASE_COHORTS`.
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
 
-CHD-ONLY CARRIERS (owner decision R2, 2026-10-27)
+CHD-ONLY CARRIERS (owner decision R2, 2026-10-26)
 -------------------------------------------------
 S8 Table repeats S6's test for the 528 genes that reached significance and
 splits its case carriers by the case series they came from. Its first header

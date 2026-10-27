@@ -12,7 +12,7 @@ say the permutation test was run on, after filtering. The rows carried S1
 Table's deletion column, 7,107 and 14,040, until 2026-10-26; each test below
 fails on that pair, one on the converter and one on a mirror not re-run.
 
-`n_chd_case_carriers` is read from S8 Table (owner decision R2, 2026-10-27),
+`n_chd_case_carriers` is read from S8 Table (owner decision R2, 2026-10-26),
 from the column its header rows locate. No two cells of the fixture's split
 gene's S8 row are alike, so a converter reading any wrong column writes a
 number this fixture does not expect. The fixture's genes are synthetic, and so
@@ -242,7 +242,7 @@ def test_the_converter_stops_on_an_s8_table_it_cannot_read_as_s6s_split(
 def test_every_committed_row_carries_the_current_note_and_denominators() -> None:
     """Reads the committed mirror, so a converter edited without being re-run fails here.
 
-    And the S8 split (owner decision R2, 2026-10-27), on the 12 registered
+    And the S8 split (owner decision R2, 2026-10-26), on the 12 registered
     genes S8 lists, as the converter transcribed them on 2026-10-27; the other
     109 rows carry none. Only this study's rows carry the column: BUR024
     refuses it on a row of any study `CHD_CASE_SPLITS` does not list, and

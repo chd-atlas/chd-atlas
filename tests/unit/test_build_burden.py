@@ -300,7 +300,7 @@ def test_every_published_row_carries_every_key_whatever_its_comparator() -> None
     and the test corrected it. It read 26 in the assertion and "24 keys" in this
     sentence until 2026-08-05 -- two numbers, neither of them right, exactly the
     drift CLAUDE.md section 6 records. `count_unit` made it 27, and
-    `n_chd_case_carriers` 28 (owner decision R2, 2026-10-27): a number on the
+    `n_chd_case_carriers` 28 (owner decision R2, 2026-10-26): a number on the
     case-control row, `null` on the de novo row, present on both.
 
     The two rows differ in `count_unit` as well as in comparator, which is the

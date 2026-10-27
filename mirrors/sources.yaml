@@ -60,7 +60,7 @@ sources:
     licence: CC0-1.0
     redistribution: permitted
   # One column of the burden mirror, `n_chd_case_carriers`, on PMID:34324492's
-  # rows for the genes this table lists (owner decision R2, 2026-10-27); every
+  # rows for the genes this table lists (owner decision R2, 2026-10-26); every
   # other number on those rows is S6's, above. Same article, same licence
   # statement. Retrieved with the rest of the supplement: the local copy's
   # modification time is 2026-08-05, as for S6.
