@@ -284,6 +284,18 @@ def _and(items: Sequence[str]) -> str:
 # The two Orphadata products, in the order the citation names them.
 _ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
 
+# What the independent-datasets figure can see, said wherever the page prints it
+# (owner decision 2026-10-26, R12). `concordance.cohort_families` groups studies
+# through the collections their rows name and the overlaps
+# `curation/cohorts.yaml` declares, and through nothing else: two studies whose
+# case sets share people the registry does not record -- PMID:34324492's S2
+# Table lists case sources no row names (`methods.html#cohorts` counts them) --
+# count as two. Measured 2026-10-27: 2, of three studies, two of them joined by
+# the one overlap the registry declares (DDD and DECIPHER) and by no shared
+# collection. On the hero figure as well as the census card: the hero is the
+# same claim, printed larger and first.
+_REGISTRY_QUALIFIER: Final = "(as far as the cohort registry records)"
+
 
 def _orphadata_version(sources: SourceRegistry) -> str:
     """The citation's "Data version", from the files' own headers (owner decision 2026-10-26, R11).
@@ -325,7 +337,7 @@ def _orphadata_version(sources: SourceRegistry) -> str:
     )
 
 
-def _stat(label: str, value: str) -> str:
+def _stat(label: str, value: str, note: str = "") -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
     The `<div>` is what HTML5 permits inside a `<dl>` to bind one label to one
@@ -333,11 +345,17 @@ def _stat(label: str, value: str) -> str:
     immediately precedes `<dd>`, so the tests that pin a row by
     `<dt>label</dt>\\s*<dd>N</dd>` keep working against the same substring.
 
-    `label` is a literal from this module and `value` comes from `_number` or
-    `len`, so neither is curated or mirrored text; nothing here needs escaping,
-    and anything that ever does must go through a `render` primitive instead.
+    `note` qualifies the value in a second `<dd>` after it (`stat-note`, set
+    small), which a `<dt>` may have, so the value's own `<dd>` still holds the
+    number alone. One card carries one: `_REGISTRY_QUALIFIER`.
+
+    `label` and `note` are literals from this module and `value` comes from
+    `_number` or `len`, so none is curated or mirrored text; nothing here needs
+    escaping, and anything that ever does must go through a `render` primitive
+    instead.
     """
-    return f'<div class="stat"><dt>{label}</dt><dd>{value}</dd></div>'
+    qualifier = f'<dd class="stat-note">{note}</dd>' if note else ""
+    return f'<div class="stat"><dt>{label}</dt><dd>{value}</dd>{qualifier}</div>'
 
 
 def _render(
@@ -400,7 +418,7 @@ def _render(
             # page of an atlas that refuses to pool studies (D33), reads as
             # exactly the pooling it refuses.
             _stat("Within-study combined rare-variant results", _number(combined_results)),
-            _stat("Independent datasets", _number(census.families)),
+            _stat("Independent datasets", _number(census.families), _REGISTRY_QUALIFIER),
             # Beside "Independent datasets" rather than at the end, because the
             # two answer the same reader's question one level apart: how many
             # separate collections the evidence rests on, and how many named
@@ -482,7 +500,8 @@ def _render(
       <div class="figure"><span class="figure-value">{_number(published_gene_count)}</span>
         <span class="figure-label">genes published</span></div>
       <div class="figure"><span class="figure-value">{_number(census.families)}</span>
-        <span class="figure-label">independent datasets</span></div>
+        <span class="figure-label">independent datasets</span>
+        <span class="figure-note">{_REGISTRY_QUALIFIER}</span></div>
       <div class="figure"><span class="figure-value">{_number(census.rows)}</span>
         <span class="figure-label">rare-variant statistics</span></div>
     </div>

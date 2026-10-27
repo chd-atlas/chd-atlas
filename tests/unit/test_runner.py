@@ -1293,3 +1293,31 @@ def test_a_malformed_identity_id_on_a_published_gene_fails_validate_as_the_build
     with pytest.raises(BuildRefused, match="GEN004"):
         build_site(repo, out)
     assert not out.exists()
+
+
+def test_the_table_a_chd_only_count_comes_from_is_held_to_the_source_registry(
+    tmp_path: Path,
+) -> None:
+    """`n_chd_case_carriers` is transcribed from a file no row's `source` names.
+
+    S8 Table, `CHD_CASE_SPLITS`'s source for PMID:34324492, whose rows name S6
+    as their `source`. Nothing read its registry entry until the review
+    (2026-10-27) renamed it, and marked it `redistribution: prohibited`, and
+    the whole suite passed both times. `_used_sources` now counts it as a
+    source the burden mirror relies on wherever a row carries the column, so
+    it is held to SRC003 and SRC004 like every row's own: renamed here, it is
+    SRC003, the one error. Both edits to the committed registry fail
+    `test_the_committed_repository_validates_cleanly`; this is the test that
+    fails if `_used_sources` stops collecting it.
+    """
+    root = _real_repo(tmp_path)
+    path = root / "mirrors" / "sources.yaml"
+    text = path.read_text(encoding="utf-8")
+    assert text.count("id: audain2021_s8\n") == 1
+    path.write_text(text.replace("id: audain2021_s8\n", "id: audain2021_s8_renamed\n"))
+
+    report = validate_repository(root)
+    errors = [issue for issue in report.issues if issue.severity is Severity.ERROR]
+    assert [(issue.code, "'audain2021_s8'" in issue.message) for issue in errors] == [
+        ("SRC003", True)
+    ]

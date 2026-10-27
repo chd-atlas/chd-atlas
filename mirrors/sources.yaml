@@ -59,6 +59,20 @@ sources:
     # CC BY that PLOS uses for some titles: read off this article, not assumed.
     licence: CC0-1.0
     redistribution: permitted
+  # One column of the burden mirror, `n_chd_case_carriers`, on PMID:34324492's
+  # rows for the genes this table lists (owner decision R2, 2026-10-26); every
+  # other number on those rows is S6's, above. Same article, same licence
+  # statement. Retrieved with the rest of the supplement: the local copy's
+  # modification time is 2026-08-05, as for S6.
+  - id: audain2021_s8
+    name: >-
+      Audain et al. 2021, PLoS Genetics 17(7) e1009679, S8 Table (the 528
+      significant genes, with the CHD-only and TAA-only contributions)
+    version: "sha256:d070834994949311b3cff7a8a8470944c6ddd14c4644351062b0243c57db0ebc"
+    retrieved_on: 2026-08-05
+    url: https://journals.plos.org/plosgenetics/article/file?id=10.1371/journal.pgen.1009679.s013&type=supplementary
+    licence: CC0-1.0
+    redistribution: permitted
   - id: clingen
     name: Clinical Genome Resource (ClinGen) Gene-Disease Validity
     # The bulk CSV carries no version tag. Its banner stamps the date the file

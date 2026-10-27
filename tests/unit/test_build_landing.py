@@ -638,6 +638,13 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
     genes all sit outside the publication gate, and 127 of the burden mirror's
     150 genes are in exactly that position today.
 
+    **The dataset count says what it can see, in both places** (owner decision
+    2026-10-26, R12): "(as far as the cohort registry records)", under the hero
+    figure and as the census card's second `<dd>`, and on no other figure. The
+    families are joined only through collections the registry names or declares
+    overlapping, so case sources no row names are invisible to them. Pinned as
+    literals, never as the constant that renders them.
+
     The census is built by `burden_census` from a real fixture rather than
     constructed here, so this test cannot pass against a derivation the module
     would get wrong; `test_build_burden.py` owns that derivation's own guard.
@@ -671,6 +678,16 @@ def test_the_burden_census_reaches_the_page_in_both_places_and_agrees_with_itsel
         ), f"the hero no longer states {value} beside {label!r}"
     assert re.search(r"<dt>Rare-variant statistics</dt>\s*<dd>6</dd>", listed)
     assert re.search(r"<dt>Independent datasets</dt>\s*<dd>3</dd>", listed)
+    qualifier = "(as far as the cohort registry records)"
+    assert (
+        '<div class="stat"><dt>Independent datasets</dt><dd>3</dd>'
+        f'<dd class="stat-note">{qualifier}</dd></div>'
+    ) in listed
+    assert (
+        '"figure-value">3</span> <span class="figure-label">independent datasets</span> '
+        f'<span class="figure-note">{qualifier}</span></div>'
+    ) in hero
+    assert text.count(qualifier) == 2
     assert re.search(r"<dt>Genes with a reported rare-variant result</dt>\s*<dd>2</dd>", listed)
     assert re.search(
         r"<dt>Genes with a rare-variant result surviving its study's correction</dt>"

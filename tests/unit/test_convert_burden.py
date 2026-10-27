@@ -221,10 +221,14 @@ def test_rewriting_this_study_keeps_every_other_studys_rows(tmp_path: Path) -> N
     """It wrote the whole file until 2026-10-25, deleting two studies' rows if run alone.
 
     Driven through `write_mirror` on a mirror holding a row from another study,
-    which a test reading the committed mirror cannot exercise (§4.23).
+    which a test reading the committed mirror cannot exercise (§4.23). The
+    shared writer's column order is the schema's: it is written out in
+    `burden_mirror.py`, and a column added to the schema alone would be
+    missing from every row a converter writes.
     """
     from burden_mirror import ORDER
 
+    assert BURDEN.column_names == ORDER
     other = dict.fromkeys(ORDER, "")
     other.update({"study": "PMID:40127276", "gene": "HGNC:1", "cohort_stratum": "all"})
     out = tmp_path / "burden.tsv"

@@ -368,7 +368,13 @@ def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_co
     families = _read(site, "manifest.json")["counts"]["cohort_families"]
     assert families == 2
     landing = (site / "index.html").read_text(encoding="utf-8")
-    assert re.search(rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>", landing)
+    # With the qualifier owner decision R12 put beside it, since the figure
+    # counts only what the registry records.
+    assert re.search(
+        rf"<dt>Independent datasets</dt>\s*<dd>{families}</dd>"
+        r'<dd class="stat-note">\(as far as the cohort registry records\)</dd>',
+        landing,
+    )
 
     noticed = 0
     for entry in _read(site, "genes/index.json")["genes"]:
@@ -1119,6 +1125,30 @@ def test_every_gene_page_links_gnomad_and_clinvar_from_its_registry_ids(site: Pa
         assert f'href="{clinvar}"' in xrefs, entry["gene"]
 
 
+def _s8_sentence(burden: list[dict[str, Any]], study: str) -> str:
+    """What a card adds after `study`'s summary caveat, worded from the bundle (R2).
+
+    One row per gene carries `n_chd_case_carriers` for PMID:34324492, the only
+    study with one, so more than one is a fixture this cannot read.
+    """
+    rows = [
+        row for row in burden if row["study"] == study and row["n_chd_case_carriers"] is not None
+    ]
+    assert len(rows) <= 1, study
+    if not rows:
+        return ""
+    chd, carriers = rows[0]["n_chd_case_carriers"], rows[0]["n_case_carriers"]
+    if chd == carriers:
+        return (
+            " For this gene, the study's S8 Table counts every carrier among its CHD cases, "
+            "so none is an aneurysm proband."
+        )
+    return (
+        f" For this gene, the study's S8 Table counts {chd:,} of the {carriers:,} carriers "
+        "among its CHD cases."
+    )
+
+
 def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_corrected_dataset(
     site: Path,
 ) -> None:
@@ -1146,6 +1176,10 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     that study -- so PMID:34324492's thoracic aortic aneurysm probands reach
     every card that shows its counts. The gene index, whose strips summarise
     every study's result for every gene, prints each caveat exactly once.
+    After it, where the study's row carries `n_chd_case_carriers`, what S8
+    Table says of the CHD cases among its carriers (owner decision R2,
+    2026-10-27), worded from the bundle's two counts; GATA4's card is pinned
+    as a literal, and the sentence must reach at least one card.
 
     And every card states once what the atlas itself curated, nothing in the
     main column repeats it, a card names who disputes the gene exactly where
@@ -1165,7 +1199,7 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
     publications = _read(site, "publications.json")["publications"]
     own_lab = {publication["id"]: publication["own_lab"] for publication in publications}
     caveats = {publication["id"]: publication["summary_caveat"] for publication in publications}
-    listed = flagged = uncorrected_cards = noted_cards = 0
+    listed = flagged = uncorrected_cards = noted_cards = split_cards = 0
     on_strips: set[str] = set()
     for entry in entries:
         bundle = _read(site, entry["bundle"])
@@ -1209,13 +1243,26 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
         notes = re.findall(
             r'<p class="card-note"><a href="#study-(\d+)">[^<]*</a>: (.*?)</p>', card
         )
+
         assert notes == [
-            (study.removeprefix("PMID:"), html.escape(caveats[study]))
+            (
+                study.removeprefix("PMID:"),
+                html.escape(caveats[study] + _s8_sentence(bundle["burden"], study)),
+            )
             for study in sorted(lined)
             if caveats[study]
         ], entry["gene"]
         assert card.count('class="card-note"') == len(notes), entry["gene"]
         noted_cards += bool(notes)
+        split_cards += "S8 Table counts" in card
+        if entry["gene"] == "HGNC:4173":  # GATA4: 29 carriers, all CHD cases in S8
+            assert (
+                card.count(
+                    "For this gene, the study&#x27;s S8 Table counts every carrier among its CHD "
+                    "cases, so none is an aneurysm proband.</p>"
+                )
+                == 1
+            )
         on_strips.update(
             study
             for family in bundle["independent_datasets"]["families"]
@@ -1242,6 +1289,7 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
         f"{uncorrected_cards} of {len(entries)} cards name a study with no correction"
     )
     assert 0 < noted_cards < len(entries), f"{noted_cards} of {len(entries)} cards carry a note"
+    assert 0 < split_cards <= noted_cards, f"{split_cards} cards carry the S8 Table sentence"
 
     browse = (site / "genes" / "index.html").read_text(encoding="utf-8")
     assert any(caveats.get(study) for study in on_strips), "no strip names a noted study"
@@ -1855,6 +1903,8 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
     owner decisions 2026-10-26, batch 2 (R1-I3)  942  1,051  21 sentences, 415 words
     review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
+    owner decisions batch 3 (R12, R2)            957  1,066  21 sentences, 430 words
+    review fixes to batch 3, 2026-10-27          957  1,066  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1906,6 +1956,22 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     (its card's scope line now names the gene its panel graded, +2), and none
     on CRIPTO's, which has no matrix; the median rose by 15. (a) was
     reset to 986, 957 x 1.03 rounded up, and (b) stays 22, one over 21.
+
+    The row after it is the third batch (R12, R2; decided 2026-10-26),
+    measured on 2026-10-27 with this parser on fresh builds of the tree after
+    each item against one of a12b897 (957, 1,066, 21 / 430). Neither item
+    moved any figure. R12's seven newly registered case series are named only
+    inside two folds on the 77 pages carrying PMID:34324492 (its block's "How
+    this study counted" and the cohort notes). R2's card sentence,
+    owner-decided (E4), is 14 words on 10 cards (+14 each, measured) and 0 on
+    the other 109, below the median's reach. Both constants stay.
+
+    The last row is the review of that batch (2026-10-27), measured with this
+    parser on a fresh build of the fixed tree against one of 64ac83a (957,
+    1,066, 21 / 430, as the row above). Only R2's card sentence moved: it
+    gained "so none is an aneurysm proband", +6 words on each of the same 10
+    cards and 0 on the other 109, below the median's reach. By the rule,
+    957 x 1.03 rounded up is 986 and 21 + 1 is 22, so both constants stay.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and

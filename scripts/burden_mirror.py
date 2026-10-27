@@ -20,9 +20,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# The order `TABLE_SCHEMAS["burden"]` declares. Written out rather than imported
-# so the converters stay runnable without the package installed, matching
-# `convert_hgnc.py` and `convert_burden.py`.
+# The order `TABLE_SCHEMAS["burden"]` declares, and the only copy of it in
+# `scripts/`: every burden converter writes through `merge_study`. Written out
+# rather than imported so the converters stay runnable without the package
+# installed, matching `convert_hgnc.py`, and pinned to `BURDEN.column_names` by
+# `test_convert_burden.py`.
 ORDER: tuple[str, ...] = (
     "study",
     "gene",
@@ -35,6 +37,7 @@ ORDER: tuple[str, ...] = (
     "count_unit",
     "n_case_carriers",
     "n_cases",
+    "n_chd_case_carriers",
     "comparator",
     "n_control_carriers",
     "n_controls",

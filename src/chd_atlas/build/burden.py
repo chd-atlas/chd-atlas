@@ -70,6 +70,10 @@ class BurdenRow:
     by `validate/burden.py`, and reshaping them here into, say, a union type
     would move that check into the build, where a violation raises mid-write
     instead of being reported by the gate.
+
+    `n_chd_case_carriers` sits last, out of the schema's order, only because a
+    field with a default must follow those without; `load_burden` always
+    passes it.
     """
 
     study: str
@@ -100,6 +104,7 @@ class BurdenRow:
     control_cohorts: tuple[str, ...]
     method_note: str | None
     source: str
+    n_chd_case_carriers: int | None = None
 
 
 def _cohorts(value: object) -> tuple[str, ...]:
@@ -212,6 +217,7 @@ def load_burden(root: Path) -> dict[str, list[BurdenRow]]:
             control_cohorts=_cohorts(record["control_cohorts"]),
             method_note=record["method_note"],
             source=str(record["source"]),
+            n_chd_case_carriers=record["n_chd_case_carriers"],
         )
         grouped.setdefault(row.gene, []).append(row)
 
@@ -313,6 +319,10 @@ def burden_payload(rows: Iterable[BurdenRow]) -> list[Json]:
             "count_unit": row.count_unit,
             "n_case_carriers": row.n_case_carriers,
             "n_cases": row.n_cases,
+            # How many of the case carriers are CHD cases, where the study
+            # counted that apart from a case set holding another condition;
+            # `null` elsewhere (owner decision R2, 2026-10-26).
+            "n_chd_case_carriers": row.n_chd_case_carriers,
             "comparator": row.comparator,
             "n_control_carriers": row.n_control_carriers,
             "n_controls": row.n_controls,
@@ -594,9 +604,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     from a row without those sentences is computing something else.
 
     **The whole registry is published, not only the ids the published rows
-    cite.** The two sets are identical today -- 13 and 13 -- and identical
-    figures are one figure to every test (CLAUDE.md section 4.30), so this says
-    which one it is: this is a *resolution table*, and a table that omitted an id
+    cite.** The two sets were identical when measured -- 20 and 20 on
+    2026-10-27 -- and identical figures are one figure to every test (CLAUDE.md
+    section 4.30), so this says which one it is: this is a *resolution table*,
+    and a table that omitted an id
     some row cites would 404 exactly where a reader needed it. The direction is
     also the safe one -- `validate_burden_references` (BUR009) already refuses a
     row citing a cohort this file does not carry, so publishing the registry
@@ -606,10 +617,10 @@ def build_cohorts(cohorts: Iterable[Cohort], emitter: Emitter) -> None:
     Sorted by id: `encode_json`'s `sort_keys` orders dict keys and never list
     elements, so an unsorted array here checksums differently between two builds
     of one commit. `url` is emitted as `null` rather than omitted where a
-    collection has no public page (4 of the 13), because an object whose shape
-    varies is a trap for a consumer reading a field off one record and expecting
-    it on the next -- the rule `admission_provenance` and `burden_payload`
-    already follow.
+    collection has no public page (11 of the 20 on 2026-10-27), because an
+    object whose shape varies is a trap for a consumer reading a field off one
+    record and expecting it on the next -- the rule `admission_provenance` and
+    `burden_payload` already follow.
     """
     emitter.write_json(
         COHORTS,

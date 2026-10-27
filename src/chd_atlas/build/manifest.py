@@ -445,6 +445,16 @@ from chd_atlas.corpus import Corpus
 #   row) gains `members`: one `{study, state}` per study in the family, sorted
 #   by study, each study's own state by the family rule over its rows alone. A
 #   family of two studies made the family's state no longer every member's.
+# * `cohorts.json` gains seven records (owner decision R12, 2026-10-26): the
+#   CHD case series PMID:34324492's S2 Table identifies by PMID with 50 or more
+#   cases, which every one of that study's rows now names in `case_cohorts`.
+#   A population change: `counts.cohorts` goes from 13 to 20, and
+#   `counts.cohort_families` stays 2, since no other study names one of them.
+# * Every object of a bundle's `burden` array gains `n_chd_case_carriers`
+#   (owner decision R2, 2026-10-26): how many of `n_case_carriers` are CHD
+#   cases, where a study whose case set also holds another condition counted
+#   them apart; `null` elsewhere. Only PMID:34324492's S8 Table gives one, on
+#   the 12 mirrored rows (10 published) for the genes it lists.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from
@@ -558,8 +568,8 @@ def write_manifest(
     corpus_counts = {
         "assertions": len(corpus.assertions),
         # The registry `cohorts.json` publishes entire, not the subset the
-        # published rows cite. Those are 13 and 13 today; the key is named for
-        # the file so the two cannot be confused if they ever part.
+        # published rows cite. Those were 20 and 20 on 2026-10-27; the key is
+        # named for the file so the two cannot be confused if they ever part.
         "cohorts": len(corpus.cohorts),
         "datasets": len(corpus.datasets),
         "featured": len(corpus.featured),

@@ -83,6 +83,7 @@ EXHAUSTIVE: dict[str, str] = {
     "### The bundle's `burden_combined` array: one study's own combination of its arms": (
         "combined_row"
     ),
+    "### The bundle's `burden` array: per study, never pooled": "burden_row",
     "## `scope.json`": "scope_term",
 }
 
@@ -202,6 +203,11 @@ def _published(site: Path, kind: str) -> dict[str, Any]:
         # The documented example is an Orphanet-path subtype, so the published
         # term compared against it is the same one: every key, warrant included.
         return dict(next(t for t in load("scope.json")["terms"] if t["id"] == "MONDO:0012547"))
+    if kind == "burden_row":
+        # TAB2, the documented row's gene. Its first row is PMID:34324492's,
+        # not the documented one, which the key-set comparison does not mind:
+        # every row carries every key (`burden.burden_payload`).
+        return dict(load("genes/HGNC_17075.json")["burden"][0])
     if kind == "combined_row":
         # TBX5 again: it carries PMID:40127276's rows, so its first combined
         # object is that study's damaging-class combination.
@@ -1334,6 +1340,13 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
 
     quoted = re.search(r'the reason: "(Graded for [^"]+)"', doc)
     assert quoted, "the doc must still quote the card's Orphanet line"
+    # Owner decision R2: the doc quotes the card's S8 sentence; GATA4's card has it.
+    s8 = (
+        "For this gene, the study's S8 Table counts every carrier among its CHD cases, so "
+        "none is an aneurysm proband."
+    )
+    assert f'shows: "{s8}"' in doc
+    assert s8 in _card_paragraph(pages["HGNC_4173"], "card-note")
     scope_lines = {_card_paragraph(page, "card-scope") for page in pages.values()}
     assert quoted.group(1) in scope_lines
     assert "Graded for Noonan syndrome as a syndrome" not in doc

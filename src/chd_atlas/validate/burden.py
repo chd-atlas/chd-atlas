@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from chd_atlas.issues import Severity, ValidationIssue
-from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, CHD_CASE_SPLITS, read_table
 from chd_atlas.vocab import (
     EFFECT_MEASURES,
     BurdenComparator,
@@ -157,10 +157,20 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
         # A carrier count above its denominator is arithmetically impossible and
         # means a column was transcribed into the wrong slot -- the failure mode
         # a per-column range check cannot see, because both numbers are
-        # individually valid non-negative integers.
+        # individually valid non-negative integers. The third pair is the same
+        # rule one level in (owner decision R2, 2026-10-26): the CHD cases
+        # among a row's case carriers are a subset of them, so more is
+        # impossible. It is a subset invariant and nothing more. It cannot see
+        # the wrong band of S8 Table read in place of "only CHD": every band's
+        # `case` is within it (measured 2026-10-27, "only CHD" plus "only TAA"
+        # is "CHD+TAA", which is S6's `case`, for all 528 genes, a blank read
+        # as none). What catches a misread band is
+        # `scripts/convert_audain2021.py`, which locates the column from S8's
+        # header rows and refuses a sheet where it cannot.
         for carriers, total in (
             ("n_case_carriers", "n_cases"),
             ("n_control_carriers", "n_controls"),
+            ("n_chd_case_carriers", "n_case_carriers"),
         ):
             a, b = row[carriers], row[total]
             if a is not None and b is not None and a > b:
@@ -169,6 +179,21 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
                     line,
                     f"'{carriers}' ({a}) exceeds '{total}' ({b})",
                 )
+
+        # BUR024 -- a CHD-only count on a row of a study that gives none (owner
+        # decision R2). `CHD_CASE_SPLITS` is the one record of which studies
+        # split their case carriers and in which table; a gene page's card
+        # names that table, so a count on another study's row would publish
+        # under a table that study never had.
+        chd = row["n_chd_case_carriers"]
+        if chd is not None and row["study"] not in CHD_CASE_SPLITS:
+            error(
+                "BUR024",
+                line,
+                f"'n_chd_case_carriers' is {chd} on a row of {row['study']}, which "
+                f"CHD_CASE_SPLITS records no CHD-only count for (only "
+                f"{', '.join(sorted(CHD_CASE_SPLITS))})",
+            )
 
         low, high = row["ci_low"], row["ci_high"]
         if low is not None and high is not None and low > high:

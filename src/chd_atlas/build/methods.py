@@ -479,7 +479,7 @@ _RARE_VARIANTS: Final = (
 #
 # It read "every sample collection a rare-variant study in this atlas draws on,
 # with what qualifies every number drawn from it" until review (2026-10-26)
-# measured both halves false. PMID:34324492's rows name 4 collections
+# measured both halves false. PMID:34324492's rows named 4 collections
 # (`decipher`, `isca`, `signature`, `taa_cases`), and the study's S2 Table lists
 # 189 case sources holding 7,958 cases, of which those 4 hold 4,242 -- counted
 # from the supplement's `s007.xlsx` (sheet "S2 Table": 189 source rows whose
@@ -491,9 +491,16 @@ _RARE_VARIANTS: Final = (
 # them"). And some descriptions qualify nothing (`isca`'s is a case count), so
 # the list carries "the caveats its curator recorded", whatever they are. The
 # sources the rows do not name are not named here either: an unregistered
-# source has no record to resolve against. The 4 is pinned against the mirror,
-# 4,242 against the four descriptions' own counts and 7,958 against
-# `taa_cases`'s; 189 is the supplement's alone and nothing here can check it.
+# source has no record to resolve against.
+#
+# 11 and 6,211 since owner decision R12 (2026-10-26) registered the seven
+# CHD case sources S2 identifies by PMID with 50 or more cases, 1,969 between
+# them (S2's own counts, each recorded in its `curation/cohorts.yaml`
+# description). The 178 S2 sources still unnamed hold 1,747 cases, so "two
+# that name neither may still share people this registry does not record"
+# still covers them. The 11 is pinned against the mirror, 6,211 against the 11
+# descriptions' own counts and 7,958 against `taa_cases`'s; 189 is the
+# supplement's alone and nothing here can check it.
 # The declared-overlap clause since review (2026-10-27): "two that name none in
 # common may still share people this registry does not record" stopped being
 # the whole truth when the registry recorded one such pair (`ddd` and
@@ -502,8 +509,8 @@ _COHORTS_INTRO: Final = (
     '<h2 id="cohorts">Cohorts</h2>'
     "<p>Every sample collection a rare-variant row in this atlas names, with the caveats "
     "its curator recorded. A row may not name every collection its study drew on: the "
-    "rows for PMID:34324492 name 4 of the 189 case sources its S2 Table lists, and those "
-    "4 hold 4,242 of its 7,958 cases. Two studies that name the same collection describe "
+    "rows for PMID:34324492 name 11 of the 189 case sources its S2 Table lists, and those "
+    "11 hold 6,211 of its 7,958 cases. Two studies that name the same collection describe "
     "partly the same people; two that name collections this registry records as "
     "overlapping may; and two that name neither may still share people this registry "
     "does not record. The same records are published as "
@@ -519,9 +526,10 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     section 9) -- the same order `cohorts.json` publishes. Every curated field
     is escaped: names, descriptions and urls are free text. A url is the
     collection's public page, linked inside its own description; a cohort with
-    none (4 of 13) gets no link rather than an empty one. The link reads
-    "website", not "source" (2026-10-26): it leads to the collection's home
-    page, and "source" beside a description reads as the citation for it.
+    none (11 of 20, measured 2026-10-27) gets no link rather than an empty
+    one. The link reads "website", not "source" (2026-10-26): it leads to the
+    collection's home page, and "source" beside a description reads as the
+    citation for it.
 
     `cohort-list` is layout only. The base `dl` is a two-column grid whose label
     column grows to its widest label, which suits the grade key's chips and

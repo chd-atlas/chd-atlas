@@ -219,6 +219,13 @@ STYLESHEET: Final = """
     font-variant-numeric: tabular-nums; color: var(--evidence);
   }
   .figure-label { font-size: 0.85rem; color: var(--muted); }
+  /* A qualifier under a figure or a census card's value (`landing._REGISTRY_
+     QUALIFIER`): read with the number, so smaller and muted rather than in the
+     value's size and weight. `.stat dd.stat-note` is (0,2,1) against
+     `.stat dd`'s (0,1,1). */
+  .figure-note, .stat dd.stat-note {
+    font-size: 0.78rem; font-weight: 400; line-height: 1.3; color: var(--muted);
+  }
   .hero-note { margin: 0 0 1rem; font-size: 0.9rem; color: var(--muted); }
   .cta {
     display: inline-block; background: var(--evidence); color: var(--on-evidence);

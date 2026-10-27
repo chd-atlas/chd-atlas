@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from chd_atlas.tables import BURDEN, BURDEN_COMBINED
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, validate_table
 from chd_atlas.validate.burden import (
     validate_burden,
     validate_burden_combined,
@@ -34,6 +34,7 @@ _ROW: dict[str, str] = {
     "count_unit": "individuals",
     "n_case_carriers": "4",
     "n_cases": "1471",
+    "n_chd_case_carriers": "",
     "comparator": "control_cohort",
     "n_control_carriers": "0",
     "n_controls": "45082",
@@ -212,9 +213,33 @@ def test_a_carrier_count_above_its_denominator_is_reported(tmp_path: Path) -> No
     """BUR003. Both numbers are individually valid non-negative integers, so no
     per-column range check can see this -- it is what a column transcribed into
     the wrong slot looks like, which is the single likeliest converter bug.
+
+    The CHD cases among a row's case carriers are a subset of them (owner
+    decision R2, 2026-10-26), so more is the same defect one level in, and as
+    many is the ordinary case: 11 of the 12 rows carrying the column when it
+    was transcribed (2026-10-27; ANKRD11's 12 of 13 is the twelfth). Fewer
+    than none is the schema's to refuse, as TBL006. These are PMID:34324492's
+    rows, the one study whose rows carry the column.
     """
+    split = {**_ROW, "study": "PMID:34324492"}
     assert "BUR003" in _codes(tmp_path, {**_ROW, "n_case_carriers": "1472"})
     assert "BUR003" in _codes(tmp_path, {**_ROW, "n_control_carriers": "45083"})
+    assert "BUR003" in _codes(tmp_path, {**split, "n_chd_case_carriers": "5"})
+    assert _codes(tmp_path, {**split, "n_chd_case_carriers": "4"}) == []
+    negative = _write(tmp_path, {**split, "n_chd_case_carriers": "-1"}) / "mirrors" / "burden.tsv"
+    assert [issue.code for issue in validate_table(negative, BURDEN)] == ["TBL006"]
+
+
+def test_a_chd_only_count_on_a_study_that_gives_none_is_reported(tmp_path: Path) -> None:
+    """BUR024. A gene page's card names the table the count came from, read
+    from `CHD_CASE_SPLITS` by the row's study. Before this code, a count on a
+    PMID:40127276 row validated clean and its card published "Sierant MC et al.
+    2025: ... the study's S8 Table counts ..." (review, 2026-10-27), a table
+    that study does not have. Reported once per row, like every row rule here;
+    the study `CHD_CASE_SPLITS` lists passes (the BUR003 test above).
+    """
+    other = {**_ROW, "n_chd_case_carriers": "4"}
+    assert _codes(tmp_path, other, {**other, "gene": "HGNC:4173"}) == ["BUR024", "BUR024"]
 
 
 def test_an_inverted_confidence_interval_is_reported(tmp_path: Path) -> None:

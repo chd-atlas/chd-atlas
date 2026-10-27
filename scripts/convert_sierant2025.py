@@ -347,6 +347,8 @@ def _de_novo_row(
         "count_unit": "de_novo_mutations",
         "n_case_carriers": _integer(record, ix["dnm_obs"]),
         "n_cases": str(N_TRIOS),
+        # Every proband is a CHD case, so there is no split to give.
+        "n_chd_case_carriers": "",
         "comparator": "mutation_model",
         "n_control_carriers": "",
         "n_controls": "",
@@ -385,6 +387,7 @@ def _case_control_row(
         "count_unit": "alleles",
         "n_case_carriers": _integer(record, ix["cc_obs"]),
         "n_cases": _integer(record, ix["cc_total"]),
+        "n_chd_case_carriers": "",
         "comparator": "control_cohort",
         "n_control_carriers": _integer(record, ix["cc_ctrl"]),
         "n_controls": _integer(record, ix["cc_ctrl_total"]),
