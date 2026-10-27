@@ -428,6 +428,54 @@ def test_a_non_http_report_url_never_becomes_a_link(
     assert report_url.strip() not in page
 
 
+def test_panelapp_australias_homepage_link_opens_the_genes_own_page_and_nothing_else_moves(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """R8 (owner decision 2026-10-26): the one report URL the atlas builds.
+
+    GenCC gives `https://panelapp-aus.org`, the bare homepage, as the report URL
+    of every PanelApp Australia submission (5,478 of 5,478 in the mirror), so
+    the row's link opened a page naming no gene. Exactly that URL from exactly
+    that submitter links `/panels/entities/<symbol>` instead, the symbol
+    percent-encoded (`@`, which HGNC's older group symbols carry, is the
+    character that shows it). A PanelApp Australia URL that is not the bare
+    homepage, and another submitter carrying that same homepage string, keep
+    the URL GenCC gave. Rows are in the GenCC group, in mirror order.
+    """
+    homepage = "https://panelapp-aus.org"
+    records = tuple(
+        replace(_gencc(submitter, Classification.DEFINITIVE), report_url=url)
+        for submitter, url in (
+            ("PanelApp Australia", homepage),
+            ("PanelApp Australia", "https://panelapp-aus.org/panels/250/"),
+            ("G2P", homepage),
+        )
+    )
+    build_gene_pages(
+        facts_uncurated,
+        Emitter(root=tmp_path),
+        symbols={GATA4: "GATA4@"},
+        validity={
+            GATA4: GeneValidity(
+                records=records,
+                state=ValidityState.EXPERT_CURATED,
+                has_source_discordance=False,
+            )
+        },
+        assertions={},
+        publications={},
+        burden={},
+        cohorts={},
+    )
+
+    groups = _validity_table(_page(tmp_path, "HGNC_4173.html"))
+    assert re.findall(r'<a href="(https://panelapp-aus[^"]*)">', groups) == [
+        "https://panelapp-aus.org/panels/entities/GATA4%40",
+        "https://panelapp-aus.org/panels/250/",
+        "https://panelapp-aus.org",
+    ]
+
+
 def test_an_uncurated_notice_never_denies_functional_records_the_rail_counts(
     tmp_path: Path,
 ) -> None:

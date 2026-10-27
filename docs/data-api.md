@@ -774,7 +774,14 @@ behind those fields live:
     the record behind the classification (measured 2026-10-25; 157 of 266 on
     2026-08-06, before the population widened). Attribute these to their
     `submitter` and present them as classifications this atlas mirrors; do not
-    render them as though every one resolves to a citable report.
+    render them as though every one resolves to a citable report. The bundle
+    publishes PanelApp Australia's homepage as GenCC gave it. Since `2.19` the
+    site's gene pages link such a row to
+    `https://panelapp-aus.org/panels/entities/<symbol>` instead, the gene's own
+    page on that site (built from the HGNC symbol, percent-encoded) — the one
+    report URL this atlas constructs rather than republishes; a client may do
+    the same. It leads to the gene's PanelApp Australia panels, not to the one
+    submission, which the URL GenCC gave does not identify.
   - `sop` is published because ClinGen's committed mirror spans SOP4 through
     SOP12 with no crosswalk between framework versions published anywhere. A
     classification attributed to ClinGen without its SOP version is an

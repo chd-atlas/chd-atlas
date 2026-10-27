@@ -255,6 +255,16 @@ def test_tbx5_publishes_its_mirrored_validity_with_the_provenance_behind_it(
     for field in ("source", "classification_term", "disease", "sop", "report_url"):
         assert clingen[field], f"{field} is empty on TBX5's ClinGen record"
 
+    # R8 (owner decision 2026-10-26): the bundle keeps the URL GenCC gave,
+    # PanelApp Australia's bare homepage, and the page links TBX5's own entry
+    # there instead -- the one report URL the atlas builds.
+    panelapp = [r for r in validity["records"] if r["submitter"] == "PanelApp Australia"]
+    assert [r["report_url"] for r in panelapp] == ["https://panelapp-aus.org"]
+    page = (site / "genes" / "HGNC_11604.html").read_text(encoding="utf-8")
+    assert re.findall(r'href="(https://panelapp-aus\.org[^"]*)"', page) == [
+        "https://panelapp-aus.org/panels/entities/TBX5"
+    ]
+
 
 def _burden_rows(gene: str, bundle: dict[str, Any]) -> list[BurdenRow]:
     """A bundle's published burden rows as the `BurdenRow`s the renderers read."""

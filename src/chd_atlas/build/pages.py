@@ -69,6 +69,7 @@ import html
 import re
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Final, NamedTuple
+from urllib.parse import quote
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow, _sort_key, shared_cohorts
 from chd_atlas.build.charts import LogScale, coordinate, marker, polyline, svg_figure
@@ -1674,13 +1675,46 @@ def _rail(
     )
 
 
-def _validity_row(record: ValidityRecord) -> Row:
+# GenCC's `report_url` for every PanelApp Australia submission: the site's bare
+# homepage, on all 5,478 of them in the mirror (measured 2026-10-26), so the
+# validity table's "open" link landed on a page that does not name the gene.
+_PANELAPP_AUSTRALIA: Final = "PanelApp Australia"
+_PANELAPP_AUSTRALIA_HOME: Final = "https://panelapp-aus.org"
+
+
+def _report_url(record: ValidityRecord, symbol: str | None) -> str | None:
+    """Where a validity row's report link goes: GenCC's URL, with one exception (R8).
+
+    Owner decision 2026-10-26. A PanelApp Australia record whose `report_url`
+    is exactly the bare homepage links that site's page for the gene instead,
+    `https://panelapp-aus.org/panels/entities/<HGNC symbol>`: verified
+    2026-10-26 to answer 200 for TBX5, whose PanelApp Australia API record
+    lists it on 11 panels. **The one URL this atlas builds rather than
+    republishes**, because the one GenCC supplies names no gene and so cannot
+    lead to the record the row reports. Every other submitter's URL, and a
+    PanelApp Australia URL that is anything but the homepage, is GenCC's as
+    given; the mirror and the bundle keep GenCC's value. The symbol is the gene
+    registry's, percent-encoded; a gene the registry does not name keeps the
+    homepage rather than a URL built on its HGNC id.
+    """
+    if (
+        record.source is ValiditySource.GENCC
+        and record.submitter == _PANELAPP_AUSTRALIA
+        and record.report_url == _PANELAPP_AUSTRALIA_HOME
+        and symbol
+    ):
+        return f"{_PANELAPP_AUSTRALIA_HOME}/panels/entities/{quote(symbol, safe='')}"
+    return record.report_url
+
+
+def _validity_row(record: ValidityRecord, symbol: str | None = None) -> Row:
     """One mirrored classification as a row, in the section's one vocabulary.
 
     `classification_term` is what the authority published, not the rung it maps
     onto: GenCC's `Supportive` maps to no rung at all, and a table showing the
     mapped value would render that submitter's row as blank or, worse, as a
-    grade nobody gave.
+    grade nobody gave. `symbol` is the gene's registry symbol, for
+    `_report_url`.
     """
     curator = record.gcep if record.source is ValiditySource.CLINGEN else record.submitter
     return Row(
@@ -1690,12 +1724,14 @@ def _validity_row(record: ValidityRecord) -> Row:
             _inheritance(record.moi),
             record.classification_term,
             _date(_record_date(record)),
-            _report_link(record.report_url, record.sop),
+            _report_link(_report_url(record, symbol), record.sop),
         )
     )
 
 
-def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
+def _validity_section(
+    gene_validity: GeneValidity, notes: str = "", symbol: str | None = None
+) -> str:
     """The mirrored classifications: the expert panel's first, then everyone else's. D51.
 
     `notes` (the Orphanet scope notes) is placed after the intro and before the
@@ -1731,8 +1767,8 @@ def _validity_section(gene_validity: GeneValidity, notes: str = "") -> str:
     panel = [r for r in gene_validity.records if r.source is ValiditySource.CLINGEN]
     submitted = [r for r in gene_validity.records if r.source is ValiditySource.GENCC]
     listed = [r for r in submitted if not _repeats_the_panel(r, panel)]
-    panel_rows = [_validity_row(record) for record in panel]
-    listed_rows = [_validity_row(record) for record in listed]
+    panel_rows = [_validity_row(record, symbol) for record in panel]
+    listed_rows = [_validity_row(record, symbol) for record in listed]
     folded = len(listed) < len(submitted)
     clingen_listed = any(record.submitter == "ClinGen" for record in listed)
     return (
@@ -5450,7 +5486,9 @@ def build_gene_pages(
             # pages' notes the disease has no GenCC row), and a note placed
             # under one group read as qualifying only that group's rows.
             + _validity_section(
-                gene_validity, notes=_orphanet_notes(gene_validity, warrants, labels)
+                gene_validity,
+                notes=_orphanet_notes(gene_validity, warrants, labels),
+                symbol=symbols.get(gene),
             )
             # The atlas's own curated evidence, for a curated gene. An uncurated
             # gene's page says so on the card (`_card_curation`, D55), not here:
