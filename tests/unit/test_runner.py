@@ -1328,7 +1328,8 @@ def test_a_cell_type_mirror_with_an_unregistered_source_fails_validation(
 ) -> None:
     """`cell_type_profiles` carries `source`, so `_used_sources` holds it to SRC003.
 
-    The row is otherwise valid, so the registry gap is the cause under test.
+    Other checks (no `hoc` dataset record, an unregistered gene) may flag the
+    row as well; this test is about the source gate, so it asserts SRC003 only.
     """
     root = _real_repo(tmp_path)
     shard = root / "mirrors" / "cell_type_profiles"
