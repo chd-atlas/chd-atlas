@@ -1301,6 +1301,12 @@ def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_
     derived from the payloads, so a runner that stopped threading the registry
     to the pages fails here while every unit test passes. TBX5's line is pinned
     as a literal.
+
+    So is EVC2's, the one line whose panel did not grade its gene (review,
+    2026-10-27): it names the gene that panel graded for the term instead.
+    Every line is held to that rule from the bundles' own `gcep`, and the
+    lines it applies to must be exactly EVC2's, so a page that dropped the
+    distinction, or drew it on another gene, fails here.
     """
     scope = {term["id"]: term for term in _read(site, "scope.json")["terms"]}
     assert sorted(mondo for mondo, term in scope.items() if term["syndrome"] is True) == [
@@ -1317,6 +1323,7 @@ def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_
     assert all(type(term["syndrome"]) is bool for term in scope.values())
 
     lined: set[str] = set()
+    lined_by_another: set[str] = set()
     expected: set[str] = set()
     for entry in _read(site, "genes/index.json")["genes"]:
         bundle = _read(site, entry["bundle"])
@@ -1330,12 +1337,35 @@ def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_
                 "Graded for Holt-Oram syndrome as a whole syndrome; in scope on its curation by "
                 "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel."
             ]
+        if entry["symbol"] == "EVC2":
+            assert lines == [
+                "Graded for Ellis-van Creveld syndrome as a whole syndrome; in scope on "
+                "ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+                "Panel&#x27;s curation of it for EVC."
+            ]
         headline = bundle["headline_confidence"]
         graded = {
             record["disease"]
             for record in bundle["validity"]["records"]
             if record["source"] == "clingen" and record["classification"] == headline
         }
+        # "its curation by <panel>" only where that panel graded this gene for
+        # the term (review, 2026-10-27): the term's `attributed_to` is the panel
+        # that scopes the term, and EVC2's grader is another. Read off the
+        # bundle's own ClinGen records and `scope.json`, on every lined gene.
+        for line in lines:
+            [disease] = graded
+            own = {
+                record["gcep"]
+                for record in bundle["validity"]["records"]
+                if record["source"] == "clingen" and record["disease"] == disease
+            }
+            panel = scope[disease]["attributed_to"]
+            if panel in own:
+                assert line.endswith(f"in scope on its curation by ClinGen&#x27;s {panel}.")
+            else:
+                assert f"in scope on ClinGen&#x27;s {panel}&#x27;s curation of it for " in line
+                lined_by_another.add(entry["symbol"])
         if (
             headline is not None
             and graded
@@ -1347,6 +1377,7 @@ def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_
         ):
             expected.add(entry["symbol"])
     assert lined == expected
+    assert lined_by_another == {"EVC2"}
     assert sorted(lined) == [
         "CHD7",
         "EVC",

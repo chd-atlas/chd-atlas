@@ -1512,7 +1512,12 @@ Top to bottom:
    `scope.json` marks `syndrome` and a ClinGen expert panel scoped, the line
    names the panel: "Graded for Holt-Oram syndrome as a whole syndrome; in
    scope on its curation by ClinGen's Syndromic Disorders Gene Curation Expert
-   Panel." (since `2.19`; ten cards).
+   Panel." (since `2.19`; ten cards). The panel is the term's `attributed_to`,
+   the one whose curation scopes the term; where it is not a panel that graded
+   this gene for the disease, the line names the genes it did grade for it —
+   EVC2's: "… in scope on ClinGen's Kidney Cystic and Ciliopathy Disorders Gene
+   Curation Expert Panel's curation of it for EVC." Several diseases each name
+   their own panel.
 6. **Rare variants**: one line per study and analysis with a result that
    survives its own study's correction — the rule the evidence matrix's
    `corrected` state uses, so the two cannot disagree — naming the first such

@@ -7901,7 +7901,11 @@ def test_a_card_with_no_rare_variant_row_says_so_and_claims_no_test(
 
 
 def _clingen(
-    classification: Classification, disease: str, label: str, moi: str = "AD"
+    classification: Classification,
+    disease: str,
+    label: str,
+    moi: str = "AD",
+    gcep: str = "Congenital Heart Disease Gene Curation Expert Panel",
 ) -> ValidityRecord:
     return ValidityRecord(
         source=ValiditySource.CLINGEN,
@@ -7912,7 +7916,7 @@ def _clingen(
         moi=moi,
         report_url=None,
         sop="SOP11",
-        gcep="Congenital Heart Disease Gene Curation Expert Panel",
+        gcep=gcep,
     )
 
 
@@ -7943,12 +7947,17 @@ def _card_page(
     warrants: dict[str, Warrant] | None = None,
     scope_terms: dict[str, ScopeEntry] | None = None,
 ) -> str:
-    """One gene page, rendered with no burden rows; returns its rail."""
+    """One gene page, rendered with no burden rows; returns its rail.
+
+    `validity` also holds EVC, graded by the panel that scopes Ellis-van Creveld
+    syndrome and never rendered: the gene a card names when that panel did not
+    grade the page's own gene (`_card_scope`).
+    """
     build_gene_pages(
         {GATA4: fact},
         Emitter(root=tmp_path),
-        symbols={GATA4: "GATA4"},
-        validity={GATA4: validity},
+        symbols={GATA4: "GATA4", _EVC_GENE: "EVC"},
+        validity={GATA4: validity, _EVC_GENE: _EVC_VALIDITY},
         assertions={},
         publications={},
         burden={},
@@ -8444,6 +8453,10 @@ _HETEROTAXY: Final = "MONDO:1060197"
 _TARP: Final = "MONDO:0010711"
 _CHD: Final = "MONDO:0005453"
 _SIBLING: Final = "MONDO:0009341"
+_ELLIS_VAN_CREVELD: Final = "MONDO:0009162"
+_SYNDROMIC_PANEL: Final = "Syndromic Disorders Gene Curation Expert Panel"
+_CILIOPATHY_PANEL: Final = "Kidney Cystic and Ciliopathy Disorders Gene Curation Expert Panel"
+_SKELETAL_PANEL: Final = "Skeletal Disorders Gene Curation Expert Panel"
 
 
 def _term(
@@ -8497,9 +8510,34 @@ _SCOPE_TERMS: Final = {
     _SIBLING: _term(
         _SIBLING, "Mowat-Wilson syndrome", "gencc_submitter", "Ambry Genetics", syndrome=True
     ),
+    # Scoped on the ciliopathy panel's curation, which graded EVC; EVC2's grade
+    # for it is the skeletal panel's (the real mirror, 2026-10-27).
+    _ELLIS_VAN_CREVELD: _term(
+        _ELLIS_VAN_CREVELD,
+        "Ellis-van Creveld syndrome",
+        "clingen_expert_panel",
+        _CILIOPATHY_PANEL,
+        syndrome=True,
+    ),
 }
 _ON_SYNDROMIC_CURATION: Final = (
     "in scope on its curation by ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel"
+)
+# EVC: the gene the ciliopathy panel graded for Ellis-van Creveld syndrome.
+# `_card_page` puts it in the validity mapping every card is rendered against.
+_EVC_GENE: Final = "HGNC:3497"
+_EVC_VALIDITY: Final = GeneValidity(
+    records=(
+        _clingen(
+            Classification.DEFINITIVE,
+            _ELLIS_VAN_CREVELD,
+            "Ellis-van Creveld syndrome",
+            "AR",
+            gcep=_CILIOPATHY_PANEL,
+        ),
+    ),
+    state=ValidityState.EXPERT_CURATED,
+    has_source_discordance=False,
 )
 
 
@@ -8574,7 +8612,12 @@ _ON_SYNDROMIC_CURATION: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
-                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
             ),
             f"Graded for Holt-Oram syndrome as a whole syndrome; {_ON_SYNDROMIC_CURATION}.",
             id="TBX5: a marked syndrome a ClinGen panel scoped",
@@ -8582,13 +8625,59 @@ _ON_SYNDROMIC_CURATION: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
-                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _ELLIS_VAN_CREVELD,
+                    "Ellis-van Creveld syndrome",
+                    "AR",
+                    gcep=_SKELETAL_PANEL,
+                ),
+            ),
+            "Graded for Ellis-van Creveld syndrome as a whole syndrome; in scope on "
+            "ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation Expert "
+            "Panel&#x27;s curation of it for EVC.",
+            id="EVC2: the panel scoping the term graded another gene for it",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
                 _clingen(Classification.DEFINITIVE, _TARP, "TARP syndrome"),
             ),
             "Graded for Holt-Oram syndrome and TARP syndrome as whole syndromes; in scope on "
-            "their curation by ClinGen&#x27;s Congenital Heart Disease Gene Curation Expert "
-            "Panel and ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel.",
-            id="two marked syndromes, two panels, both named",
+            "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel&#x27;s curation of "
+            "Holt-Oram syndrome and ClinGen&#x27;s Congenital Heart Disease Gene Curation "
+            "Expert Panel&#x27;s curation of TARP syndrome.",
+            id="two marked syndromes, each named with its own panel",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HOLT_ORAM,
+                    "Holt-Oram syndrome",
+                    gcep=_SYNDROMIC_PANEL,
+                ),
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _ELLIS_VAN_CREVELD,
+                    "Ellis-van Creveld syndrome",
+                    "AR",
+                    gcep=_SKELETAL_PANEL,
+                ),
+            ),
+            "Graded for Ellis-van Creveld syndrome and Holt-Oram syndrome as whole syndromes; "
+            "in scope on ClinGen&#x27;s Kidney Cystic and Ciliopathy Disorders Gene Curation "
+            "Expert Panel&#x27;s curation of Ellis-van Creveld syndrome for EVC and "
+            "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel&#x27;s curation of "
+            "Holt-Oram syndrome.",
+            id="two marked syndromes, one scoped on another gene's grade",
         ),
         pytest.param(
             _graded(
@@ -8676,6 +8765,24 @@ def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_di
         assert "not for heart disease" not in rail
     else:
         assert f'<p class="card-scope">{line}</p>' in rail
+
+
+def test_a_syndrome_scoped_on_a_panel_that_graded_no_gene_for_it_is_refused(
+    tmp_path: Path,
+) -> None:
+    """Names no gene rather than an empty one, and never "for another gene".
+
+    A term attributed to a panel the mirror holds no record of for it is what
+    SCP005 refuses, so the build cannot reach this; if it does, the gate was
+    bypassed, and a card naming nobody, or a panel that graded nothing, is a
+    provenance claim nothing supports.
+    """
+    fact, validity = _graded(
+        Classification.DEFINITIVE,
+        _clingen(Classification.DEFINITIVE, _TARP, "TARP syndrome", gcep=_SKELETAL_PANEL),
+    )
+    with pytest.raises(ValueError, match="graded no gene for it"):
+        _card_page(tmp_path, fact, validity, scope_terms=_SCOPE_TERMS)
 
 
 _NOT_CURATED_BY_PANEL: Final = (

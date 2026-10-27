@@ -1470,11 +1470,32 @@ _CLINGEN_SCOPES: Final = frozenset(
 )
 
 
+def _panel_graders(
+    validity: Mapping[str, GeneValidity], symbols: Mapping[str, str]
+) -> dict[tuple[str, str], tuple[str, ...]]:
+    """`(disease, panel)` -> the genes that ClinGen panel graded for that disease.
+
+    Over every gene the validity mirrors curate in scope, published or not, by
+    registry symbol (the HGNC id where the registry names none), sorted. For
+    `_card_scope`, which must name them when the panel a syndrome is scoped on
+    is not the one that graded the page's own gene.
+    """
+    graders: dict[tuple[str, str], set[str]] = {}
+    for gene, gene_validity in validity.items():
+        for record in gene_validity.records:
+            if record.source is ValiditySource.CLINGEN and record.gcep is not None:
+                graders.setdefault((record.disease, record.gcep), set()).add(
+                    symbols.get(gene, gene)
+                )
+    return {key: tuple(sorted(names)) for key, names in graders.items()}
+
+
 def _card_scope(
     fact: GeneFacts,
     gene_validity: GeneValidity,
     warrants: Mapping[str, Warrant],
     scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """Why a syndrome's grade is on a CHD atlas, beside the chip. D55.
 
@@ -1521,11 +1542,33 @@ def _card_scope(
     checks against the mirror, is that the term is listed on that panel's
     curation of it -- so the line says it is in scope *on* that curation. The
     authority is the term's `attributed_to`, verbatim, after "ClinGen's".
+
+    **That panel need not be the one that graded this gene** (review,
+    2026-10-27). `attributed_to` names the panel whose curation scopes the
+    *term*. EVC2's grade for Ellis-van Creveld syndrome is the Skeletal
+    Disorders panel's, and the term is scoped on the Kidney Cystic and
+    Ciliopathy Disorders panel's curation of it for EVC; "in scope on its
+    curation by" that panel read as the panel having graded EVC2. Where no
+    ClinGen record of this gene for the term is that panel's, the clause names
+    the genes that panel did grade for it (`panel_graders`, from the validity
+    mirror the build already holds): "in scope on ClinGen's <panel>'s curation
+    of it for EVC." Measured on a build of 5f7161b: 1 of the 10 lines (EVC2);
+    the other nine panels graded the page's own gene. None found is a scope
+    term SCP005 refuses, so it raises rather than inventing a gene.
+
+    **Each disease is paired with its own panel.** With two diseases the
+    clause sorted the panels apart from the diseases and joined the two lists,
+    so Holt-Oram syndrome and TARP syndrome read as curated by the Congenital
+    Heart Disease and the Syndromic Disorders panels -- the reverse of the
+    terms' attributions. Several diseases now get one "ClinGen's <panel>'s
+    curation of <disease>" each, in the order the line names the diseases.
+    Latent: every one of the ten lines names one disease.
     """
     headline = fact.headline_confidence
     if headline is None:
         return ""
-    graded = {record.disease for record in _warrant_records(fact, gene_validity)}
+    warranting = _warrant_records(fact, gene_validity)
+    graded = {record.disease for record in warranting}
     if not graded:
         return ""
     diseases = _graded_diseases(gene_validity, headline)
@@ -1550,10 +1593,38 @@ def _card_scope(
         ]
         if len(marked) != len(terms):
             return ""
-        authorities = sorted({term.attributed_to for term in marked})
-        pronoun = "its" if len(diseases) == 1 else "their"
-        panels = _and_join([f"ClinGen's {name}" for name in authorities])
-        reason = f"in scope on {pronoun} curation by {panels}"
+        labels = {record.disease: record.disease_label for record in warranting}
+        clauses: list[tuple[str, str, tuple[str, ...]]] = []
+        for term in sorted(marked, key=lambda term: (labels[term.id], term.id)):
+            own = {
+                record.gcep
+                for record in gene_validity.records
+                if record.source is ValiditySource.CLINGEN and record.disease == term.id
+            }
+            others: tuple[str, ...] = ()
+            if term.attributed_to not in own:
+                others = (panel_graders or {}).get((term.id, term.attributed_to), ())
+                if not others:
+                    raise ValueError(
+                        f"scope term {term.id} is attributed to {term.attributed_to!r}, which "
+                        f"graded no gene for it in the validity mirror; SCP005 refuses this"
+                    )
+            clauses.append((f"ClinGen's {term.attributed_to}", labels[term.id], others))
+        if len(clauses) == 1:
+            [(panel, _, others)] = clauses
+            reason = (
+                f"in scope on {panel}'s curation of it for {_and_join(others)}"
+                if others
+                else f"in scope on its curation by {panel}"
+            )
+        else:
+            reason = "in scope on " + _and_join(
+                [
+                    f"{panel}'s curation of {label}"
+                    + (f" for {_and_join(others)}" if others else "")
+                    for panel, label, others in clauses
+                ]
+            )
     sentence = f"Graded for {_and_join(diseases)} as {noun}; {reason}."
     return f'<p class="card-scope">{html.escape(sentence)}</p>'
 
@@ -1570,6 +1641,7 @@ def _rail(
     warrants: Mapping[str, Warrant] | None = None,
     identity: GeneIdentity | None = None,
     scope_terms: Mapping[str, ScopeEntry] | None = None,
+    panel_graders: Mapping[tuple[str, str], tuple[str, ...]] | None = None,
 ) -> str:
     """The clinician card: the summary column, for every gene whether curated here or not.
 
@@ -1669,7 +1741,7 @@ def _rail(
         f"{_card_gloss(fact)}"
         f"{_card_dispute(fact, gene_validity)}"
         f"{_card_no_association(fact, gene_validity)}"
-        f"{_card_scope(fact, gene_validity, warrants or {}, scope_terms)}"
+        f"{_card_scope(fact, gene_validity, warrants or {}, scope_terms, panel_graders)}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
         '<p><a href="../methods.html">How to read this page</a> &middot; '
@@ -5530,6 +5602,7 @@ def build_gene_pages(
     combined_by_gene = combined or {}
     warrants = scope_warrants or {}
     labels = scope_labels or {}
+    graders = _panel_graders(validity, symbols)
     for gene in sorted(facts):
         fact = facts[gene]
         symbol = symbols.get(gene, gene)
@@ -5549,6 +5622,7 @@ def build_gene_pages(
                 warrants=warrants,
                 identity=identity,
                 scope_terms=scope_terms,
+                panel_graders=graders,
             )
             + "<div>"
             + _SCOPE_SHORT
