@@ -996,30 +996,40 @@ def _correction_scope(row: BurdenRow, publication: Publication | None) -> str:
 
 
 def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
-    """What S8 Table says of the CHD cases among a card's carriers (owner decision R2).
+    """What a study's own table says of the CHD cases among a card's carriers (R2).
 
-    PMID:34324492's case set includes 777 sporadic thoracic aortic aneurysm
-    probands, and the study's summary caveat beneath its card line says so. For
-    the genes its S8 Table lists, `n_chd_case_carriers` says how many of a
-    row's case carriers are CHD cases. Where that is all of them, no carrier
-    the line counts is an aneurysm proband, and a reader of the card should
-    be told: "For this gene, the study's S8 Table counts every carrier among
-    its CHD cases." It does not retire the caveat: the line's denominator is
-    the case set the study analysed, aneurysm probands among it (S8 Table has
-    a TAA-only carrier for 144 of its 528 genes). Where it is fewer, the
-    sentence gives both counts instead, and never "every".
-    Measured on a build of this tree (2026-10-27): all 10
-    published genes with a card line from that study carry the column and are
-    equal (ELN, TBX1, GATA4, TAB2, EFNB2, SOX7, ROBO4, ETS1, NKX2-5, NR2F2);
-    the one row where it is smaller, ANKRD11's 12 of 13, is on no published
-    page, so the second form is reachable from a fixture only.
+    PMID:34324492's case set combines CHD with a series of 777 sporadic
+    thoracic aortic aneurysm probands, and the study's summary caveat on the
+    card says so. For the genes its S8 Table counts, `n_chd_case_carriers`
+    says how many of a row's case carriers are CHD cases. Where that is all of
+    them: "For this gene, the study's S8 Table counts every carrier among its
+    CHD cases, so none is an aneurysm proband." The second clause is what
+    stops the first reading as a remark on how S8 counts, true of any gene
+    (review, 2026-10-27). It is the consequence, not a second figure read off
+    S8: the table's bands partition its carriers (measured 2026-10-27, "only
+    CHD" plus "only TAA" is "CHD+TAA" for all 528 genes, a blank read as
+    none), and of the 10 published genes the line shows, S8's TAA-only `case`
+    is 0 for TBX1, EFNB2, SOX7 and ETS1 and blank for the other six -- so the
+    sentence never says S8 "counts none" there. It does not retire the
+    caveat: the line's denominator is the case set the study analysed,
+    aneurysm probands among it (S8 has a TAA-only carrier for 144 of its 528
+    genes).
+
+    Where it is fewer, the sentence gives both counts, never "every", and no
+    aneurysm count: the mirror carries none, and a difference of two counts is
+    not a figure S8 prints. Measured on a build of this tree (2026-10-27): all
+    10 published genes with a card line from that study carry the column and
+    are equal (ELN, TBX1, GATA4, TAB2, EFNB2, SOX7, ROBO4, ETS1, NKX2-5,
+    NR2F2); the one row where it is smaller, ANKRD11's 12 of 13, is on no
+    published page, so that form is reachable from a fixture only.
 
     `rows` are the rows the card's lines show, one per line. The table is the
     one `CHD_CASE_SPLITS` records for the row's study: BUR024 refuses the
     column on a row of any study it does not list, so a row that reaches here
     without one means the gate was bypassed, and that raises rather than names
-    a table the study never had. Deduplicated in order, so two lines of one
-    study cannot repeat a sentence.
+    a table the study never had. A row with no case carrier says nothing,
+    since "every carrier" of none is vacuous. Deduplicated in order, so two
+    lines of one study cannot repeat a sentence.
     """
     sentences: list[str] = []
     for row in rows:
@@ -1035,7 +1045,8 @@ def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
         if row.n_case_carriers == 0:
             continue
         sentence = (
-            f"For this gene, the study's {split.table} counts every carrier among its CHD cases."
+            f"For this gene, the study's {split.table} counts every carrier among its CHD "
+            f"cases, so none is an aneurysm proband."
             if chd == row.n_case_carriers
             else f"For this gene, the study's {split.table} counts {chd:,} of the "
             f"{row.n_case_carriers:,} carriers among its CHD cases."
@@ -1246,19 +1257,20 @@ def _card_rare_variants(
         # nothing here for it to qualify. After it, what the study's own table
         # says of the CHD cases among the carriers those lines show
         # (`_chd_only`, owner decision R2): whether the caveat reaches those
-        # carriers, never whether it reaches the denominator.
+        # carriers, never whether it reaches the denominator. Only after it: a
+        # study with no caveat gets neither, because that sentence speaks of
+        # aneurysm probands only the caveat introduces (review, 2026-10-27).
         notes: list[str] = []
         for study in dict.fromkeys(study for study, _ in sorted(groups)):
             publication = publications.get(study)
-            caveat = publication.summary_caveat if publication is not None else None
+            if publication is None or publication.summary_caveat is None:
+                continue
             shown = [
                 sorted(members, key=_sort_key)[0]
                 for (owner, _), members in sorted(groups.items())
                 if owner == study
             ]
-            text = " ".join([caveat, *_chd_only(shown)] if caveat else _chd_only(shown))
-            if not text:
-                continue
+            text = " ".join([publication.summary_caveat, *_chd_only(shown)])
             notes.append(
                 f'<p class="card-note"><a href="#{html.escape(_study_anchor(study))}">'
                 f"{html.escape(_study_label(study, publications))}</a>: "

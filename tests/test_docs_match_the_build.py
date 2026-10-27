@@ -1341,7 +1341,10 @@ def test_the_page_sentences_the_doc_reports_are_the_ones_the_pages_render(site: 
     quoted = re.search(r'the reason: "(Graded for [^"]+)"', doc)
     assert quoted, "the doc must still quote the card's Orphanet line"
     # Owner decision R2: the doc quotes the card's S8 sentence; GATA4's card has it.
-    s8 = "For this gene, the study's S8 Table counts every carrier among its CHD cases."
+    s8 = (
+        "For this gene, the study's S8 Table counts every carrier among its CHD cases, so "
+        "none is an aneurysm proband."
+    )
     assert f'shows: "{s8}"' in doc
     assert s8 in _card_paragraph(pages["HGNC_4173"], "card-note")
     scope_lines = {_card_paragraph(page, "card-scope") for page in pages.values()}

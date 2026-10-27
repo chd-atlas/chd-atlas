@@ -1565,13 +1565,14 @@ Top to bottom:
    records either. Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
-   study's block. After it, where the line's row carries
-   `n_chd_case_carriers`, what that count says of the carriers the line
-   shows: "For this gene, the study's S8 Table counts every carrier among its
-   CHD cases." where it equals the row's case carriers, and both counts where
-   it is fewer. Only PMID:34324492's rows carry it, so only its caveat is ever
-   followed by one. It speaks of the carriers alone: the line's denominator
-   is the case set the study analysed, aneurysm probands among it.
+   study's block. After it, and never without it, where the line's row
+   carries `n_chd_case_carriers`, what that count says of the carriers the
+   line shows: "For this gene, the study's S8 Table counts every carrier among
+   its CHD cases, so none is an aneurysm proband." where it equals the row's
+   case carriers, and both counts where it is fewer. Only PMID:34324492's rows
+   carry it, so only its caveat is ever followed by one. It speaks of the
+   carriers alone: the line's denominator is the case set the study analysed,
+   aneurysm probands among it.
 
    **A study that published no corrected p for the gene gets a line of its
    own**, whether or not another study's results survive: "<study> publishes

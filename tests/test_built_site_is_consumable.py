@@ -1138,8 +1138,15 @@ def _s8_sentence(burden: list[dict[str, Any]], study: str) -> str:
     if not rows:
         return ""
     chd, carriers = rows[0]["n_chd_case_carriers"], rows[0]["n_case_carriers"]
-    counted = "every carrier" if chd == carriers else f"{chd:,} of the {carriers:,} carriers"
-    return f" For this gene, the study's S8 Table counts {counted} among its CHD cases."
+    if chd == carriers:
+        return (
+            " For this gene, the study's S8 Table counts every carrier among its CHD cases, "
+            "so none is an aneurysm proband."
+        )
+    return (
+        f" For this gene, the study's S8 Table counts {chd:,} of the {carriers:,} carriers "
+        "among its CHD cases."
+    )
 
 
 def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_corrected_dataset(
@@ -1252,7 +1259,7 @@ def test_every_card_lists_rare_variants_exactly_where_its_bundle_counts_a_correc
             assert (
                 card.count(
                     "For this gene, the study&#x27;s S8 Table counts every carrier among its CHD "
-                    "cases.</p>"
+                    "cases, so none is an aneurysm proband.</p>"
                 )
                 == 1
             )
@@ -1897,6 +1904,7 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     owner decisions 2026-10-26, batch 2 (R1-I3)  942  1,051  21 sentences, 415 words
     review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
     owner decisions batch 3 (R12, R2)            957  1,066  21 sentences, 430 words
+    review fixes to batch 3, 2026-10-27          957  1,066  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1957,6 +1965,13 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     cohort notes). R2's card sentence, owner-decided (E4), is 14 words on 10
     cards (+14 each, measured) and 0 on the other 109, below the median's
     reach. Both constants stay.
+
+    The last row is the review of that batch (2026-10-27), measured with this
+    parser on a fresh build of the fixed tree against one of 64ac83a (957,
+    1,066, 21 / 430, as the row above). Only R2's card sentence moved: it
+    gained "so none is an aneurysm proband", +6 words on each of the same 10
+    cards and 0 on the other 109, below the median's reach. By the rule,
+    957 x 1.03 rounded up is 986 and 21 + 1 is 22, so both constants stay.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and

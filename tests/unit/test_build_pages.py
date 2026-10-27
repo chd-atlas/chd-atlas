@@ -22,6 +22,7 @@ from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.pages import (
     _EM_DASH,
     _analysis_label,
+    _chd_only,
     _count,
     _date,
     _forest_text,
@@ -7528,12 +7529,17 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
 
     **Then what S8 Table says of the CHD cases among the line's carriers**
     (owner decision R2, 2026-10-27), from the line's row's
-    `n_chd_case_carriers`: "every carrier" where it equals the row's case
-    carriers (10 of 10 here), the two counts where it is fewer (7 of 10), and
-    nothing where the row carries none -- the Sierant rows here, and 109 of
-    PMID:34324492's 121 mirrored rows. The unequal case is on no published
-    page (ANKRD11's 12 of 13 is the only one, and ANKRD11 is unpublished), so
-    this fixture is the only place "every" is held to equality.
+    `n_chd_case_carriers`: "every carrier", and so no aneurysm proband, where
+    it equals the row's case carriers (10 of 10 here), the two counts where it
+    is fewer (7 of 10), and nothing where the row carries none -- the Sierant
+    rows here, and 109 of PMID:34324492's 121 mirrored rows. The unequal case
+    is on no published page (ANKRD11's 12 of 13 is the only one, and ANKRD11
+    is unpublished), so this fixture is the only place "every" is held to
+    equality. **From the line's own row**, the first of its group, never
+    another the group holds; **once per study**, however many of its lines
+    carry the same sentence; **never for a row with no case carrier**, of
+    whom "every" says nothing; and **never without the caveat**, whose
+    aneurysm probands it speaks of (all four review, 2026-10-27).
     """
     publications = {
         "PMID:42230622": _PUBLICATION.model_copy(
@@ -7555,7 +7561,8 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     assert after == (
         '<p class="card-note"><a href="#study-34324492">Audain E et al. 2021</a>: '
         "Cases include &lt;777&gt; TAA probands &amp; CHD. For this gene, the study&#x27;s "
-        "S8 Table counts every carrier among its CHD cases.</p>"
+        "S8 Table counts every carrier among its CHD cases, so none is an aneurysm "
+        "proband.</p>"
         '<p class="card-note"><a href="#study-40127276">D&#x27;Alessandro M et al. 2025</a>: '
         "Counts alleles.</p>"
         '<p class="card-uncorrected"><a href="#study-42230622">Audain E et al. 2026</a> '
@@ -7571,17 +7578,40 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     )
     assert 'class="card-note"' not in _card_variants(_rail_of(failing))
 
+    # Two lines of one study. The CNV line's own row is `damaging` (7 of 10),
+    # which sorts before the `lof` row its group also holds (10 of 10); the
+    # SNV line's row says what the first does, and the sentence appears once.
     fewer = _burden_page(
         tmp_path / "fewer",
         facts_uncurated,
-        [_audain2021(n_chd_case_carriers=7)],
+        [
+            _audain2021(n_chd_case_carriers=10),
+            _audain2021(consequence_class="damaging", n_chd_case_carriers=7),
+            _audain2021(variant_class="snv_indel", n_chd_case_carriers=7),
+        ],
         publications=publications,
     )
-    assert re.findall(r'<p class="card-note">.*?</p>', _card_variants(_rail_of(fewer))) == [
+    card = _card_variants(_rail_of(fewer))
+    assert card.count("<li>") == 2
+    assert re.findall(r'<p class="card-note">.*?</p>', card) == [
         '<p class="card-note"><a href="#study-34324492">Audain E et al. 2021</a>: '
         "Cases include &lt;777&gt; TAA probands &amp; CHD. For this gene, the study&#x27;s "
         "S8 Table counts 7 of the 10 carriers among its CHD cases.</p>"
     ]
+    assert _chd_only([_audain2021(n_case_carriers=0, n_chd_case_carriers=0)]) == []
+    uncaveated = _burden_page(
+        tmp_path / "uncaveated",
+        facts_uncurated,
+        [_audain2021(n_chd_case_carriers=10)],
+        publications={
+            **publications,
+            "PMID:34324492": publications["PMID:34324492"].model_copy(
+                update={"summary_caveat": None}
+            ),
+        },
+    )
+    assert 'class="card-note"' not in _card_variants(_rail_of(uncaveated))
+    assert "S8 Table" not in uncaveated
 
     # The table is named from `CHD_CASE_SPLITS` by the row's study. A count on a
     # row of a study it does not list is BUR024's to refuse, and past a
