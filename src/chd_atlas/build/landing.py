@@ -51,6 +51,7 @@ from collections.abc import Collection, Mapping, Sequence
 from typing import Final
 
 from chd_atlas.build.burden import BurdenCensus
+from chd_atlas.build.cell_types import CellTypeCensus
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import LANDING
 from chd_atlas.build.profiles import ProfileCensus
@@ -274,6 +275,7 @@ def _render(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    cell_type_census: CellTypeCensus,
     sources: SourceRegistry,
 ) -> str:
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
@@ -316,6 +318,9 @@ def _render(
             # expression layer once landed with nothing here naming it (CLAUDE.md
             # section 4.29).
             _stat("Genes with developmental expression data", _number(profile_census["genes"])),
+            # Restricted to `published` by `cell_types.cell_type_census`, for
+            # the same reason.
+            _stat("Genes with cell-type expression data", _number(cell_type_census["genes"])),
         )
     )
 
@@ -393,6 +398,7 @@ def build_landing(
     published: Collection[str],
     census: BurdenCensus,
     profile_census: ProfileCensus,
+    cell_type_census: CellTypeCensus,
     emitter: Emitter,
     sources: SourceRegistry,
 ) -> None:
@@ -429,6 +435,11 @@ def build_landing(
     reason: a whole evidence layer has landed
     with this page never touched before (CLAUDE.md section 4.29's burden
     precedent), and a silently-defaulted zero is exactly how that happens again.
+
+    `cell_type_census` is `cell_types.cell_type_census`'s return, the same object
+    `write_manifest` publishes as `counts.cell_type_genes`/`cell_type_datasets`,
+    of which this page states the first -- threaded, with no default, for the
+    same reasons as `profile_census`.
     """
     emitter.write_text(
         LANDING,
@@ -439,6 +450,7 @@ def build_landing(
             published,
             census,
             profile_census,
+            cell_type_census,
             sources,
         ),
     )

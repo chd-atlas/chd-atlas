@@ -765,6 +765,19 @@ _EXPRESSION: Final = (
     "difference. A chart following one cardiac organ across a dataset's stages fits its "
     "vertical axis to the gene's own placed medians in that organ, so a curve's height "
     "compares nothing to another gene's.</p>"
+    # The single-cell layer (Farah et al. 2024): how a cell-type figure is
+    # computed and what it does not say.
+    "<p><strong>Cell types</strong> come from single-cell RNA sequencing of 8 hearts at 9 to "
+    "15 weeks (Farah et al. 2024). For each heart, this atlas sums the reads of every cell "
+    "of one type, and of that type in one region, and divides by all of that group's reads: "
+    "counts per million (CPM). A page shows the median across hearts and the middle half of "
+    "hearts. A heart counts only with 10 or more cells of that type there. Values below 1 CPM "
+    "are below this atlas's detection floor, the Human Protein Atlas's \"not detected\" cut. "
+    "A dot's size is the share of that type's cells with at least one read.</p>"
+    "<p>Regions pool all four ages. τ is computed across cell types as for organs above. "
+    "Single-cell methods dissociate tissue, so how many cells of a type were captured "
+    "reflects the method, not the heart. A high share of cells describes that cell type, "
+    "not how common the type is.</p>"
 )
 
 

@@ -916,6 +916,21 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     assert (len(named), held) == (11, 6211)
 
 
+_CELL_TYPE_PARAGRAPHS = (
+    "<p><strong>Cell types</strong> come from single-cell RNA sequencing of 8 hearts at 9 to "
+    "15 weeks (Farah et al. 2024). For each heart, this atlas sums the reads of every cell "
+    "of one type, and of that type in one region, and divides by all of that group's reads: "
+    "counts per million (CPM). A page shows the median across hearts and the middle half of "
+    "hearts. A heart counts only with 10 or more cells of that type there. Values below 1 CPM "
+    "are below this atlas's detection floor, the Human Protein Atlas's \"not detected\" cut. "
+    "A dot's size is the share of that type's cells with at least one read.</p>"
+    "<p>Regions pool all four ages. τ is computed across cell types as for organs above. "
+    "Single-cell methods dissociate tissue, so how many cells of a type were captured "
+    "reflects the method, not the heart. A high share of cells describes that cell type, "
+    "not how common the type is.</p>"
+)
+
+
 def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -> None:
     """The expression reading notes, moved off every gene page (2026-10-26, D50).
 
@@ -1022,8 +1037,10 @@ def test_expression_states_what_every_gene_page_shortened_or_folded(page: str) -
         "per-organ axis would rescale every line to its own range and hide exactly that "
         "difference. A chart following one cardiac organ across a dataset's stages fits its "
         "vertical axis to the gene's own placed medians in that organ, so a curve's height "
-        "compares nothing to another gene's.</p>"
+        "compares nothing to another gene's.</p>" + _CELL_TYPE_PARAGRAPHS
     )
+    added = re.sub(r"<[^>]+>", " ", _CELL_TYPE_PARAGRAPHS).split()
+    assert len(added) <= 250, len(added)
 
 
 def test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say(

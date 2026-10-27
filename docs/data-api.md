@@ -299,9 +299,9 @@ point to the other 121. It carries the same development-status and
 research-use statement `status` above is the machine-readable half of, as every
 page does, and is a doorway rather than the census (since 2026-10-27): it says
 what the atlas is, states the figures a first-time reader needs, and sends
-them to `genes/index.html`. It states six keys of [`counts`](#manifestjson):
+them to `genes/index.html`. It states seven keys of [`counts`](#manifestjson):
 `genes`, `burden_rows` and `cohort_families` in the hero,
-`burden_surviving_genes` and `profile_genes` as cards, and `assertions` in the
+`burden_surviving_genes`, `profile_genes` and `cell_type_genes` as cards, and `assertions` in the
 sentence naming the curated genes. Each equals its key in `manifest.json`,
 which states the rest. Two cards are not manifest keys: the genes with a
 reported rare-variant result (any row at all; the label read "Genes with
