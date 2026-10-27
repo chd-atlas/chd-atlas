@@ -1220,6 +1220,82 @@ def test_every_contested_gene_is_chipped_on_the_gene_index_and_no_other_is(site:
         assert cell == (f"{bare} {chip}" if entry["gene"] in flagged else bare), entry["gene"]
 
 
+def test_exactly_the_genes_graded_for_a_clingen_scoped_syndrome_say_so_on_their_card(
+    site: Path,
+) -> None:
+    """R5 (owner decision 2026-10-26) on the real corpus.
+
+    Ten genes are graded at their headline for a syndrome a ClinGen expert
+    panel scoped, and their cards said nothing of it while the 21 Orphanet-
+    scoped ones did. `scope.json` now publishes the curated `syndrome` mark,
+    on exactly the nine terms those ten are graded for; ZIC3 and NODAL, graded
+    for "congenital heart disease with heterotaxy syndrome", are CHD itself and
+    stay unmarked. Two ways, both required to agree: the genes whose card
+    carries the line are the literal ten, and they are the genes whose every
+    headline disease `scope.json` marks and attributes to a ClinGen class --
+    derived from the payloads, so a runner that stopped threading the registry
+    to the pages fails here while every unit test passes. TBX5's line is pinned
+    as a literal.
+    """
+    scope = {term["id"]: term for term in _read(site, "scope.json")["terms"]}
+    assert sorted(mondo for mondo, term in scope.items() if term["syndrome"] is True) == [
+        "MONDO:0007318",  # Alagille syndrome
+        "MONDO:0007732",  # Holt-Oram syndrome
+        "MONDO:0007843",  # Kabuki syndrome 1
+        "MONDO:0008965",  # CHARGE syndrome
+        "MONDO:0009162",  # Ellis-van Creveld syndrome
+        "MONDO:0009341",  # Mowat-Wilson syndrome
+        "MONDO:0010465",  # Kabuki syndrome 2
+        "MONDO:0010711",  # TARP syndrome
+        "MONDO:0800458",  # NR2F2-related multiple congenital anomalies/dysmorphic syndrome
+    ]
+    assert all(type(term["syndrome"]) is bool for term in scope.values())
+
+    lined: set[str] = set()
+    expected: set[str] = set()
+    for entry in _read(site, "genes/index.json")["genes"]:
+        bundle = _read(site, entry["bundle"])
+        page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        lines = re.findall(r'<p class="card-scope">([^<]*in scope on [^<]*)</p>', rail)
+        if lines:
+            lined.add(entry["symbol"])
+        if entry["symbol"] == "TBX5":
+            assert lines == [
+                "Graded for Holt-Oram syndrome as a whole syndrome; in scope on its curation by "
+                "ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel."
+            ]
+        headline = bundle["headline_confidence"]
+        graded = {
+            record["disease"]
+            for record in bundle["validity"]["records"]
+            if record["source"] == "clingen" and record["classification"] == headline
+        }
+        if (
+            headline is not None
+            and graded
+            and all(
+                scope[disease]["syndrome"]
+                and scope[disease]["admitted_by"] in {"clingen_chd_panel", "clingen_expert_panel"}
+                for disease in graded
+            )
+        ):
+            expected.add(entry["symbol"])
+    assert lined == expected
+    assert sorted(lined) == [
+        "CHD7",
+        "EVC",
+        "EVC2",
+        "KDM6A",
+        "KMT2D",
+        "NOTCH2",
+        "NR2F2",
+        "RBM10",
+        "TBX5",
+        "ZEB2",
+    ]
+
+
 def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list_its_disease(
     site: Path,
 ) -> None:
@@ -1303,8 +1379,10 @@ def test_every_orphanet_warrant_scope_json_publishes_reaches_the_pages_that_list
         ]
         scoped = bool(graded) and all(record["disease"] in orphanet for record in graded)
         rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
-        lines = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
-        assert page.count('class="card-scope"') == len(lines), entry["gene"]
+        every_line = re.findall(r'<p class="card-scope">(.*?)</p>', rail)
+        assert page.count('class="card-scope"') == len(every_line), entry["gene"]
+        # The Orphanet lines; a syndrome a ClinGen panel scoped has its own (R5).
+        lines = [line for line in every_line if "in scope because Orphanet records" in line]
         assert len(lines) == int(scoped), (entry["gene"], lines)
         if scoped:
             carded += 1

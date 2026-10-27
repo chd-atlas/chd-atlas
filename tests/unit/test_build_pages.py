@@ -48,6 +48,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset, Stage
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile, EndBasis
+from chd_atlas.models.scope import ScopeEntry
 from chd_atlas.orphanet_scope import Annotation, Warrant
 from chd_atlas.vocab import (
     AtlasCuration,
@@ -7753,6 +7754,7 @@ def _card_page(
     fact: GeneFacts,
     validity: GeneValidity,
     warrants: dict[str, Warrant] | None = None,
+    scope_terms: dict[str, ScopeEntry] | None = None,
 ) -> str:
     """One gene page, rendered with no burden rows; returns its rail."""
     build_gene_pages(
@@ -7765,6 +7767,7 @@ def _card_page(
         burden={},
         cohorts={},
         scope_warrants=warrants,
+        scope_terms=scope_terms,
     )
     return _rail_of(_page(tmp_path, "HGNC_4173.html"))
 
@@ -8250,6 +8253,67 @@ _ORPHANET_WARRANTS: Final = {
 _IN_SCOPE_BY_ORPHANET: Final = (
     "in scope because Orphanet records a structural heart malformation in at least 30% of cases"
 )
+_HETEROTAXY: Final = "MONDO:1060197"
+_TARP: Final = "MONDO:0010711"
+_CHD: Final = "MONDO:0005453"
+_SIBLING: Final = "MONDO:0009341"
+
+
+def _term(
+    mondo: str, label: str, admitted_by: str, attributed_to: str, *, syndrome: bool
+) -> ScopeEntry:
+    return ScopeEntry.model_validate(
+        {
+            "id": mondo,
+            "label": label,
+            "reason": "A fixture term.",
+            "admitted_by": admitted_by,
+            "attributed_to": attributed_to,
+            "syndrome": syndrome,
+            "admitted_on": "2026-10-26",
+        }
+    )
+
+
+# R5's registry: two marked syndromes two ClinGen panels scoped, one the CHD
+# panel's; the CHD-itself heterotaxy term, unmarked; the root CHD term; and a
+# marked syndrome a GenCC submitter scoped, which names no ClinGen panel.
+_SCOPE_TERMS: Final = {
+    _HOLT_ORAM: _term(
+        _HOLT_ORAM,
+        "Holt-Oram syndrome",
+        "clingen_expert_panel",
+        "Syndromic Disorders Gene Curation Expert Panel",
+        syndrome=True,
+    ),
+    _TARP: _term(
+        _TARP,
+        "TARP syndrome",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=True,
+    ),
+    _HETEROTAXY: _term(
+        _HETEROTAXY,
+        "congenital heart disease with heterotaxy syndrome",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=False,
+    ),
+    _CHD: _term(
+        _CHD,
+        "congenital heart disease",
+        "clingen_chd_panel",
+        "Congenital Heart Disease Gene Curation Expert Panel",
+        syndrome=False,
+    ),
+    _SIBLING: _term(
+        _SIBLING, "Mowat-Wilson syndrome", "gencc_submitter", "Ambry Genetics", syndrome=True
+    ),
+}
+_ON_SYNDROMIC_CURATION: Final = (
+    "in scope on its curation by ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel"
+)
 
 
 @pytest.mark.parametrize(
@@ -8306,7 +8370,7 @@ _IN_SCOPE_BY_ORPHANET: Final = (
         pytest.param(
             _graded(
                 Classification.DEFINITIVE,
-                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _CHD, "congenital heart disease"),
                 _clingen(Classification.LIMITED, _NOONAN, "Noonan syndrome"),
             ),
             None,
@@ -8319,6 +8383,54 @@ _IN_SCOPE_BY_ORPHANET: Final = (
             ),
             None,
             id="no panel graded it, so nothing was graded for anything",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+            ),
+            f"Graded for Holt-Oram syndrome as a whole syndrome; {_ON_SYNDROMIC_CURATION}.",
+            id="TBX5: a marked syndrome a ClinGen panel scoped",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _TARP, "TARP syndrome"),
+            ),
+            "Graded for Holt-Oram syndrome and TARP syndrome as whole syndromes; in scope on "
+            "their curation by ClinGen&#x27;s Congenital Heart Disease Gene Curation Expert "
+            "Panel and ClinGen&#x27;s Syndromic Disorders Gene Curation Expert Panel.",
+            id="two marked syndromes, two panels, both named",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(
+                    Classification.DEFINITIVE,
+                    _HETEROTAXY,
+                    "congenital heart disease with heterotaxy syndrome",
+                ),
+            ),
+            None,
+            id="ZIC3: CHD itself, unmarked, though its name says syndrome",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _HOLT_ORAM, "Holt-Oram syndrome"),
+                _clingen(Classification.DEFINITIVE, _CHD, "congenital heart disease"),
+            ),
+            None,
+            id="a marked syndrome beside an unmarked CHD term at the headline",
+        ),
+        pytest.param(
+            _graded(
+                Classification.DEFINITIVE,
+                _clingen(Classification.DEFINITIVE, _SIBLING, "Mowat-Wilson syndrome"),
+            ),
+            None,
+            id="a marked syndrome no ClinGen panel scoped names no panel",
         ),
     ],
 )
@@ -8355,12 +8467,25 @@ def test_the_card_says_when_the_grade_is_for_a_syndrome_rather_than_for_heart_di
     measured 2026-10-26), and pinned so it stays a sentence nobody can publish.
     PTPN11 is graded Definitive for two Orphanet-scoped syndromes, and a line
     naming one would state half of what the warrant row above it names.
+
+    **A syndrome a ClinGen panel scoped gets the line too** (owner decision
+    2026-10-26, R5), read off the curated `syndrome` mark: Holt-Oram is marked,
+    and "congenital heart disease with heterotaxy syndrome" (ZIC3, NODAL) is not
+    -- it is CHD itself, whatever its name says. Every headline disease must be
+    marked and ClinGen-scoped, as every one must be Orphanet-scoped above: a
+    marked syndrome beside an unmarked CHD term gets nothing, and a marked
+    term a GenCC submitter scoped has no panel to name. It says the syndrome is
+    in scope *on* the panel's curation, not *because* the panel curates it: the
+    Syndromic Disorders panel curates 176 disease terms, 3 of them in scope.
     """
     fact, validity = gene
-    rail = _card_page(tmp_path, fact, validity, warrants=_ORPHANET_WARRANTS)
+    rail = _card_page(
+        tmp_path, fact, validity, warrants=_ORPHANET_WARRANTS, scope_terms=_SCOPE_TERMS
+    )
     if line is None:
         assert "card-scope" not in rail
         assert "in scope because Orphanet" not in rail
+        assert "in scope on" not in rail
         assert "not for heart disease" not in rail
     else:
         assert f'<p class="card-scope">{line}</p>' in rail

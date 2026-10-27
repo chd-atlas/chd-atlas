@@ -515,6 +515,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         combined=combined,
         scope_warrants=warrants,
         scope_labels={str(e.id): e.label for e in corpus.chd_scope},
+        # The registry itself, for the card's line on a syndrome a ClinGen
+        # panel scoped (R5): it reads each term's `syndrome` mark and authority.
+        scope_terms={str(e.id): e for e in corpus.chd_scope},
     )
     # `validity` again, and the same object `build_gene_pages` was handed: the
     # browse row's `definitive for` cell and the gene page's `definitive for`

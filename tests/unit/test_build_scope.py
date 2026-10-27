@@ -47,6 +47,7 @@ _HOLT_ORAM = _entry(
     admitted_by="clingen_expert_panel",
     attributed_to="Syndromic Disorders Gene Curation Expert Panel",
     orphanet=None,
+    syndrome=True,
 )
 _NOONAN = _entry("MONDO:0018997", "Noonan syndrome")
 _NOONAN_4 = _entry("MONDO:0012547", "Noonan syndrome 4")
@@ -61,6 +62,9 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
     the Orphanet mirror on every build, so `scope.json` cannot drift from what
     Orphanet records. A ClinGen-path term carries `orphanet: null`, never an
     absent key (CLAUDE.md section 5: check with `is`, not only equality).
+
+    `syndrome` (R5, 2026-10-26) is the curated mark, a boolean on every term:
+    `true` on the marked Holt-Oram term, `false` where nobody marked one.
     """
     entries = [_NOONAN_4, _HOLT_ORAM, _NOONAN]
     warrants = scope_warrants(entries, _TABLES, _STRUCTURAL)
@@ -70,7 +74,9 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
 
     assert [term["id"] for term in terms] == ["MONDO:0007732", "MONDO:0012547", "MONDO:0018997"]
     assert terms[0]["orphanet"] is None
-    assert set(terms[0]) == {"id", "label", "admitted_by", "attributed_to", "orphanet"}
+    assert set(terms[0]) == {"id", "label", "admitted_by", "attributed_to", "orphanet", "syndrome"}
+    assert terms[0]["syndrome"] is True
+    assert terms[1]["syndrome"] is False
     assert terms[1] == {
         "id": "MONDO:0012547",
         "label": "Noonan syndrome 4",
@@ -89,6 +95,7 @@ def test_scope_json_publishes_every_term_sorted_with_its_warrant_derived_from_th
                 }
             ],
         },
+        "syndrome": False,
     }
     assert terms[2]["orphanet"]["via"] == "direct"
     assert terms[2]["orphanet"]["omim"] is None

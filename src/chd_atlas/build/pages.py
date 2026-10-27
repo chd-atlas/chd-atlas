@@ -122,6 +122,7 @@ from chd_atlas.models.cohort import Cohort
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile
+from chd_atlas.models.scope import ScopeAuthority, ScopeEntry
 from chd_atlas.orphanet_scope import Warrant
 from chd_atlas.vocab import (
     CONTESTED,
@@ -1459,8 +1460,18 @@ def _card_no_association(fact: GeneFacts, gene_validity: GeneValidity) -> str:
     return f'<p class="card-no-association">{html.escape(sentence)}</p>'
 
 
+# The two scope classes whose authority is a ClinGen expert panel, for which a
+# marked syndrome's card line names the panel (`_card_scope`, R5).
+_CLINGEN_SCOPES: Final = frozenset(
+    {ScopeAuthority.CLINGEN_CHD_PANEL, ScopeAuthority.CLINGEN_EXPERT_PANEL}
+)
+
+
 def _card_scope(
-    fact: GeneFacts, gene_validity: GeneValidity, warrants: Mapping[str, Warrant]
+    fact: GeneFacts,
+    gene_validity: GeneValidity,
+    warrants: Mapping[str, Warrant],
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
 ) -> str:
     """Why a syndrome's grade is on a CHD atlas, beside the chip. D55.
 
@@ -1488,25 +1499,59 @@ def _card_scope(
     among the 21 Orphanet lines measured 2026-10-26. The clause then names the
     Orphanet syndromes the frequency was recorded for, so it is never read as
     a frequency recorded for the subtype itself.
+
+    **A syndrome a ClinGen expert panel scoped gets the line too** (owner
+    decision 2026-10-26, R5): "Graded for Holt-Oram syndrome as a whole
+    syndrome; in scope on its curation by ClinGen's Syndromic Disorders Gene
+    Curation Expert Panel." Ten genes are graded at their headline for such a
+    syndrome and their cards said nothing. Which terms are syndromes is the
+    curated `ScopeEntry.syndrome` mark, because nothing else says it: ZIC3 and
+    NODAL are graded for "congenital heart disease with heterotaxy syndrome",
+    which is CHD itself. Rendered only when **every** headline disease is a
+    marked term an authority of a ClinGen class scoped, for the reason the
+    Orphanet line needs all of them.
+
+    **The reason clause is not the owner's "because <panel> curates it"**,
+    which reads as sufficient and is not: measured 2026-10-26 on the ClinGen
+    mirror, the Syndromic Disorders panel curates 176 disease terms and 3 are
+    in scope, Hearing Loss 63 and 1. What `admitted_by` records, and SCP005
+    checks against the mirror, is that the term is listed on that panel's
+    curation of it -- so the line says it is in scope *on* that curation. The
+    authority is the term's `attributed_to`, verbatim, after "ClinGen's".
     """
     headline = fact.headline_confidence
     if headline is None:
         return ""
     graded = {record.disease for record in _warrant_records(fact, gene_validity)}
-    if not graded or not graded <= warrants.keys():
+    if not graded:
         return ""
     diseases = _graded_diseases(gene_validity, headline)
     noun = "a whole syndrome" if len(diseases) == 1 else "whole syndromes"
-    found = [warrants[disease] for disease in sorted(graded)]
-    recorded_for = (
-        ""
-        if all(warrant.via == "direct" for warrant in found)
-        else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
-    )
-    sentence = (
-        f"Graded for {_and_join(diseases)} as {noun}; in scope because Orphanet records a "
-        f"structural heart malformation in at least 30% of cases{recorded_for}."
-    )
+    if graded <= warrants.keys():
+        found = [warrants[disease] for disease in sorted(graded)]
+        recorded_for = (
+            ""
+            if all(warrant.via == "direct" for warrant in found)
+            else f" of {_and_join(sorted(dict.fromkeys(warrant.name for warrant in found)))}"
+        )
+        reason = (
+            "in scope because Orphanet records a structural heart malformation in at least 30% "
+            f"of cases{recorded_for}"
+        )
+    else:
+        terms = [(scope_terms or {}).get(disease) for disease in sorted(graded)]
+        marked = [
+            term
+            for term in terms
+            if term is not None and term.syndrome and term.admitted_by in _CLINGEN_SCOPES
+        ]
+        if len(marked) != len(terms):
+            return ""
+        authorities = sorted({term.attributed_to for term in marked})
+        pronoun = "its" if len(diseases) == 1 else "their"
+        panels = _and_join([f"ClinGen's {name}" for name in authorities])
+        reason = f"in scope on {pronoun} curation by {panels}"
+    sentence = f"Graded for {_and_join(diseases)} as {noun}; {reason}."
     return f'<p class="card-scope">{html.escape(sentence)}</p>'
 
 
@@ -1521,6 +1566,7 @@ def _rail(
     publications: Mapping[str, Publication] | None = None,
     warrants: Mapping[str, Warrant] | None = None,
     identity: GeneIdentity | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
 ) -> str:
     """The clinician card: the summary column, for every gene whether curated here or not.
 
@@ -1620,7 +1666,7 @@ def _rail(
         f"{_card_gloss(fact)}"
         f"{_card_dispute(fact, gene_validity)}"
         f"{_card_no_association(fact, gene_validity)}"
-        f"{_card_scope(fact, gene_validity, warrants or {})}"
+        f"{_card_scope(fact, gene_validity, warrants or {}, scope_terms)}"
         f"{_card_rare_variants(rows, families, publications or {})}"
         f"{_card_curation(fact)}"
         '<p><a href="../methods.html">How to read this page</a> &middot; '
@@ -5322,6 +5368,7 @@ def build_gene_pages(
     scope_warrants: Mapping[str, Warrant] | None = None,
     scope_labels: Mapping[str, str] | None = None,
     identities: Mapping[str, GeneIdentity] | None = None,
+    scope_terms: Mapping[str, ScopeEntry] | None = None,
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -5393,6 +5440,7 @@ def build_gene_pages(
                 publications=publications,
                 warrants=warrants,
                 identity=identity,
+                scope_terms=scope_terms,
             )
             + "<div>"
             + _SCOPE_SHORT

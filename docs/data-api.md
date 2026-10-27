@@ -246,7 +246,8 @@ wrong by the next one.
   `correction_genes` and `genome_wide_threshold` to every record of
   [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
   ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
-  `null`: its 248 counted panel genes, not comparisons. Additive.
+  `null`: its 248 counted panel genes, not comparisons. It added `syndrome` to
+  every [`scope.json`](#scopejson) term, `false` unless curated. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -1463,7 +1464,11 @@ Top to bottom:
    in at least 30% of cases." ("… as whole syndromes" where the grade is for
    more than one.) For a subtype, whose warrant is its syndrome's, the clause
    names the syndrome the frequency was recorded for ("… of cases of
-   Adams-Oliver syndrome").
+   Adams-Oliver syndrome"). Where instead every such disease is a term
+   `scope.json` marks `syndrome` and a ClinGen expert panel scoped, the line
+   names the panel: "Graded for Holt-Oram syndrome as a whole syndrome; in
+   scope on its curation by ClinGen's Syndromic Disorders Gene Curation Expert
+   Panel." (since `2.19`; ten cards).
 6. **Rare variants**: one line per study and analysis with a result that
    survives its own study's correction — the rule the evidence matrix's
    `corrected` state uses, so the two cannot disagree — naming the first such
@@ -2155,10 +2160,22 @@ structural CHD is frequent but not part of the diagnosis.
         "frequency": "Frequent (79-30%)"
       }
     ]
-  }
+  },
+  "syndrome": false
 }
 ```
 
+- `syndrome` (since `2.19`) is a curated mark, always a boolean: `true` where
+  the term names a syndrome — a disease with a heart malformation among its
+  features — rather than heart disease itself, so a grade for it is a grade
+  for the syndrome as a whole. Set on the nine ClinGen-scoped syndrome terms
+  that published genes are graded for at their headline (Holt-Oram, CHARGE,
+  Alagille, Ellis-van Creveld, Kabuki 1 and 2, Mowat-Wilson, TARP, and
+  NR2F2-related multiple congenital anomalies/dysmorphic syndrome). `false`
+  says no curator has marked the term, which is not a finding that it is not
+  a syndrome: the Orphanet-path terms are syndromes by their warrant and are
+  not marked, and "congenital heart disease with heterotaxy syndrome" is CHD
+  itself whatever its name says.
 - `admitted_by` is a string token naming the kind of authority that puts the
   term in scope, one of four:
 

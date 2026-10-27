@@ -431,6 +431,8 @@ from chd_atlas.corpus import Corpus
 #   curated: the gene count a study's own correction ran over, and the p it
 #   states for genome-wide significance. PMID:40127276's `tests_reported` goes
 #   from 248 to `null`, because 248 counted its panel genes, not comparisons.
+# * Every `scope.json` term gains `syndrome`, a curated boolean, `true` on the
+#   nine ClinGen-scoped syndromes published genes are graded for.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from
