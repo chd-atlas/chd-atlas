@@ -8508,13 +8508,22 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
     until review measured that dropping it survived the suite: the Orphanet
     line's disease label, the dispute line's disease label, and the study
     label on a rare-variant line, its link's accessible name and the
-    no-correction line.
+    no-correction line. The no-association line's submitter and disease label
+    joined them after the next review (2026-10-27): its escape survived all
+    1,383 tests.
+
+    **And the fixture carries all three lines a disputed, Orphanet-scoped gene
+    can show, so their order is pinned here too**: the dispute line, then the
+    no-association line, then the Orphanet line (`_rail`'s order, and
+    `docs/data-api.md`'s). The R6 test pins the no-association line directly
+    after the gloss, which only holds where no dispute line sits between.
     """
     marked = "<i>Noonan</i>"
     fact, validity = _graded(
         Classification.DEFINITIVE,
         _rasopathy(Classification.DEFINITIVE, _NOONAN, marked),
         _rasopathy(Classification.DISPUTED, "MONDO:0009026", "<b>Costello</b>"),
+        _no_association("<q>Lab</q>", "MONDO:0007173", "<kbd>ASD7</kbd>", "2021-12-10 00:00:00"),
     )
     publications = {
         **_ALL_STUDIES,
@@ -8524,8 +8533,14 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
         "PMID:42230622": _PUBLICATION.model_copy(update={"authors": ["<u>Audain</u>"]}),
     }
     rows = [_sierant(), _burden_row(cohort_stratum="all", effect=3.1, effect_bound=None)]
+    flagged = replace(
+        fact,
+        has_conflicting_evidence=True,
+        has_no_association_report=True,
+        no_association_reported_by=("<q>Lab</q>",),
+    )
     build_gene_pages(
-        {GATA4: replace(fact, has_conflicting_evidence=True)},
+        {GATA4: flagged},
         Emitter(root=tmp_path),
         symbols={GATA4: "GATA4"},
         validity={GATA4: validity},
@@ -8547,8 +8562,17 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
     assert line.startswith("&lt;s&gt;Sierant&lt;/s&gt; et al. 2025 · ")
     assert 'aria-label="Details for &lt;s&gt;Sierant&lt;/s&gt; et al. 2025"' in line
     assert '">&lt;u&gt;Audain&lt;/u&gt; et al. 2026</a> publishes no corrected p' in rail
-    for raw in ("<i>", "<b>", "<s>", "<u>"):
+    silence = _slice_between(rail, '<p class="card-no-association">', ("</p>",))
+    assert silence == (
+        "&lt;q&gt;Lab&lt;/q&gt; reports no known disease relationship for "
+        "&lt;kbd&gt;ASD7&lt;/kbd&gt; (2021); see the validity table."
+    )
+    for raw in ("<i>", "<b>", "<s>", "<u>", "<q>", "<kbd>"):
         assert raw not in rail, raw
+    lines = [
+        rail.index(f'<p class="card-{kind}">') for kind in ("dispute", "no-association", "scope")
+    ]
+    assert lines == sorted(lines), "the dispute, no-association and Orphanet lines moved"
 
 
 def test_two_studies_that_would_share_one_anchor_are_refused(

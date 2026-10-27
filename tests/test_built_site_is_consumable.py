@@ -554,13 +554,39 @@ def test_a_gene_an_authority_reported_no_association_for_says_so_in_both_payload
         payload = json.loads(bundle_path.read_text(encoding="utf-8"))
         assert payload["has_no_association_report"] == bool(payload["no_association_reported_by"])
         # And the card says it exactly where the bundle does (owner decision
-        # 2026-10-26, R6): one line, naming every authority the bundle names.
+        # 2026-10-26, R6): one line, naming every authority behind a no-known-
+        # disease-relationship record, as the card names them -- a panel record
+        # by its panel, a GenCC one by its submitter. **Read off the validity
+        # records, not `no_association_reported_by`** (review, 2026-10-27): the
+        # bundle names a panel record's GenCC copy "ClinGen", and the card folds
+        # that copy into the panel's own clause, so the bundle's list fails here
+        # the day a published gene carries a panel's record (RXRA has one, and
+        # is not published). A copy folds where the panel holds a record for
+        # the same disease; one that differs from it is listed in the table,
+        # and the card may name it, which this does not require.
         rail = bundle_path.with_suffix(".html").read_text(encoding="utf-8")
         rail = rail[rail.index('<aside class="rail">') : rail.index("</aside>")]
         lines = re.findall(r'<p class="card-no-association">(.*?)</p>', rail)
         assert len(lines) == int(payload["has_no_association_report"]), payload["gene"]
-        for authority in payload["no_association_reported_by"]:
-            assert f"{html.escape(authority)} reports no known disease relationship" in lines[0]
+        if not lines:
+            continue
+        silent = [
+            record
+            for record in payload["validity"]["records"]
+            if record["classification"] == "no_known_association"
+        ]
+        panel = {record["disease"] for record in silent if record["source"] == "clingen"}
+        authorities = {
+            (f"the {record['gcep']}" if record["gcep"] else "ClinGen")
+            if record["source"] == "clingen"
+            else record["submitter"]
+            for record in silent
+            if not (record["submitter"] == "ClinGen" and record["disease"] in panel)
+        }
+        assert authorities, payload["gene"]
+        for authority in sorted(authorities):
+            clause = f"{html.escape(authority)} reports no known disease relationship"
+            assert clause in lines[0] or clause[0].upper() + clause[1:] in lines[0], authority
     page = (site / "genes" / "HGNC_4214.html").read_text(encoding="utf-8")
     assert (
         '<p class="card-no-association">Illumina reports no known disease relationship for '
@@ -1308,6 +1334,18 @@ _ATTRIBUTED_ON_THE_FRONT_PAGE: dict[str, str] = {
     "audain2026_sd3": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
     "sierant2025_ds6": "Audain et al. 2026 and Sierant et al. 2025, both CC BY 4.0",
 }
+# A source the sentence names though `sources.json` requires no attribution for
+# it, beside the two supplements that do.
+_ALSO_ON_THE_FRONT_PAGE: dict[str, str] = {"audain2021_s6": "and of Audain et al. 2021, CC0."}
+# The words the sentence states each `sources.json` licence in. HPO's licence is
+# a URL the sentence does not state, so it is the one source held to its name
+# alone.
+_LICENCE_WORDS: dict[str, str] = {
+    "CC-BY-4.0": "CC BY 4.0",
+    "CC0-1.0": "CC0",
+    "EMBL-EBI Terms of Use": "EMBL-EBI's Terms of Use",
+}
+_LICENCE_NOT_STATED: frozenset[str] = frozenset({"hpo"})
 
 
 def test_the_front_page_names_every_source_that_requires_attribution(site: Path) -> None:
@@ -1322,6 +1360,13 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     the page names it and a phrase is pinned; each phrase must be on the page,
     with the licence where it is CC BY. Measured on a real build the day it was
     written: 7 such sources.
+
+    **Every licence the sentence states is held to `sources.json`** (review,
+    2026-10-27), not only CC BY: "Audain et al. 2021, CC0" and "EMBL-EBI's
+    Terms of Use" were pinned by a unit literal alone, so a licence changed in
+    `mirrors/sources.yaml` left the hand-written sentence stating the old one
+    on a green build. Each phrase must carry the words for the licence its
+    source records, and a licence the sentence has no words for fails here.
     """
     sources = json.loads((site / "sources.json").read_text(encoding="utf-8"))["sources"]
     required = {
@@ -1337,10 +1382,14 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
     page = (site / "index.html").read_text(encoding="utf-8")
     where = page[page.index("<h2>Where this data comes from</h2>") :]
     where = " ".join(html.unescape(re.sub(r"<[^>]+>", "", where[: where.index("<h2", 4)])).split())
-    for source, phrase in sorted(_ATTRIBUTED_ON_THE_FRONT_PAGE.items()):
+    named = {**_ATTRIBUTED_ON_THE_FRONT_PAGE, **_ALSO_ON_THE_FRONT_PAGE}
+    for source, phrase in sorted(named.items()):
         assert phrase in where, f"{source}: {phrase!r} is not on the front page"
-        if licences[source] == "CC-BY-4.0":
-            assert "CC BY 4.0" in phrase, source
+        if source in _LICENCE_NOT_STATED:
+            continue
+        licence = licences[source]
+        assert licence in _LICENCE_WORDS, f"{source}: the front page states no {licence!r}"
+        assert _LICENCE_WORDS[licence] in phrase, f"{source}: {licence} is not what it states"
 
 
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
