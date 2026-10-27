@@ -182,10 +182,11 @@ def gene_cell_type_expression(
         for dataset in datasets
         if dataset.design == DatasetDesign.CELL_TYPE_PROFILE
     }
-    # gene -> dataset -> (cell_type, region) -> row. `unit` is read from the
-    # first row of the (gene, dataset) in file order; no validator rule holds
-    # a dataset to a single unit, so a mixed file would publish that first
-    # row's unit for all of them.
+    # gene -> dataset -> (cell_type, region) -> row. `units` collects every
+    # distinct unit over all of a dataset's rows, across genes; no validator
+    # rule holds a dataset to one unit, so the check below refuses a mixed
+    # dataset rather than publish one unit for values measured in another.
+    units: dict[str, set[str]] = {}
     rows: dict[str, dict[str, dict[tuple[str, str], Mapping[str, Any]]]] = {}
     for path, schema_name in mirror_paths(root):
         if schema_name != CELL_TYPE_PROFILES.name:
@@ -197,6 +198,7 @@ def gene_cell_type_expression(
             dataset = by_id.get(str(record["dataset"]))
             if dataset is None or record["gene"] is None:
                 continue
+            units.setdefault(str(dataset.id), set()).add(str(record["unit"]))
             tokens = {c.token for c in dataset.cell_types}
             region = str(record["region"])
             if record["cell_type"] not in tokens or (
@@ -206,12 +208,18 @@ def gene_cell_type_expression(
             cells = rows.setdefault(str(record["gene"]), {}).setdefault(str(dataset.id), {})
             cells[str(record["cell_type"]), region] = record
 
+    for dataset_id, found in sorted(units.items()):
+        if len(found) > 1:
+            raise ValueError(
+                f"dataset {dataset_id!r} mixes units in cell_type_profiles: {sorted(found)}"
+            )
+
     result: dict[str, CellTypeExpression] = {}
     for gene, per_dataset in rows.items():
         entries = []
         for dataset_id in sorted(per_dataset):
             cells = per_dataset[dataset_id]
-            unit = str(next(iter(cells.values()))["unit"])
+            (unit,) = units[dataset_id]
             entries.append(_dataset_entry(by_id[dataset_id], unit, cells))
         result[gene] = CellTypeExpression(datasets=entries)
     return result

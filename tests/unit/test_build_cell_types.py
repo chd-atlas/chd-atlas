@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from chd_atlas.build.cell_types import (
     CELL_TYPE_TAU_METHOD,
     CellTypeExpression,
@@ -69,6 +71,8 @@ def test_cell_types_and_regions_follow_the_declared_order(tmp_path: Path) -> Non
     script = """
 import json, sys
 from pathlib import Path
+
+import pytest
 from chd_atlas.build.cell_types import gene_cell_type_expression
 from chd_atlas.models.dataset import Dataset
 
@@ -194,3 +198,14 @@ def test_the_census_counts_published_genes_only(tmp_path: Path) -> None:
     expression = gene_cell_type_expression(tmp_path, [_dataset()])
     assert set(expression) == {_GENE, "HGNC:2200"}
     assert cell_type_census(expression, {_GENE, "HGNC:9999"}) == {"genes": 1, "datasets": 1}
+
+
+def test_a_dataset_with_two_units_is_refused(tmp_path: Path) -> None:
+    # Different genes, so no single gene's rows disagree: the check is per dataset.
+    rows = [
+        _row("Cardiomyocyte", "all", 5.0),
+        _row("Cardiomyocyte", "all", 5.0, gene="HGNC:2200").replace("cpm", "tpm"),
+    ]
+    _write(tmp_path, rows)
+    with pytest.raises(ValueError, match=r"hoc.*cpm.*tpm"):
+        gene_cell_type_expression(tmp_path, [_dataset()])
