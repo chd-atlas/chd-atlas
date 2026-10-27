@@ -1462,12 +1462,13 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured after the owner's wording decisions of 2026-10-26, with the headroom
-# owner decision E4 keeps: (a) 895 x 1.03 rounded up, (b) 22 + 1. See the test
-# for the series and the rule. Lower each when a page sheds prose; raising one
-# is a decision, and its commit says why.
-_MEDIAN_VISIBLE_WORDS = 922
-_BOILERPLATE_SENTENCES = 23
+# Measured after the review fixes of 2026-10-27, with the headroom owner decision
+# E4 keeps: (a) 882 x 1.03 rounded up, (b) 21 + 1 -- both lowered from 922 and
+# 23, so the ratchet stays tight. See the test for the series and the rule.
+# Lower each when a page sheds prose; raising one is a decision, and its commit
+# says why.
+_MEDIAN_VISIBLE_WORDS = 909
+_BOILERPLATE_SENTENCES = 22
 
 
 class _VisibleText(HTMLParser):
@@ -1581,9 +1582,10 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     452625c, after Task 6                        836    952  20 sentences, 386 words
     802d694, the gene card's link to methods     841    957  21 sentences, 395 words
     2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
+    9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
     =========================================  =====  =====  ======================
 
-    The last row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
+    The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
     R6, R7), measured on a build of the clean tree at each commit: 3b766ba
     read 841 and 21 / 395, as at 802d694. E1 lifted two particular caveats
     out of the chart folds (+12, to 853); E2 dropped "whole" (-2, to 851); R4's
@@ -1594,6 +1596,16 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     W2, W4 and W5 change no gene page's visible prose (W4's and W5's cohort
     descriptions render folded). Growth from owner-decided sentences is deliberate (E4), and
     none of them was folded or cut to fit.
+
+    The row after it is the review of those decisions (2026-10-27), measured
+    on a fresh build of the clean tree at that commit against one of ad03128
+    (895, 1,016, 22 / 432, as at 2f6300a). R4's caption now renders only where
+    the card lists a surviving row, so it left 86 pages (-38 each) and the
+    boilerplate (-1 sentence, -38 words); the own-lab declaration's corrected
+    wording is 10 words longer in each own-lab block (+10 or +20 on 118 pages,
+    +10 boilerplate words). Per page: -28 on 27, -18 on 40, +16 on 16, and
+    smaller moves elsewhere; the median fell by 13. Both constants were lowered
+    to the new measurement, not left at their old headroom.
 
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
@@ -1606,11 +1618,12 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 922, the last row's 895 x 1.03 rounded up, and (b) at 23,
-    one more than 22 (owner decision E4 keeps both margins; they were 867 and
-    22 over 802d694's row). **When this fails, re-measure before anything else.** If
-    the growth is a new study's or dataset's own data-driven prose, raise the
-    budget and put the measurement here. Never fold a caveat the fold rule
+    (a) is held at 909, the last row's 882 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 922 and
+    23 over 2f6300a's row, and 867 and 22 over 802d694's). **When this fails,
+    re-measure before anything else.** If the growth is a new study's or
+    dataset's own data-driven prose, raise the budget and put the measurement
+    here. Never fold a caveat the fold rule
     requires visible to get under it: the budget exists to keep explanation
     off the page, not to take a warning out of sight.
 
