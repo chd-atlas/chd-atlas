@@ -445,8 +445,8 @@ from chd_atlas.corpus import Corpus
 #   row) gains `members`: one `{study, state}` per study in the family, sorted
 #   by study, each study's own state by the family rule over its rows alone. A
 #   family of two studies made the family's state no longer every member's.
-# * `cohorts.json` gains seven records (owner decision R12, 2026-10-27): the
-#   case series PMID:34324492's S2 Table identifies by PMID with 50 or more
+# * `cohorts.json` gains seven records (owner decision R12, 2026-10-26): the
+#   CHD case series PMID:34324492's S2 Table identifies by PMID with 50 or more
 #   cases, which every one of that study's rows now names in `case_cohorts`.
 #   A population change: `counts.cohorts` goes from 13 to 20, and
 #   `counts.cohort_families` stays 2, since no other study names one of them.

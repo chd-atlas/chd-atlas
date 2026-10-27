@@ -80,14 +80,14 @@ The CNV part does not have that problem, and the difference is the point. S2
 Table lists 189 case sources for 7,958 cases (measured 2026-10-26; this
 paragraph said "~190 sources are mostly single-case reports plus four
 collections" until then). The 11 registered as this study's case cohorts hold
-6,211 of them (2026-10-27, owner decision R12: the four it named before, 4,242,
-and the seven S2 identifies by PMID with 50 or more cases, 1,969); of the
-other 178, 105 single-case sources hold 105, 69 sources of 2 to 49 cases hold
-471, and 4 sources of 50 or more hold 1,171. None is a CNV study this atlas
-carries, so aggregating them puts no deletion in the mirror twice. The de novo
-part aggregates two studies this atlas intends to carry individually. What the
-unregistered sources cost is visibility, not a double count; see the comment
-on `CASE_COHORTS`.
+6,211 of them (owner decision R12, 2026-10-26: the four it named before, 4,242,
+and the seven CHD case sources S2 identifies by PMID with 50 or more cases,
+1,969); of the other 178, 105 single-case sources hold 105, 69 sources of 2 to
+49 cases hold 471, and 4 sources of 50 or more hold 1,171. None is a CNV study
+this atlas carries, so aggregating them puts no deletion in the mirror twice.
+The de novo part aggregates two studies this atlas intends to carry
+individually. What the unregistered sources cost is visibility, not a double
+count; see the comment on `CASE_COHORTS`.
 
 When Jin 2017 and Sifrim 2016 land, their own de novo tables are the right
 representation, and their cohorts will name the overlap between them properly.
@@ -165,18 +165,21 @@ S8_CASE: Final = "case"
 S8_SYMBOL: Final = "symbol"
 
 # S2/S3 Tables. 11 of S2's 189 case sources are registered, and they hold 6,211
-# of its 7,958 cases (78%). This comment called the rest "~190 single-case PMID
-# sources" until 2026-10-26, when four were registered, holding 4,242 (53%).
-# Owner decision R12 (2026-10-27) added the seven S2 identifies by PMID with 50
+# of its 7,958 cases (78%). Four were registered with the study on 2026-08-05,
+# holding 4,242 (53%); this comment called the rest "~190 single-case PMID
+# sources" until S2 was measured on 2026-10-26. Owner decision R12
+# (2026-10-26) added the seven CHD case sources S2 identifies by PMID with 50
 # or more cases: 742 + 432 + 340 + 178 + 123 + 91 + 63 = 1,969, read from S2's
-# own counts and recorded in each `curation/cohorts.yaml` description. Of the
-# 178 still unregistered, measured from S2 that day, 105 are single cases (105
+# own counts on 2026-10-27 and recorded in each `curation/cohorts.yaml`
+# description. (S2 identifies an eighth source of that size by PMID, its
+# aneurysm series, which is `taa_cases`, one of the four.) Of the 178 still
+# unregistered, measured from S2 that day, 105 are single cases (105
 # individuals), 69 hold 2 to 49 (471 in all) and 4 hold 50 or more (1,171 in
-# all); those 4 are the S2 sources labelled by a collection name rather than a
-# publication, which the owner decided are not registered. The unregistered
-# sources are named on no row, so `shared_cohorts` cannot report an overlap
-# between one of them and a study curated later: check S2 before curating
-# another CHD cohort. Alphabetical, as before.
+# all). S2 labels 6 of the 178 by a collection name rather than a
+# publication: those 4, which the owner decided are not registered, and 2 of
+# the 69. The unregistered sources are named on no row, so `shared_cohorts`
+# cannot report an overlap between one of them and a study curated later:
+# check S2 before curating another CHD cohort. Alphabetical, as before.
 CASE_COHORTS: Final = (
     "decipher;isca;pmid18535492_22349727_cases;pmid22318994_cases;pmid22912587_cases;"
     "pmid22929023_cases;pmid22939634_cases;pmid22969434_cases;pmid26655555_cases;"

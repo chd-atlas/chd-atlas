@@ -761,12 +761,12 @@ def test_the_cohort_list_says_what_its_rows_name_and_what_they_do_not(
     every collection a row names -- and that a row may not name all its study
     drew on.
 
-    **11 and 6,211 since owner decision R12 (2026-10-27)**, which registered
-    the seven sources S2 identifies by PMID with 50 or more cases. Each
-    description opens with S2's own count for its source, and the literal
-    below is those counts as read from S2 that day -- so a count mistyped in
-    a description, or two counts swapped between sources, fails here, which
-    the sum alone would not catch for a swap.
+    **11 and 6,211 since owner decision R12 (2026-10-26)**, which registered
+    the seven CHD case sources S2 identifies by PMID with 50 or more cases.
+    Each description opens with S2's own count for its source, and the literal
+    below is those counts as read from S2 on 2026-10-27 -- so a count mistyped
+    in a description, or two counts swapped between sources, fails here,
+    which the sum alone would not catch for a swap.
 
     Every figure in the sentence that the repository can check is checked:
 

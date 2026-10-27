@@ -493,9 +493,9 @@ _RARE_VARIANTS: Final = (
 # sources the rows do not name are not named here either: an unregistered
 # source has no record to resolve against.
 #
-# 11 and 6,211 since owner decision R12 (2026-10-27) registered the seven
-# sources S2 identifies by PMID with 50 or more cases, 1,969 between them
-# (S2's own counts, each recorded in its `curation/cohorts.yaml`
+# 11 and 6,211 since owner decision R12 (2026-10-26) registered the seven
+# CHD case sources S2 identifies by PMID with 50 or more cases, 1,969 between
+# them (S2's own counts, each recorded in its `curation/cohorts.yaml`
 # description). The 178 S2 sources still unnamed hold 1,747 cases, so "two
 # that name neither may still share people this registry does not record"
 # still covers them. The 11 is pinned against the mirror, 6,211 against the 11

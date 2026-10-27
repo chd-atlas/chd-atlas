@@ -1957,14 +1957,14 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on CRIPTO's, which has no matrix; the median rose by 15. (a) was
     reset to 986, 957 x 1.03 rounded up, and (b) stays 22, one over 21.
 
-    The row after it is the third batch (R12, R2; 2026-10-27), measured with
-    this parser on fresh builds of the tree after each item against one of
-    a12b897 (957, 1,066, 21 / 430). Neither item moved any figure. R12's seven
-    newly registered case series are named only inside two folds on the 77
-    pages carrying PMID:34324492 (its block's "How this study counted" and the
-    cohort notes). R2's card sentence, owner-decided (E4), is 14 words on 10
-    cards (+14 each, measured) and 0 on the other 109, below the median's
-    reach. Both constants stay.
+    The row after it is the third batch (R12, R2; decided 2026-10-26),
+    measured on 2026-10-27 with this parser on fresh builds of the tree after
+    each item against one of a12b897 (957, 1,066, 21 / 430). Neither item
+    moved any figure. R12's seven newly registered case series are named only
+    inside two folds on the 77 pages carrying PMID:34324492 (its block's "How
+    this study counted" and the cohort notes). R2's card sentence,
+    owner-decided (E4), is 14 words on 10 cards (+14 each, measured) and 0 on
+    the other 109, below the median's reach. Both constants stay.
 
     The last row is the review of that batch (2026-10-27), measured with this
     parser on a fresh build of the fixed tree against one of 64ac83a (957,

@@ -263,8 +263,8 @@ wrong by the next one.
   and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
   every [`scope.json`](#scopejson) term, `false` unless curated, and
   `burden_surviving_genes` to `counts`. It registered seven more case
-  collections, the series PMID:34324492's S2 Table identifies by PMID with 50
-  or more cases, and that study's rows name them in `case_cohorts`:
+  collections, the CHD case series PMID:34324492's S2 Table identifies by PMID
+  with 50 or more cases, and that study's rows name them in `case_cohorts`:
   `counts.cohorts` went from 13 to 20, and `counts.cohort_families` did not
   move, since no other study names any of them. And it added
   [`n_chd_case_carriers`](#the-bundles-burden-array-per-study-never-pooled) to
@@ -1112,15 +1112,18 @@ congenital heart disease cases, where the study's case set also holds cases of
 a condition outside this atlas's scope and the study counted the CHD cases'
 carriers apart; it is `null` everywhere else, which is not a count of zero.
 Same unit as `n_case_carriers`, and never above it. Only `PMID:34324492` gives
-one (validation refuses one on a row of any other study, `BUR024`): its cases
-include 777 sporadic thoracic aortic aneurysm probands (the
-`taa_cases` cohort), and its S8 Table counts the CHD-only carriers for the 528
-genes that reached significance, so the rows for the genes it lists carry that
-count and the rest carry `null`. Every other number on those rows is from S6
-Table, the file the row's `source` names; S8 Table is recorded in
+one (validation refuses one on a row of any other study, `BUR024`). Its cases
+combine congenital heart disease with a series of 777 sporadic thoracic aortic
+aneurysm probands (the `taa_cases` cohort), and the study does not report how
+many of the 777 are in the case set its rows count. Its S8 Table counts the
+CHD-only carriers for 521 of the 528 genes that reached significance and
+leaves the count blank for the other 7: a row carries the count where S8 gives
+one for its gene, and `null` otherwise. Every other number on those rows is
+from S6 Table, the file the row's `source` names; S8 Table is recorded in
 [`sources.json`](#sourcesjson) as `audain2021_s8`. Where the count equals
 `n_case_carriers`, every carrier the row counts is a CHD case, and a gene
-page's card says so beneath the study's caveat about its aneurysm probands.
+page's card says so in the paragraph that holds the study's caveat about its
+aneurysm probands, after the caveat.
 
 ### The bundle's `burden_combined` array: one study's own combination of its arms
 
@@ -2223,9 +2226,12 @@ Table lists case sources that no row names;
 [`methods.html#cohorts`](#methodshtml) states how many of its sources the rows
 do name, and how many of its cases those hold. So two studies that name no
 collection in common, and none this file records as overlapping, may still
-share people, and `cohort_families` cannot see it. The seven `CHD case series of PMID:…` records, added in `2.19`, are the
-sources that table identifies by PMID with 50 or more cases; each description
-says what the table says of its series and nothing more.
+share people, and `cohort_families` cannot see it. The seven
+`CHD case series of PMID:…` records, added in `2.19`, are the CHD case sources
+that table identifies by PMID with 50 or more cases (the one other source it
+identifies by PMID with that many is the study's aneurysm series,
+`taa_cases`); each description says what the table says of its series and
+nothing more.
 
 `counts.cohorts` in `manifest.json` is the length of this array. It is **not**
 `counts.cohort_families`, which counts how many independent collections the

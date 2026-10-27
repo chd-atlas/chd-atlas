@@ -87,8 +87,8 @@ def test_the_committed_registry_parses_and_covers_every_cited_cohort() -> None:
         "decipher",
         "isca",
         "taa_cases",
-        # PMID:34324492's S2 Table sources identified by PMID with 50 or more
-        # cases (owner decision R12, 2026-10-27).
+        # PMID:34324492's S2 Table CHD case sources identified by PMID with 50
+        # or more cases (owner decision R12, 2026-10-26).
         "pmid22318994_cases",
         "pmid22939634_cases",
         "pmid22912587_cases",
