@@ -1059,10 +1059,20 @@ def test_the_review_status_bullets_name_the_records_the_build_marks(
     third. Read from the bullet itself, so a record marked or cleared in the
     curation fails here until the bullet is reworded. Measured on the build it
     was written against: two cohorts and two scope terms, each `pending_review`.
+
+    **The bullet ends where its paragraph does**, at the next bullet or a
+    blank line, found in the raw text and asserted found. It was sliced from
+    the whitespace-collapsed section up to the next `" - "`, which `find`
+    misses after a section's last bullet: `cohorts.json`'s ran to the end of
+    the section, and a name moved out of the bullet into the paragraph after
+    it passed the full suite (review, 2026-10-27, mutant M26).
     """
-    section = _section(heading)
+    doc = DOC.read_text()
+    section = doc[doc.index(heading) : doc.index("\n## ", doc.index(heading) + len(heading))]
     start = section.index("- `review_status` and `review_note`")
-    bullet = section[start : section.find(" - ", start + 1)]
+    ends = [end for end in (section.find("\n- ", start), section.find("\n\n", start)) if end != -1]
+    assert ends, f"the review_status bullet under {heading} has no end inside its section"
+    bullet = " ".join(section[start : min(ends)].split())
     marked = sorted(
         record["id"]
         for record in json.loads((site / payload).read_text())[key]
@@ -1071,6 +1081,10 @@ def test_the_review_status_bullets_name_the_records_the_build_marks(
     assert marked, f"no {payload} record carries a review status; this checks nothing"
     assert sorted(set(re.findall(pattern, bullet))) == marked
     assert f"{_WORDS[len(marked)].capitalize()} " in bullet
+    # Review, 2026-10-27 (D1): the cohorts bullet defined `pending_review` as
+    # "the sources disagree", false for the two scope terms it also marks, and
+    # the words are the label of the `has_source_discordance` chip.
+    assert "sources disagree" not in bullet.lower()
 
 
 def test_the_contested_section_names_each_contested_gene_and_what_its_headline_is(

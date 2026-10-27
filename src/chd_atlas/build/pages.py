@@ -1181,7 +1181,7 @@ def _card_rare_variants(
     and precedes the declaration: placed after it, it would read as
     qualifying who wrote the studies, which the registry does not record at
     all. Measured on a real build the day it was added: all 86 lines carry
-    it, in the five forms above -- "Tested in 1 independent dataset (as far
+    it, in these five forms: "Tested in 1 independent dataset (as far
     as the cohort registry records) (a study by an atlas author)." on 24, the
     same ending "; none survives a correction its study published." on 4,
     "(each study by an atlas author)" on 48, and two datasets with "(1 of the

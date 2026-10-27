@@ -3,11 +3,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
+
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from chd_atlas.models.cohort import CohortFile
-from chd_atlas.models.scope import ChdScopeFile
+from chd_atlas.build.burden import build_cohorts
+from chd_atlas.build.emit import Emitter
+from chd_atlas.build.paths import COHORTS, SCOPE
+from chd_atlas.build.scope import build_scope
+from chd_atlas.models.cohort import Cohort, CohortFile
+from chd_atlas.models.review import ReviewStatus
+from chd_atlas.models.scope import ChdScopeFile, ScopeEntry
 
 _COHORT = {
     "id": "pmid22969434_cases",
@@ -73,3 +81,60 @@ def test_a_review_status_is_refused_at_load_without_its_note_and_a_note_without_
     )
     absent = getattr(model.model_validate({key: [entry]}), key)[0]
     assert absent.review_status is None and absent.review_note is None
+
+
+def _emit_cohort(record: BaseModel, emitter: Emitter) -> None:
+    assert isinstance(record, Cohort)
+    build_cohorts([record], emitter)
+
+
+def _emit_term(record: BaseModel, emitter: Emitter) -> None:
+    assert isinstance(record, ScopeEntry)
+    build_scope([record], {}, emitter)
+
+
+@pytest.mark.parametrize(
+    ("model", "entry", "emit", "published"),
+    [
+        pytest.param(Cohort, _COHORT, _emit_cohort, COHORTS, id="cohorts.json"),
+        pytest.param(ScopeEntry, _TERM, _emit_term, SCOPE, id="scope.json"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("fields", "match"),
+    [
+        pytest.param(
+            {"review_status": ReviewStatus.PENDING_REVIEW, "review_note": None},
+            "needs a review_note",
+            id="no-note",
+        ),
+        pytest.param(
+            {"review_status": None, "review_note": "S2 and the abstract differ."},
+            "needs a review_status",
+            id="no-status",
+        ),
+    ],
+)
+def test_each_emitter_refuses_a_record_that_bypassed_the_check_before_writing_it(
+    tmp_path: Path,
+    model: type[BaseModel],
+    entry: dict[str, str],
+    emit: Callable[[BaseModel, Emitter], None],
+    published: str,
+    fields: dict[str, object],
+    match: str,
+) -> None:
+    """Both or neither, again where the JSON is written (review, 2026-10-27, N2).
+
+    The test above holds the refusal at load, and `render.review_status_note`
+    raises on a page; but a record built without validation reached
+    `build_cohorts` and `build_scope` and published `"pending_review"` beside
+    a `null` note. `model_copy(update=...)` skips validation, so the record
+    here is a valid one with the pair broken afterwards -- every other field
+    is what the emitter expects, and nothing but the check can refuse it.
+    Each emitter raises before writing, so no file is left behind either.
+    """
+    record = model.model_validate(entry).model_copy(update=fields)
+    with pytest.raises(ValueError, match=match):
+        emit(record, Emitter(root=tmp_path))
+    assert not (tmp_path / published).exists()

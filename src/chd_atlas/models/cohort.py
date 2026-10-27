@@ -54,7 +54,7 @@ class Cohort(BaseModel):
     # as independent datasets. Declared on both entries (`CohortFile`
     # checks it), so neither record reads as independent on its own.
     overlaps_with: list[CohortId] = Field(default_factory=list)
-    # An open question about the sources this record rests on (owner's
+    # A question about this record that the atlas leaves open (owner's
     # standing rule, 2026-10-27; `models/review.py`): both or neither, the
     # note stating only what is unresolved. Published in `cohorts.json` and
     # rendered after the description wherever it renders.

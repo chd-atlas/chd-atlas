@@ -75,13 +75,19 @@ from __future__ import annotations
 
 import html
 from collections.abc import Mapping
-from typing import Final
+from typing import Final, assert_never
 
 from chd_atlas.build.concordance import ALPHA
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import COHORTS, DATASETS, METHODS_PAGE
-from chd_atlas.build.render import document, grade_key, review_status_note
+from chd_atlas.build.render import (
+    document,
+    grade_key,
+    review_status_label,
+    review_status_note,
+)
 from chd_atlas.models.cohort import Cohort
+from chd_atlas.models.review import ReviewStatus
 
 # What the published set *is*, stated in full here and in one line on both page
 # kinds that show it (`pages._SCOPE_SHORT`, which links this section).
@@ -518,6 +524,44 @@ _COHORTS_INTRO: Final = (
 )
 
 
+def _review_gloss(status: ReviewStatus) -> str:
+    """What a record carrying `status` is, said after its label (`_review_key`)."""
+    match status:
+        case ReviewStatus.PENDING_REVIEW:
+            return (
+                "carries a question about it that this atlas leaves open for an expert: its "
+                "note states what is unresolved, and the atlas takes no side."
+            )
+        case ReviewStatus.NOT_ACCESSIBLE:
+            return (
+                "rests on a source that could not be read: its note states what that leaves "
+                "unchecked, and the atlas does not guess at it."
+            )
+        case _:
+            assert_never(status)
+
+
+def _review_key(cohorts: Mapping[str, Cohort]) -> str:
+    """What each review label in the list marks, for the labels it prints; `""` for none.
+
+    Review (2026-10-27, M8): the list printed "Pending review:" after two
+    descriptions, and every gene page's cohort fold links here, but no page
+    said what the label means or that the atlas takes no side. One
+    sentence per status the registry carries, in the vocabulary's order,
+    and nothing when no record carries one: a key for a label the page does
+    not print defines nothing a reader meets. On the committed registry, 2 of
+    20 records carry `pending_review` and none `not_accessible` (measured
+    2026-10-27), so the page prints the first sentence alone.
+    """
+    present = {cohort.review_status for cohort in cohorts.values()}
+    sentences = [
+        f"A record marked <strong>{review_status_label(status)}</strong> {_review_gloss(status)}"
+        for status in ReviewStatus
+        if status in present
+    ]
+    return f"<p>{' '.join(sentences)}</p>" if sentences else ""
+
+
 def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     """The registry as a definition list: name and id, then the description.
 
@@ -535,7 +579,8 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
     says so right after its description, before any link: its status's label
     ("Pending review:" or "Source not accessible:") and the curator's note,
     escaped (`render.review_status_note`, which a gene page's cohort notes
-    share). A record with none gets nothing.
+    share). A record with none gets nothing. Before the list, where any record
+    carries one, a sentence says what each printed label marks (`_review_key`).
 
     `cohort-list` is layout only. The base `dl` is a two-column grid whose label
     column grows to its widest label, which suits the grade key's chips and
@@ -549,7 +594,7 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
         + "</dd>"
         for cohort in sorted(cohorts.values(), key=lambda cohort: cohort.id)
     )
-    return f'{_COHORTS_INTRO}<dl class="cohort-list">{items}</dl>'
+    return f'{_COHORTS_INTRO}{_review_key(cohorts)}<dl class="cohort-list">{items}</dl>'
 
 
 # How to read a gene page's developmental expression section (2026-10-26, D50,
