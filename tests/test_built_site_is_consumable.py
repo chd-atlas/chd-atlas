@@ -1733,12 +1733,11 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured after the review fixes of 2026-10-27, with the headroom owner decision
-# E4 keeps: (a) 882 x 1.03 rounded up, (b) 21 + 1 -- both lowered from 922 and
-# 23, so the ratchet stays tight. See the test for the series and the rule.
-# Lower each when a page sheds prose; raising one is a decision, and its commit
-# says why.
-_MEDIAN_VISIBLE_WORDS = 971
+# Measured after the review fixes to the second batch of owner decisions
+# (2026-10-27), with the headroom owner decision E4 keeps: (a) 957 x 1.03
+# rounded up, (b) 21 + 1. See the test for the series and the rule. Lower each
+# when a page sheds prose; raising one is a decision, and its commit says why.
+_MEDIAN_VISIBLE_WORDS = 986
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -1855,6 +1854,7 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     2f6300a, owner decisions 2026-10-26          895  1,016  22 sentences, 432 words
     9a8f14d, review fixes 2026-10-27             882  1,001  21 sentences, 404 words
     owner decisions 2026-10-26, batch 2 (R1-I3)  942  1,051  21 sentences, 415 words
+    review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -1896,6 +1896,17 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     particular to the page's data, so the fold rule keeps it visible; (a) was
     raised to 971, 942 x 1.03 rounded up, and (b) stays 22, one over 21.
 
+    The last row is the review of that batch (2026-10-27), measured on a fresh
+    build of the fixed tree against one of 5f7161b (942, 1,051, 21 / 415, as
+    the row above). Two boilerplate sentences grew, both to stay true since
+    I3: the pooling caption names the declared-overlap reason beside the
+    shared-collection one (+13 words), and the matrix key's `corrected`
+    caption no longer says "that study" of a family that may hold two (+2).
+    So +15 on 117 of the 118 pages with a matrix, +17 on the 118th, EVC2's
+    (its card's scope line now names the gene its panel graded, +2), and none
+    on CRIPTO's, which has no matrix; the median rose by 15. (a) was
+    reset to 986, 957 x 1.03 rounded up, and (b) stays 22, one over 21.
+
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
     the review's fixes to methods.html left every gene page's bytes as at
@@ -1907,10 +1918,10 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 971, the last row's 942 x 1.03 rounded up, and (b) at 22,
-    one more than 21 (owner decision E4 keeps both margins; they were 909 and
-    22 over 9a8f14d's row, 922 and 23 over 2f6300a's, and 867 and 22 over
-    802d694's). **When this fails,
+    (a) is held at 986, the last row's 957 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 971 and
+    22 over the batch-2 row, 909 and 22 over 9a8f14d's, 922 and 23 over
+    2f6300a's, and 867 and 22 over 802d694's). **When this fails,
     re-measure before anything else.** If the growth is a new study's or
     dataset's own data-driven prose, raise the budget and put the measurement
     here. Never fold a caveat the fold rule
