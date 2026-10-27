@@ -53,10 +53,9 @@ cohorts:
   #
   # `overlaps_with` (I3, 2026-10-27). An author of PMID:34324492 -- a study by
   # an atlas author (`own_lab`), which names `decipher` -- answered that its
-  # case set does, or likely does, include DDD participants: through DECIPHER,
-  # as above, and through a collection in its S2 Table that is not a
-  # registered cohort. PMID:42230622 names `ddd`. The two studies were two independent datasets
-  # on every page; declared here, `shared_cohorts` links them and
+  # case set does, or likely does, include DDD participants, through DECIPHER
+  # as above. PMID:42230622 names `ddd`. The two studies were two independent
+  # datasets on every page; declared here, `shared_cohorts` links them and
   # `cohort_families` makes them one. The descriptions' last clause read "this atlas's cohort registry
   # records the two as separate collections and cannot see that overlap"
   # until the declaration made it false; it is dropped rather than reworded,
