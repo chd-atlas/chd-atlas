@@ -101,13 +101,31 @@ publications:
     # travel on the burden rows themselves, so this is the study's cohort and
     # not either arm's.
     cohort_size: 11555
-    # 248 prespecified panel genes, and the study's JL-FDR accounts for exactly
-    # that number -- "to generate meta-analysis P-values and FDR statistics that
-    # account for the number of genes tested". Counted 2026-08-05 from Dataset
-    # S6, which carries 248 gene rows with no duplicates. Unlike PMID:42230622,
-    # this study publishes a corrected p on every row, so the page points at
-    # that column rather than leaning on this denominator.
-    tests_reported: 248
+    # NO `tests_reported` (owner decision 2026-10-26, W1). It read 248 until
+    # then, and 248 counts panel genes, not comparisons: each gene is tested in
+    # two arms over several consequence classes, so no page could truthfully
+    # print "248 comparisons". Every row of this study carries a corrected p,
+    # so no page needs a scan size for it either; the gene count is below.
+    #
+    # The 248 genes the study's per-arm Benjamini-Hochberg correction ran over.
+    # Methods: "When performing multiple testing correction on the P-values
+    # from the Poisson test or FET independently, the Benjamini–Hochberg
+    # procedure was used to generate FDR statistics." Dataset S6's legend:
+    # "Table shows all 248 MIPseq panel genes". Measured 2026-10-26 on DS6
+    # (sha256 in mirrors/sources.yaml): Benjamini-Hochberg over n = 248 on each
+    # arm's printed p reproduces its printed FDR for all 248 genes in all six
+    # arm x class columns (largest relative difference 7e-15); n = 247 or 249
+    # misses by 4e-3. So a row's q here is within the panel, not genome-wide.
+    correction_genes: 248
+    # Fig. 1 legend: "Genes surpassing genome-wide significance (P-value <
+    # 2.6 × 10⁻⁶) and those with FDR < 0.05 are shown in red and blue,
+    # respectively." Dataset S6 applies the same line to every p column, arms
+    # and meta-analysis alike ("Red shading denotes p-values that surpass
+    # genome-wide significance"): its conditional formatting shades red below
+    # 0.000002631578947, which is 0.05 / 19,000. Transcribed as the paper prints
+    # it; measured 2026-10-26, no p-value in DS6 falls between 2.6e-6 and
+    # 2.63e-6, so the two spellings mark the same rows.
+    genome_wide_threshold: 2.6e-6
     # NO ANCESTRY FIELD. The paper reports none -- searched 2026-08-05 for
     # "ancestry", "ancestries", "European" and "self-reported race" across its
     # full text, with no match. Leaving the list empty says that; inventing a

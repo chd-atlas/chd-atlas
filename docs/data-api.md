@@ -242,7 +242,11 @@ wrong by the next one.
   [`methods.html`](#methodshtml), the site's reading notes. Additive.
   `2.19` widened the structural heart phenotypes [`scope.json`](#scopejson)'s
   Orphanet warrants are read against by six lesions; ten warrants gained
-  pulmonic stenosis, and no term or gene entered or left scope.
+  pulmonic stenosis, and no term or gene entered or left scope. It added
+  `correction_genes` and `genome_wide_threshold` to every record of
+  [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
+  ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
+  `null`: its 248 counted panel genes, not comparisons. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -1474,7 +1478,14 @@ Top to bottom:
    `details` otherwise, with an accessible name naming the study. Not the
    most significant row: a line keeps its study table's reading order, while
    a matrix cell names the most significant of the rows behind its state (see
-   the rare-variant section below). Beneath the lines, once
+   the rare-variant section below). Where the study's publication records
+   `correction_genes`, the line's row also carries its corrected p and what it
+   was corrected over ("q 0.00369 within its 248-gene panel"), because a q over
+   a panel is not genome-wide; where it records `genome_wide_threshold`, every
+   surviving row on the line whose raw p is below it is marked, the line's own
+   row as "genome-wide (p 1.07e-08)" and a named one as "loss-of-function
+   (genome-wide, p 1.35e-09)" (TBX5's de novo line). Today only PMID:40127276
+   records either. Beneath the lines, once
    per study with a line, that study's curated `summary_caveat` from
    `publications.json`, where it has one; the full caveat stays in the
    study's block.
@@ -1886,6 +1897,8 @@ The committed corpus curates no variants, so the real index is empty:
       "cohort_size": null,
       "ancestry": [],
       "tests_reported": null,
+      "correction_genes": null,
+      "genome_wide_threshold": null,
       "summary_caveat": null
     }
   ]
@@ -1901,6 +1914,23 @@ recorded one, which does not mean the study's results need no qualification:
 its rows' `method_note` and the [`cohorts.json`](#cohortsjson) descriptions
 remain the full caveat. A consumer showing the study's counts or results away
 from those should show this sentence too.
+
+`tests_reported` is the number of comparisons a study ran, where it states
+one; it is `null` for PMID:40127276 since `2.19`, which recorded 248 until then:
+that is the number of its panel *genes*, each tested in two arms over several
+consequence classes, not a count of comparisons. That study corrects every row,
+so no page needs a scan size for it.
+
+`correction_genes` (since `2.19`) is the number of genes a study's own
+multiple-testing correction ran over, recorded for a study whose correction was
+over a prespecified gene panel rather than the genome: 248 for PMID:40127276,
+whose per-arm Benjamini-Hochberg q reproduces over exactly its 248 panel genes.
+`genome_wide_threshold` (since `2.19`) is the p-value the study itself states
+for genome-wide significance, transcribed: `2.6e-06` for PMID:40127276, from its
+Fig. 1 legend. Both are `null` where not recorded. A row of such a study with
+`pvalue_adjusted` below 0.05 survives a correction **within its panel**; whether
+its raw `pvalue` also clears the study's genome-wide line is a separate, stronger
+claim, and a consumer showing "surviving" should say which.
 
 Ordered by PMID lexically, not numerically — so `PMID:10` precedes `PMID:9`. A
 PMID is issued at indexing time, so numeric order ranks by nothing a reader

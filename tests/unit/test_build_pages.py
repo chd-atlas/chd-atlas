@@ -7371,6 +7371,47 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
     assert 'class="card-note"' not in _card_variants(_rail_of(failing))
 
 
+def test_the_card_says_how_wide_a_survival_is_where_its_study_records_it(
+    tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
+) -> None:
+    """The panel a q was corrected over, and the study's own genome-wide line (R3).
+
+    Owner decision 2026-10-26: "surviving its own study's correction" read as
+    genome-wide, and PMID:40127276's q is a Benjamini-Hochberg over its 248
+    panel genes. Where a publication records `correction_genes`, the line's
+    row carries its q and that scope; where it records `genome_wide_threshold`,
+    every surviving row on the line strictly below it is marked, the named ones
+    too. **The boundary is strict**, as the paper's "P-value < 2.6 x 10^-6"
+    reads: the line's row here sits exactly on the threshold and is not
+    marked, while the named row just below it is. Real rows (TBX5's card) are
+    pinned in `test_built_site_is_consumable.py`; this is the fixture that can
+    put a row on the line, which no real row is.
+
+    A study recording neither field renders exactly as before, which the
+    fixture literals in `test_the_card_names_each_study_and_test_by_its_first_
+    surviving_row` hold: its PMID:40127276 publication records neither, and its
+    de novo rows sit far below 2.6e-6.
+    """
+    publications = {
+        "PMID:40127276": _SIERANT_PUBLICATION["PMID:40127276"].model_copy(
+            update={"correction_genes": 248, "genome_wide_threshold": 2.6e-6}
+        ),
+    }
+    rows = [
+        _sierant_de_novo(pvalue=2.6e-6, pvalue_adjusted=1.2e-4),
+        _sierant_de_novo(
+            consequence_class="lof", n_case_carriers=21, pvalue=2.59e-6, pvalue_adjusted=1.1e-4
+        ),
+    ]
+    page = _burden_page(tmp_path, facts_uncurated, rows, publications=publications)
+
+    assert re.findall(r"<li>(.*?) · <a ", _card_variants(_rail_of(page))) == [
+        "Sierant MC et al. 2025 · de novo enrichment (trios vs mutation model) — damaging "
+        "(LOF + missense): 27 de novo / 3,887 trios vs 0.607 expected · q 0.00012 within its "
+        "248-gene panel · also surviving: loss-of-function (genome-wide, p 2.59e-06)"
+    ]
+
+
 def test_the_card_and_the_matrix_read_one_rule_for_surviving_a_correction(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]
 ) -> None:

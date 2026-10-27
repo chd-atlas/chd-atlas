@@ -341,13 +341,26 @@ _RARE_VARIANTS: Final = (
     # use" until review (2026-10-27): no study here treats a raw p below 0.05 as
     # significant -- PMID:42230622's block tells a reader to judge raw p against
     # its whole scan -- so the number is stated as the atlas's, unattributed.
+    #
+    # The sentence after "survives none" (owner decision 2026-10-26, R3): a
+    # survival is only as wide as the correction, and PMID:40127276's is a
+    # Benjamini-Hochberg over its 248 panel genes (`Publication.
+    # correction_genes`, reproduced from Dataset S6 to 7e-15), which the card
+    # now names beside the q (`pages._correction_scope`), marking every
+    # surviving row below the study's own genome-wide line
+    # (`pages._genome_wide`). Stated in general; true today of the one study
+    # whose correction ran over a panel, the only one curated with either field.
     "<p>Every count and statistic in a gene page's study tables is an upstream study's, "
     "republished as published. The atlas computes none of them. It applies one rule of its "
     f"own, at {_ALPHA}: a row that is not synonymous "
     "<strong>supports</strong> the gene when its result points to enrichment in cases and "
     f"its p is below {_ALPHA}, and <strong>survives</strong> its study's correction when the "
     f"corrected p its study published is below {_ALPHA} as well; a row whose study published "
-    "no corrected p survives none. A gene page's card lists the rows that survive, the "
+    "no corrected p survives none. A study's correction covers only the genes it was run "
+    "over: where those were a gene panel rather than the genome, the card says so beside "
+    "the corrected p, and marks any surviving row whose raw p is also below the threshold "
+    "the study itself states for genome-wide significance. A gene page's card lists the "
+    "rows that survive, the "
     "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
     "support, and a forest plot draws a surviving row filled. Where a study is by an "
     "author of this atlas, its block says so.</p>"

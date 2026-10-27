@@ -580,6 +580,12 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
     raw p against its whole scan. The literal below pins the published number
     and the assertion beside it pins the rule's, so a change to either fails
     here until the other is reconsidered.
+
+    **It names how wide a survival is** (owner decision 2026-10-26, R3): a
+    correction over a gene panel is not a genome-wide one, and the card says
+    which, beside the q. PMID:40127276's per-arm q is Benjamini-Hochberg over
+    its 248 panel genes, reproduced from Dataset S6 on every arm; the card
+    pins on TBX5 are in `test_built_site_is_consumable.py`.
     """
     assert ALPHA == 0.05, "the rule's threshold moved; re-read #rare-variants' first paragraph"
     expected = [
@@ -589,7 +595,11 @@ def test_rare_variants_states_what_every_gene_page_folded_or_shortened(page: str
         "<strong>supports</strong> the gene when its result points to enrichment in cases and "
         "its p is below 0.05, and <strong>survives</strong> its study's correction when the "
         "corrected p its study published is below 0.05 as well; a row whose study published "
-        "no corrected p survives none. A gene page's card lists the rows that survive, the "
+        "no corrected p survives none. A study's correction covers only the genes it was run "
+        "over: where those were a gene panel rather than the genome, the card says so beside "
+        "the corrected p, and marks any surviving row whose raw p is also below the threshold "
+        "the study itself states for genome-wide significance. A gene page's card lists the "
+        "rows that survive, the "
         "evidence matrix marks a dataset whose rows survive apart from one whose rows only "
         "support, and a forest plot draws a surviving row filled. Where a study is by an "
         "author of this atlas, its block says so.",

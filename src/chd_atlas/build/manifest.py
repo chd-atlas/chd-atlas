@@ -426,6 +426,11 @@ from chd_atlas.corpus import Corpus
 #   outside Abnormal heart morphology (`orphanet_scope.ADDED_BRANCHES`). No
 #   field changes; ten `scope.json` warrants gain pulmonic stenosis among their
 #   `phenotypes`, and no term or gene enters or leaves scope.
+# * Every record of `publications.json` (and `featured.json`'s embedded ones)
+#   gains `correction_genes` and `genome_wide_threshold`, `null` where not
+#   curated: the gene count a study's own correction ran over, and the p it
+#   states for genome-wide significance. PMID:40127276's `tests_reported` goes
+#   from 248 to `null`, because 248 counted its panel genes, not comparisons.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

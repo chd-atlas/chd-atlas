@@ -953,6 +953,54 @@ def _row_label(row: BurdenRow) -> str:
 _OWN_LAB_MARK: Final = " · study by an atlas author"
 
 
+def _correction_scope(row: BurdenRow, publication: Publication | None) -> str:
+    """What a card line's row survived, where its study says (owner decision 2026-10-26, R3).
+
+    "Surviving its own study's correction" read as genome-wide on every line,
+    and for PMID:40127276 it is not: that study's q is a Benjamini-Hochberg
+    correction over its 248 panel genes (`Publication.correction_genes`,
+    measured against Dataset S6), and the same study draws a genome-wide line
+    of its own at p < 2.6e-6 (`Publication.genome_wide_threshold`, from its
+    Fig. 1 legend; `_genome_wide`). Measured on a build of e0393f4: 67
+    non-synonymous rows on 25 published genes survive at q < 0.05, and 25 of
+    them, on 13 genes, are below the study's genome-wide line -- two strengths
+    of finding the card printed identically. TBX5's case-control damaging row
+    (p 1.34e-4, q 0.00369) is the first kind and its de novo damaging row (p
+    1.07e-8) the second.
+
+    So a line's row gains its corrected p and the panel it was corrected over.
+    Only the line's own row: the rest of the group are named, not stated, and
+    carry no corrected p. The statistic is named by `_statistic`, so it is `q`
+    only where the correction is a false-discovery rate, as on the matrix and
+    the forest panel. Renders only where the field is curated, so every other
+    study today renders exactly as before.
+    """
+    if publication is None or publication.correction_genes is None:
+        return ""
+    if row.pvalue_adjusted is None:
+        return ""
+    return f" · {_statistic(row)} within its {publication.correction_genes:,}-gene panel"
+
+
+def _genome_wide(row: BurdenRow, publication: Publication | None) -> str:
+    """`p <raw p>` where a row clears its study's own genome-wide line, else "" (R3).
+
+    Strictly below, as the paper's "P-value < 2.6 x 10^-6" reads; formatted as
+    the study tables format a p. Marked on **every** surviving row of a card
+    line, the named ones too, not only the line's own row: measured on a real
+    build, marking the line's row alone left 15 of the 25 genome-wide rows
+    unmarked and 6 of the 13 genes with one -- FLT4's case-control
+    loss-of-function row (p 1.75e-15) sat named under a damaging row that
+    survives within the panel only. Independent of `correction_genes`: a study
+    may state a genome-wide line without correcting over a panel.
+    """
+    if publication is None or publication.genome_wide_threshold is None:
+        return ""
+    if row.pvalue is None or not row.pvalue < publication.genome_wide_threshold:
+        return ""
+    return f"p {row.pvalue:.3g}"
+
+
 def _card_rare_variants(
     rows: Sequence[BurdenRow],
     families: tuple[frozenset[str], ...],
@@ -1098,16 +1146,24 @@ def _card_rare_variants(
         for study, analysis in sorted(groups):
             surviving = sorted(groups[(study, analysis)], key=_sort_key)
             first, others = surviving[0], surviving[1:]
-            also = (
-                f" · also surviving: {'; '.join(_row_label(row) for row in others)}"
-                if others
-                else ""
-            )
+            publication = publications.get(study)
+            named = []
+            for row in others:
+                genome_wide = _genome_wide(row, publication)
+                named.append(
+                    f"{_row_label(row)} (genome-wide, {genome_wide})"
+                    if genome_wide
+                    else _row_label(row)
+                )
+            also = f" · also surviving: {'; '.join(named)}" if named else ""
+            genome_wide = _genome_wide(first, publication)
             name = _study_label(study, publications)
             line = (
                 f"{name} · {analysis} — {_row_label(first)}: "
                 f"{_count(first.n_case_carriers, first.n_cases, first.count_unit)} vs "
-                f"{_controls(first)}{also}{own_lab(study)}"
+                f"{_controls(first)}{_correction_scope(first, publication)}"
+                f"{f' · genome-wide ({genome_wide})' if genome_wide else ''}"
+                f"{also}{own_lab(study)}"
             )
             # `caveats` where a surviving row's `method_note` qualifies these
             # counts -- it is footnoted in the study's block, outside every

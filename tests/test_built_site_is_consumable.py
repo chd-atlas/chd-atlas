@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+from chd_atlas.build.burden import BurdenRow
+from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.render import RESEARCH_USE_NOTICE
 from chd_atlas.build.runner import build_site
 from chd_atlas.corpus import load_curation
@@ -252,6 +254,89 @@ def test_tbx5_publishes_its_mirrored_validity_with_the_provenance_behind_it(
     assert clingen["source"] == "clingen"
     for field in ("source", "classification_term", "disease", "sop", "report_url"):
         assert clingen[field], f"{field} is empty on TBX5's ClinGen record"
+
+
+def _burden_rows(gene: str, bundle: dict[str, Any]) -> list[BurdenRow]:
+    """A bundle's published burden rows as the `BurdenRow`s the renderers read."""
+    return [
+        BurdenRow(
+            **{
+                **row,
+                "gene": gene,
+                "case_cohorts": tuple(row["case_cohorts"]),
+                "control_cohorts": tuple(row["control_cohorts"]),
+            }
+        )
+        for row in bundle["burden"]
+    ]
+
+
+def test_tbx5s_card_says_how_wide_each_surviving_result_is(site: Path) -> None:
+    """R3 (owner decision 2026-10-26) on the real corpus, pinned on TBX5.
+
+    PMID:40127276's q is a Benjamini-Hochberg correction over its 248 panel
+    genes, and the study states its own genome-wide line at p < 2.6e-6. TBX5
+    carries both kinds of survivor: its case-control damaging row (p 1.34e-4,
+    q 0.00369) survives within the panel only, and its de novo damaging row (p
+    1.07e-8) and loss-of-function row (p 1.35e-9) clear the genome-wide line
+    too. Literals, never the constants that render them.
+
+    **Every** surviving row below the line is marked on its card, the named
+    ones as well as each line's own: derived from every bundle with the
+    predicate the card reads, never pinned. Marking only each line's row left
+    15 of the 25 such rows unmarked when measured (2026-10-26), and 6 of the 13
+    genes carrying one, FLT4's case-control loss-of-function row (p 1.75e-15)
+    among them. Both sides of that count must be non-zero for it to measure
+    anything (CLAUDE.md section 4.30), so the line's own and the named marks are
+    each required to occur.
+
+    W1 is checked here too: PMID:40127276's `tests_reported` is null, because
+    the 248 it held counted panel genes, not comparisons.
+    """
+    publications = {
+        publication["id"]: publication
+        for publication in _read(site, "publications.json")["publications"]
+    }
+    sierant = publications["PMID:40127276"]
+    assert sierant["correction_genes"] == 248
+    assert sierant["genome_wide_threshold"] == 2.6e-06
+    assert sierant["tests_reported"] is None
+
+    page = (site / "genes" / "HGNC_11604.html").read_text(encoding="utf-8")
+    card = page[page.index('<div class="card-variants">') :]
+    card = card[: card.index("</div>")]
+    assert re.findall(r"<li>(.*?) · <a ", card) == [
+        "Sierant MC et al. 2025 · case-control burden test — damaging (LOF + missense): "
+        "22 alleles / 21,750 vs 103 alleles / 270,733 · q 0.00369 within its 248-gene panel "
+        "· also surviving: loss-of-function",
+        "Sierant MC et al. 2025 · de novo enrichment (trios vs mutation model) — damaging "
+        "(LOF + missense): 5 de novo / 3,887 trios vs 0.0671 expected · q 5.31e-07 within its "
+        "248-gene panel · genome-wide (p 1.07e-08) · also surviving: loss-of-function "
+        "(genome-wide, p 1.35e-09)",
+    ]
+
+    thresholds = {
+        study: publication["genome_wide_threshold"]
+        for study, publication in publications.items()
+        if publication["genome_wide_threshold"] is not None
+    }
+    expected = own = named = 0
+    for entry in _read(site, "genes/index.json")["genes"]:
+        rows = _burden_rows(entry["gene"], _read(site, entry["bundle"]))
+        expected += sum(
+            1
+            for row in rows
+            if row.study in thresholds
+            and survives_own_correction(row)
+            and row.pvalue is not None
+            and row.pvalue < thresholds[row.study]
+        )
+        html_page = (site / entry["bundle"].replace(".json", ".html")).read_text(encoding="utf-8")
+        rail = html_page[html_page.index('<aside class="rail">') : html_page.index("</aside>")]
+        own += rail.count(" · genome-wide (p ")
+        named += rail.count(" (genome-wide, p ")
+    assert own > 0 and named > 0, (own, named)
+    assert own + named == expected
 
 
 def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
