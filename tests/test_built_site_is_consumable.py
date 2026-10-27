@@ -402,6 +402,51 @@ def test_studies_on_collections_declared_overlapping_are_one_dataset_wherever_co
     assert noticed == 72
 
 
+# One card per form of the tested line that occurs on the real build, measured
+# the day the qualifier reached the cards (owner answer 2026-10-27): 24, 4, 48,
+# 7 and 3 cards, 86 in all.
+_TESTED_LINES: dict[str, str] = {
+    "HGNC_10252": "Tested in 1 independent dataset (as far as the cohort registry records) (a "
+    "study by an atlas author).",
+    "HGNC_13672": "Tested in 1 independent dataset (as far as the cohort registry records) (a "
+    "study by an atlas author); none survives a correction its study published.",
+    "HGNC_11291": "Tested in 1 independent dataset (as far as the cohort registry records) "
+    "(each study by an atlas author); none survives a correction its study published.",
+    "HGNC_6770": "Tested in 2 independent datasets (as far as the cohort registry records) (1 "
+    "of the 2 studies by an atlas author); none survives a correction its study published.",
+    "HGNC_7882": "Tested in 2 independent datasets (as far as the cohort registry records) (2 "
+    "of the 3 studies by an atlas author); none survives a correction its study published.",
+}
+
+
+def test_every_dataset_count_on_a_card_says_what_the_registry_can_see(site: Path) -> None:
+    """The front page's qualifier on the gene cards too (owner answer 2026-10-27).
+
+    "Independent datasets 2 (as far as the cohort registry records)" on the
+    front page, and on a card "Tested in N independent dataset(s)" with no
+    qualifier, though both count the same cohort families: joined only through
+    collections the registry names or declares overlapping. The qualifier
+    follows the count and precedes the author declaration, which it must not
+    read as qualifying. One card per form that occurs is pinned as a literal
+    -- ROCK2, KLF13, SRF, SMAD4, NOTCH2 -- and every tested line on every card
+    is held to the shape, so a form that appears later carries it too.
+    """
+    seen = {}
+    for path in sorted((site / "genes").glob("HGNC_*.html")):
+        page = path.read_text(encoding="utf-8")
+        rail = page[page.index('<aside class="rail">') : page.index("</aside>")]
+        for line in re.findall(r"<p>(Tested in [^<]*)</p>", rail):
+            assert re.fullmatch(
+                r"Tested in (1 independent dataset|\d+ independent datasets) "
+                r"\(as far as the cohort registry records\)( \([^)]*\))?"
+                r"(; none survives a correction its study published)?\.",
+                line,
+            ), (path.stem, line)
+            seen[path.stem] = line
+    assert seen, "no card prints a dataset count; this checks nothing"
+    assert {stem: seen.get(stem) for stem in _TESTED_LINES} == _TESTED_LINES
+
+
 def test_every_published_bundle_carries_the_identity_its_registry_row_holds(site: Path) -> None:
     """D52 on the committed corpus. A runner that stops passing `identities` to
     `build_genes` publishes six nulls on every bundle -- which the API doc defines
@@ -1889,11 +1934,11 @@ _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z(\"'“])")
 # (b)'s share: a sentence on at least this fraction of gene pages is boilerplate.
 _BOILERPLATE_SHARE = 0.9
 
-# Measured after the review fixes to the second batch of owner decisions
-# (2026-10-27), with the headroom owner decision E4 keeps: (a) 957 x 1.03
+# Measured after the owner's answers of 2026-10-27 (the registry qualifier on
+# the gene cards), with the headroom owner decision E4 keeps: (a) 964 x 1.03
 # rounded up, (b) 21 + 1. See the test for the series and the rule. Lower each
 # when a page sheds prose; raising one is a decision, and its commit says why.
-_MEDIAN_VISIBLE_WORDS = 986
+_MEDIAN_VISIBLE_WORDS = 993
 _BOILERPLATE_SENTENCES = 22
 
 
@@ -2013,6 +2058,7 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     review fixes to batch 2, 2026-10-27          957  1,066  21 sentences, 430 words
     owner decisions batch 3 (R12, R2)            957  1,066  21 sentences, 430 words
     review fixes to batch 3, 2026-10-27          957  1,066  21 sentences, 430 words
+    owner answers 2026-10-27 (A1, A2)            964  1,073  21 sentences, 430 words
     =========================================  =====  =====  ======================
 
     The 2f6300a row is the owner's wording decisions of 2026-10-26 (E1, E2, R4,
@@ -2081,6 +2127,18 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     cards and 0 on the other 109, below the median's reach. By the rule,
     957 x 1.03 rounded up is 986 and 21 + 1 is 22, so both constants stay.
 
+    The last row is the owner's answers of 2026-10-27, measured with this
+    parser on fresh builds of the tree after each item against one of 3bf08fb
+    (957, 1,066, 21 / 430, as the row above). A1's review statuses render
+    only inside the cohort-notes fold (two notes on each of the 77 pages
+    carrying PMID:34324492) and moved nothing. A2's qualifier on the card's
+    "Tested in N independent dataset(s)" line, owner-decided (E4), is 7 words
+    on 86 cards and 0 on the other 33 (measured per page), and the median
+    rose by 7 to 964. (b) did not move: the line is on 86 of 119 pages, under
+    the 90% share, and reads differently by count and declaration. By the
+    rule (a) was raised to 993, 964 x 1.03 rounded up, and (b) stays 22, one
+    over 21.
+
     "cells" is the history: (a) with cells counted, the figure this test
     asserted until review, 957 at zero headroom. (b) never counted them, and
     the review's fixes to methods.html left every gene page's bytes as at
@@ -2092,10 +2150,11 @@ def test_a_gene_page_carries_no_more_visible_prose_than_its_measured_budget(site
     on a gene page sits in a table cell.
 
     **Headroom, because a curation-only change must not fail the suite.**
-    (a) is held at 986, the last row's 957 x 1.03 rounded up, and (b) at 22,
-    one more than 21 (owner decision E4 keeps both margins; they were 971 and
-    22 over the batch-2 row, 909 and 22 over 9a8f14d's, 922 and 23 over
-    2f6300a's, and 867 and 22 over 802d694's). **When this fails,
+    (a) is held at 993, the last row's 964 x 1.03 rounded up, and (b) at 22,
+    one more than 21 (owner decision E4 keeps both margins; they were 986 and
+    22 over the three rows before it, 971 and 22 over the batch-2 row, 909 and
+    22 over 9a8f14d's, 922 and 23 over 2f6300a's, and 867 and 22 over
+    802d694's). **When this fails,
     re-measure before anything else.** If the growth is a new study's or
     dataset's own data-driven prose, raise the budget and put the measurement
     here. Never fold a caveat the fold rule

@@ -87,7 +87,12 @@ from chd_atlas.build.burden import BurdenCensus
 from chd_atlas.build.emit import Emitter
 from chd_atlas.build.paths import LANDING
 from chd_atlas.build.profiles import ProfileCensus
-from chd_atlas.build.render import EVIDENCE_POWER_CAVEAT, document, evidence_legend
+from chd_atlas.build.render import (
+    EVIDENCE_POWER_CAVEAT,
+    REGISTRY_QUALIFIER,
+    document,
+    evidence_legend,
+)
 from chd_atlas.build.validity import GeneValidity, admitting_grade
 from chd_atlas.corpus import Corpus
 from chd_atlas.validate.sources import SourceRegistry
@@ -284,17 +289,10 @@ def _and(items: Sequence[str]) -> str:
 # The two Orphadata products, in the order the citation names them.
 _ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
 
-# What the independent-datasets figure can see, said wherever the page prints it
-# (owner decision 2026-10-26, R12). `concordance.cohort_families` groups studies
-# through the collections their rows name and the overlaps
-# `curation/cohorts.yaml` declares, and through nothing else: two studies whose
-# case sets share people the registry does not record -- PMID:34324492's S2
-# Table lists case sources no row names (`methods.html#cohorts` counts them) --
-# count as two. Measured 2026-10-27: 2, of three studies, two of them joined by
-# the one overlap the registry declares (DDD and DECIPHER) and by no shared
-# collection. On the hero figure as well as the census card: the hero is the
-# same claim, printed larger and first.
-_REGISTRY_QUALIFIER: Final = "(as far as the cohort registry records)"
+# `render.REGISTRY_QUALIFIER` says what the independent-datasets figure can see,
+# wherever this page prints it (owner decision 2026-10-26, R12): on the hero
+# figure as well as the census card, since the hero is the same claim, printed
+# larger and first. A gene card's dataset count carries the same constant.
 
 
 def _orphadata_version(sources: SourceRegistry) -> str:
@@ -347,7 +345,7 @@ def _stat(label: str, value: str, note: str = "") -> str:
 
     `note` qualifies the value in a second `<dd>` after it (`stat-note`, set
     small), which a `<dt>` may have, so the value's own `<dd>` still holds the
-    number alone. One card carries one: `_REGISTRY_QUALIFIER`.
+    number alone. One card carries one: `REGISTRY_QUALIFIER`.
 
     `label` and `note` are literals from this module and `value` comes from
     `_number` or `len`, so none is curated or mirrored text; nothing here needs
@@ -418,7 +416,7 @@ def _render(
             # page of an atlas that refuses to pool studies (D33), reads as
             # exactly the pooling it refuses.
             _stat("Within-study combined rare-variant results", _number(combined_results)),
-            _stat("Independent datasets", _number(census.families), _REGISTRY_QUALIFIER),
+            _stat("Independent datasets", _number(census.families), REGISTRY_QUALIFIER),
             # Beside "Independent datasets" rather than at the end, because the
             # two answer the same reader's question one level apart: how many
             # separate collections the evidence rests on, and how many named
@@ -501,7 +499,7 @@ def _render(
         <span class="figure-label">genes published</span></div>
       <div class="figure"><span class="figure-value">{_number(census.families)}</span>
         <span class="figure-label">independent datasets</span>
-        <span class="figure-note">{_REGISTRY_QUALIFIER}</span></div>
+        <span class="figure-note">{REGISTRY_QUALIFIER}</span></div>
       <div class="figure"><span class="figure-value">{_number(census.rows)}</span>
         <span class="figure-label">rare-variant statistics</span></div>
     </div>

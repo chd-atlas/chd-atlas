@@ -291,7 +291,13 @@ not manifest keys: the genes carrying mirrored ClinGen/GenCC validity, the genes
 with a reported rare-variant result (any row at all; the label read "Genes with
 rare-variant evidence" until `2.19`), and the genes this atlas has itself curated. All are
 read from the same build that produced this document's other examples rather
-than written by hand. Its *Where this data comes from* names every source
+than written by hand. The independent-datasets figure, in the hero and on its
+census card, carries "(as far as the cohort registry records)": it counts
+cohort families, which join two studies only through a collection both name or
+collections [`cohorts.json`](#cohortsjson) records as overlapping, so two
+studies that share people the registry does not record count as two. A gene
+page's card qualifies its own dataset count the same way. The page's *Where
+this data comes from* names every source
 [`sources.json`](#sourcesjson) records as `permitted_with_attribution`, with
 the licence where it is CC BY. It links to
 `genes/index.html`, `genes/index.json`, `manifest.json`, `sources.json`,
@@ -1594,11 +1600,16 @@ Top to bottom:
    gene, from its rows.
 
    With no surviving row, how many independent datasets (cohort families, not
-   studies) tested the gene, declaring any study among them by an author of
+   studies) tested the gene, qualified as the front page qualifies its count —
+   "(as far as the cohort registry records)", straight after the count — then
+   declaring any study among them by an author of
    this atlas — "(a study by an atlas author)" where one study tested it,
    "(each study by an atlas author)", or "(1 of the 2 studies by an atlas
    author)", counted in studies — and, where some study published a
-   correction for it, that none survives a correction its study published; with no row at
+   correction for it, that none survives a correction its study published: "Tested in 2
+   independent datasets (as far as the cohort registry records) (1 of the 2
+   studies by an atlas author); none survives a correction its study
+   published." With no row at
    all, that no rare-variant study here reports a result. The power caveat — no enrichment at these cohort sizes is not
    evidence against a gene — follows whenever the gene has rows.
 7. One sentence saying what the atlas itself has curated (below).

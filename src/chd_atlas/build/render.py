@@ -477,6 +477,20 @@ EVIDENCE_POWER_CAVEAT: Final = (
 )
 
 
+# What an independent-datasets count can see, said wherever a page prints one:
+# the front page's figure (owner decision 2026-10-26, R12) and each gene card's
+# "Tested in N independent dataset(s)" line (owner answer 2026-10-27). One
+# definition, so the two cannot come to say it differently.
+# `concordance.cohort_families` groups studies through the collections their
+# rows name and the overlaps `curation/cohorts.yaml` declares, and through
+# nothing else: two studies whose case sets share people the registry does not
+# record -- PMID:34324492's S2 Table lists case sources no row names
+# (`methods.html#cohorts` counts them) -- count as two. Measured 2026-10-27: 2,
+# of three studies, two of them joined by the one overlap the registry declares
+# (DDD and DECIPHER) and by no shared collection.
+REGISTRY_QUALIFIER: Final = "(as far as the cohort registry records)"
+
+
 def review_status_note(record: str, status: ReviewStatus | None, note: str | None) -> str:
     """A curated record's open question, for after its description; `""` where none.
 
