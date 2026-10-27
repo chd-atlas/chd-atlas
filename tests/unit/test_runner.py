@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from chd_atlas.build.runner import BuildRefused, build_site
 from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.validate.runner import ValidationReport, validate_repository
 
@@ -1242,3 +1243,33 @@ def test_an_orphanet_warrant_is_checked_on_both_validity_branches(
     refusals = [i for i in report.issues if i.code == "SCP006"]
     assert len(refusals) == 1
     assert "does not reach ORPHA:648" in refusals[0].message
+
+
+def test_a_malformed_identity_id_on_a_published_gene_fails_validate_as_the_build_refuses_it(
+    tmp_path: Path,
+) -> None:
+    """GEN004 (owner decision 2026-10-26, R13), from the real validator on a real corpus.
+
+    Measured that day on a copy of the committed repository with TBX5's
+    Ensembl id cut to `ENSG0089225`: `chd-atlas validate` reported 0 errors and
+    `chd-atlas build` refused the repository after writing had begun,
+    `external_links` raising on the page. Validate now reports exactly that
+    one error, so its verdict is the build's, and the build refuses at the
+    gate, before anything is written -- the refusal still holds, earlier.
+    """
+    repo = _real_repo(tmp_path / "repo")
+    registry = repo / "mirrors" / "genes.tsv"
+    text = registry.read_text(encoding="utf-8")
+    assert text.count("\tENSG00000089225\t") == 1, "TBX5's registry row moved"
+    registry.write_text(text.replace("\tENSG00000089225\t", "\tENSG0089225\t"), encoding="utf-8")
+
+    report = validate_repository(repo)
+
+    errors = [issue for issue in report.issues if issue.severity is Severity.ERROR]
+    assert [issue.code for issue in errors] == ["GEN004"]
+    assert "HGNC:11604" in errors[0].message and "'ENSG0089225'" in errors[0].message
+    assert report.ok is False
+    out = tmp_path / "dist"
+    with pytest.raises(BuildRefused, match="GEN004"):
+        build_site(repo, out)
+    assert not out.exists()

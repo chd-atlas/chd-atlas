@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from chd_atlas.build.identity import GeneIdentity
 from chd_atlas.build.validity import gene_validity, published_genes
 from chd_atlas.corpus import Corpus, load_curation, unexpected_curation_entries
 from chd_atlas.genes import GeneRegistry
@@ -29,7 +30,7 @@ from chd_atlas.validate.burden import (
     validate_burden_combined_references,
     validate_burden_references,
 )
-from chd_atlas.validate.genes import validate_mirror_symbols
+from chd_atlas.validate.genes import validate_identity_ids, validate_mirror_symbols
 from chd_atlas.validate.ids import load_id_registry, validate_ids
 from chd_atlas.validate.ontology import (
     OntologyRegistry,
@@ -158,6 +159,36 @@ def _symbol_registry(root: Path) -> GeneRegistry | None:
     if frame is None or "hgnc_id" not in frame.columns or "symbol" not in frame.columns:
         return None
     return GeneRegistry(frame.iter_rows(named=True))
+
+
+def _gene_identities(root: Path) -> dict[str, GeneIdentity] | None:
+    """The two ids each `mirrors/genes.tsv` row links by, or None when it cannot be read.
+
+    For GEN004 (R13). Only the columns `identity.identity_id_problems` reads,
+    cleaned as `build/runner.py::_gene_identities` cleans them: a blank or
+    whitespace-only cell is absent. None rather than empty, for the reason
+    `_symbol_registry` gives: an empty mapping would report every published
+    gene's ids missing, burying the one TBL008 that says the file is unread.
+    """
+    path = root / "mirrors" / "genes.tsv"
+    if not path.is_file():
+        return None
+    frame, _ = read_table(path, TABLE_SCHEMAS["genes"])
+    if frame is None or any(
+        column not in frame.columns for column in ("hgnc_id", "ensembl_gene", "ncbi_gene")
+    ):
+        return None
+    identities: dict[str, GeneIdentity] = {}
+    for row in frame.select(["hgnc_id", "ensembl_gene", "ncbi_gene"]).iter_rows(named=True):
+        gene = (row["hgnc_id"] or "").strip()
+        if not gene:
+            continue
+        ensembl = (row["ensembl_gene"] or "").strip() or None
+        ncbi = row["ncbi_gene"]
+        identities[gene] = GeneIdentity(
+            ensembl_gene=ensembl, ncbi_gene=int(ncbi) if ncbi is not None else None
+        )
+    return identities
 
 
 def _mirror_gene_labels(root: Path) -> list[tuple[str, str, str]]:
@@ -674,6 +705,8 @@ def validate_repository(root: Path) -> ValidationReport:
         # `test_prf_references_run_on_both_scope_branches` pins that this
         # single call site is in fact reached on both the mirror-readable and
         # mirrors-missing (TBL012) branches.
+        # The gate's population, once, for PRF009 and GEN004 below.
+        published = _gate_published_genes(root, corpus)
         issues.extend(
             validate_profile_references(
                 root,
@@ -686,8 +719,22 @@ def validate_repository(root: Path) -> ValidationReport:
                 # the first profiles mirror landed; the unit test passed `None`
                 # explicitly and so never exercised this call site.
                 known_genes=known_genes or None,
-                published_genes=_gate_published_genes(root, corpus),
+                published_genes=published,
                 phases=corpus.cardiac_phases,
+            )
+        )
+        # GEN004 (owner decision 2026-10-26, R13): the identity ids every
+        # published gene page links by, read by the rule the build refuses a
+        # page on. In this branch because the published population is the
+        # gate's, computed from the curated scope a failed corpus load empties.
+        # `or None` for the reason the burden call above uses it: a header-only
+        # registry reads as empty, not unreadable, and would report all 119
+        # published genes' ids missing (measured 2026-10-26, burying the one
+        # REF001 `test_an_unreadable_gene_registry_does_not_multiply_by_the_
+        # burden_mirror` holds the report to).
+        issues.extend(
+            validate_identity_ids(
+                _gene_identities(root) or None, published, str(root / "mirrors" / "genes.tsv")
             )
         )
 

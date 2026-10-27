@@ -7,12 +7,17 @@ corpus as unresolvable. A missing reference table must never present as hundreds
 of dangling references -- that buries the real error under cascading false
 positives, and distinguishing "the data is wrong" from "the reference data never
 loaded" is one of this project's two load-bearing guarantees.
+
+`GEN004` (owner decision 2026-10-26, R13) is the registry's other job: the
+Ensembl and NCBI Gene ids every published gene page links by, held to the rule
+the build refuses a page on (`build/identity.py::identity_id_problems`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
+from chd_atlas.build.identity import EMPTY_IDENTITY, GeneIdentity, identity_id_problems
 from chd_atlas.genes import GeneRegistry, Resolution
 from chd_atlas.issues import Severity, ValidationIssue
 
@@ -151,6 +156,50 @@ def validate_mirror_symbols(
                 ),
             )
         )
+    return issues
+
+
+def validate_identity_ids(
+    identities: Mapping[str, GeneIdentity] | None,
+    published: Iterable[str],
+    location: str,
+) -> list[ValidationIssue]:
+    """GEN004: every published gene's identity ids, by the rule the build refuses a page on.
+
+    Owner decision 2026-10-26 (R13). `build/identity.py::external_links`
+    refuses a published gene whose Ensembl or NCBI Gene id is missing or
+    malformed, and nothing in `chd-atlas validate` reported either: measured
+    2026-10-26 on a copy of the committed corpus, TBX5's Ensembl id cut to
+    `ENSG0089225` validated with 0 errors and the build refused the repository
+    after writing had begun (a missing NCBI Gene id behaved the same). The
+    rule is `identity.identity_id_problems`, shared, so the two cannot
+    disagree; the population is the build's too, the published genes, so a
+    registry row for a gene the gate does not admit is not this check's
+    business. A published gene with no registry row at all lacks both ids.
+
+    ERROR, because the build refuses on it. A validator reports and never
+    raises. `identities` is `None` when `mirrors/genes.tsv` cannot be read,
+    which TBL008 already reports as an error, so this returns nothing rather
+    than one GEN004 per published gene.
+    """
+    if identities is None:
+        return []
+    issues: list[ValidationIssue] = []
+    for gene in sorted(published):
+        missing, malformed = identity_id_problems(identities.get(gene, EMPTY_IDENTITY))
+        problems = ([f"no {' or '.join(missing)}"] if missing else []) + malformed
+        if problems:
+            issues.append(
+                ValidationIssue(
+                    code="GEN004",
+                    severity=Severity.ERROR,
+                    location=location,
+                    message=(
+                        f"{gene} is published and its gene page links gnomAD and ClinVar by "
+                        f"these ids: {'; '.join(problems)}; the build refuses such a page"
+                    ),
+                )
+            )
     return issues
 
 

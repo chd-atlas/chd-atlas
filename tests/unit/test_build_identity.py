@@ -79,6 +79,18 @@ def test_a_value_that_is_not_an_ensembl_gene_id_never_reaches_an_href(ensembl: s
         external_links(_NKX2_5, replace(_IDENTITY, ensembl_gene=ensembl))
 
 
+@pytest.mark.parametrize("ncbi", [0, -1482])
+def test_an_ncbi_gene_id_below_one_is_refused_rather_than_queried(ncbi: int) -> None:
+    """The ClinVar link would query `0[geneid]`, which names no gene (R13).
+
+    The build accepted it until owner decision 2026-10-26 made the build and
+    GEN004 read one rule (`identity_id_problems`): a validator that refused it
+    while the build linked it, or the reverse, is the disagreement R13 removed.
+    """
+    with pytest.raises(ValueError, match="is not an NCBI Gene id"):
+        external_links(_NKX2_5, replace(_IDENTITY, ncbi_gene=ncbi))
+
+
 def test_the_identity_payload_carries_every_key_and_an_integer_gene_id() -> None:
     """Every key on every gene, `null` where the registry has nothing.
 

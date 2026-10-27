@@ -40,6 +40,10 @@ HPO_PATTERN: Final = r"^HP:\d{7}$"
 # A MONDO exact match's target in `mirrors/mondo_xrefs.tsv`: an Orphanet code or
 # an OMIM entry, the two the Orphanet scope rule follows.
 XREF_TARGET_PATTERN: Final = r"^(ORPHA|OMIM):\d+$"
+# Ensembl's stable human gene id. Named here, beside the other grammars, since
+# owner decision 2026-10-26 (R13): `build/identity.py` refuses a published
+# page on it and GEN004 reports the same rule from `chd-atlas validate`.
+ENSEMBL_GENE_PATTERN: Final = r"^ENSG\d{11}$"
 # Official UniProt accession grammar, with an optional isoform suffix.
 UNIPROT_PATTERN: Final = (
     r"^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?$"

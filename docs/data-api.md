@@ -683,8 +683,11 @@ abridged, and each is documented in full further down.
   Every key is present on every gene and `null` only where the registry holds no
   value; `ncbi_gene` is an integer. The gene page links gnomAD by
   `ensembl_gene` and ClinVar by `ncbi_gene`, and the build fails rather than
-  publish a gene missing either, so a build that completes never publishes
-  either as `null`. The bundle carries the ids, not the URLs.
+  publish a gene missing either, or carrying an `ensembl_gene` that is not
+  `ENSG` and 11 digits or an `ncbi_gene` below 1, so a build that completes
+  never publishes either as `null` or malformed. Since `2.19` `chd-atlas
+  validate` reports the same rule as `GEN004`, so the gate refuses such a
+  registry before the build begins. The bundle carries the ids, not the URLs.
 - `assertions` carry their full `evidence` array, including each item's
   `locator`, `strength` and `summary` — the record a curator is judged on.
   Assertion fields: `curated_on`, `curator`, `evidence`, `extracardiac_features`,
