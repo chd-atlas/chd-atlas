@@ -1572,6 +1572,18 @@ def test_the_front_page_names_every_source_that_requires_attribution(site: Path)
         assert licence in _LICENCE_WORDS, f"{source}: the front page states no {licence!r}"
         assert _LICENCE_WORDS[licence] in phrase, f"{source}: {licence} is not what it states"
 
+    # R11 (owner decision 2026-10-26): the Orphadata citation's "Data version"
+    # is the release `sources.json` publishes for both products, read from the
+    # files' own headers -- one release, one day, so stated once.
+    releases = {
+        (source["file_version"], source["file_date"].split(" ")[0])
+        for source in sources
+        if source["id"] in {"orphanet_product4", "orphanet_product1"}
+    }
+    assert releases == {("1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23")}
+    (version, day) = releases.pop()
+    assert f"http://sciences.orphadata.com/. Data version {version}, {day}. Mondo" in where
+
 
 def test_no_page_says_a_sample_was_a_whole_organ(site: Path) -> None:
     """Owner decision 2026-10-26 (E2): "bulk tissue", never "whole".

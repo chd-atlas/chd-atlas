@@ -254,7 +254,8 @@ wrong by the next one.
   `correction_genes` and `genome_wide_threshold` to every record of
   [`publications.json`](#publicationsjson) (and `featured.json`'s embedded
   ones), `null` where not curated, and set PMID:40127276's `tests_reported` to
-  `null`: its 248 counted panel genes, not comparisons. It added `syndrome` to
+  `null`: its 248 counted panel genes, not comparisons. It added `file_version`
+  and `file_date` to every [`sources.json`](#sourcesjson) entry, and `syndrome` to
   every [`scope.json`](#scopejson) term, `false` unless curated, and
   `burden_surviving_genes` to `counts`. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
@@ -2253,7 +2254,9 @@ What the atlas mirrors, and on whose terms.
       "licence": "https://hpo.jax.org/app/license",
       "redistribution": "permitted_with_attribution",
       "ontology_prefix": "HP",
-      "ontology_file": "ontologies/hp-2026-06-23.obo"
+      "ontology_file": "ontologies/hp-2026-06-23.obo",
+      "file_version": null,
+      "file_date": null
     }
   ]
 }
@@ -2270,6 +2273,14 @@ mirrored third-party content, whose terms are the ones recorded here.
 
 `version` is the upstream release identifier and `retrieved_on` the date it was
 taken, so a claim can be traced to the exact release it rests on.
+
+`file_version` and `file_date` (since `2.19`) are what a mirrored file states
+about itself, verbatim, where `version` is a checksum that identifies the file
+but cites as nothing. Both Orphadata products carry them, from their `<JDBOR>`
+header — `"1.3.42 / 4.1.8 [2025-03-03]"`, dated `2026-06-23` — written beside
+the sha256 by the converter on every run; `null` elsewhere. Orphadata's
+requested citation ends "Data version [date]", and the site's front page prints
+both there.
 
 The registry also carries `clingen` and `gencc` — the two sources every
 mirrored record in a gene bundle's `validity.records` is attributed to.

@@ -435,6 +435,8 @@ from chd_atlas.corpus import Corpus
 #   nine ClinGen-scoped syndromes published genes are graded for.
 # * `counts` gains `burden_surviving_genes`: the published genes with a row
 #   surviving its own study's correction, the genes whose card lists one.
+# * Every `sources.json` entry gains `file_version` and `file_date`, what the
+#   file states about itself, `null` but for the two Orphadata products.
 SCHEMA_VERSION: Final = "2.19"
 
 # What `status` publishes today. A literal rather than something derived from

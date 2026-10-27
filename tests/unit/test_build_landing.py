@@ -23,11 +23,41 @@ from chd_atlas.build.validity import GeneValidity, ValidityRecord, uncurated
 from chd_atlas.corpus import Corpus
 from chd_atlas.models.assertion import Evidence, LesionAssertion, SupplementaryLocator
 from chd_atlas.models.literature import Publication
+from chd_atlas.validate.sources import Source, SourceRegistry
 from chd_atlas.vocab import Classification, ValiditySource, ValidityState
+
 
 # What a corpus with no burden evidence at all publishes. Every test in this
 # file that is about something else -- escaping, pluralisation, the shell --
 # renders against it.
+def _orphadata(
+    source_id: str, file_version: str | None = None, file_date: str | None = None
+) -> Source:
+    """An Orphadata product's registry entry; only the header fields are read here."""
+    return Source.model_validate(
+        {
+            "id": source_id,
+            "name": "Orphadata Science",
+            "version": "sha256:" + "0" * 64,
+            "retrieved_on": "2026-10-25",
+            "url": "https://www.orphadata.com/",
+            "licence": "CC-BY-4.0",
+            "redistribution": "permitted_with_attribution",
+            "file_version": file_version,
+            "file_date": file_date,
+        }
+    )
+
+
+# Both products of one release, as `mirrors/sources.yaml` records them today:
+# one version, one day, two times of day.
+_SOURCES = SourceRegistry(
+    sources=[
+        _orphadata("orphanet_product4", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:57:18"),
+        _orphadata("orphanet_product1", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"),
+    ]
+)
+
 _NO_BURDEN = BurdenCensus(rows=0, genes=0, families=0, studies=(), surviving_genes=0)
 
 # The developmental-expression counterpart to `_NO_BURDEN`, for the same tests.
@@ -157,6 +187,7 @@ def _build(
     census: BurdenCensus = _NO_BURDEN,
     profile_census: ProfileCensus = _NO_PROFILES,
     combined_results: int = 0,
+    sources: SourceRegistry = _SOURCES,
 ) -> str:
     """Render the page.
 
@@ -188,6 +219,7 @@ def _build(
         profile_census=profile_census,
         combined_results=combined_results,
         emitter=emitter,
+        sources=sources,
     )
     return (tmp_path / LANDING).read_text(encoding="utf-8")
 
@@ -353,6 +385,7 @@ def test_the_page_is_published_through_write_text_and_reaches_the_checksums(
         profile_census=_NO_PROFILES,
         combined_results=0,
         emitter=emitter,
+        sources=_SOURCES,
     )
 
     assert list(emitter.checksums) == ["index.html"]
@@ -1008,7 +1041,8 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
         "nominates is in scope on how often it carries a structural heart malformation; its "
         "cardiovascular annotations and its mappings to OMIM are mirrored under CC BY 4.0 — "
         "<em>Orphadata Science: Free access data from Orphanet. &copy; INSERM 1999. Available "
-        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>. '
+        'on <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>. Data '
+        "version 1.3.42 / 4.1.8 [2025-03-03], 2026-06-23.</em> "
         # Every other attribution-required source, in one hand-written sentence
         # (owner decision 2026-10-26, R10); `test_built_site_is_consumable.py`
         # holds the set it names to `sources.json`.
@@ -1026,6 +1060,55 @@ def test_the_front_page_names_orphanet_and_attributes_it_as_its_licence_requires
     # false of three sources (review, 2026-10-26).
     assert "by version or checksum" not in sources_section
     assert "ClinGen, GenCC, HPO, Orphanet" in _prose(_section(text, "<h2>What this is</h2>"))
+
+
+@pytest.mark.parametrize(
+    ("sources", "stated"),
+    [
+        pytest.param(
+            SourceRegistry(
+                sources=[
+                    _orphadata(
+                        "orphanet_product4", "1.3.43 / 4.1.8 [2026-01-01]", "2026-12-01 01:00:00"
+                    ),
+                    _orphadata(
+                        "orphanet_product1", "1.3.42 / 4.1.8 [2025-03-03]", "2026-06-23 07:53:50"
+                    ),
+                ]
+            ),
+            "Data version 1.3.43 / 4.1.8 [2026-01-01], 2026-12-01 (product 4); "
+            "1.3.42 / 4.1.8 [2025-03-03], 2026-06-23 (product 1).</em>",
+            id="two releases: each product named",
+        ),
+        pytest.param(
+            SourceRegistry(
+                sources=[_orphadata("orphanet_product4"), _orphadata("orphanet_product1")]
+            ),
+            "http://sciences.orphadata.com/</a>.</em>",
+            id="no header recorded: nothing to cite",
+        ),
+    ],
+)
+def test_the_orphadata_citation_states_the_release_each_product_was_mirrored_from(
+    tmp_path: Path, sources: SourceRegistry, stated: str
+) -> None:
+    """Orphadata's citation asks for its "Data version" (owner decision 2026-10-26, R11).
+
+    The page printed none and pointed to `sources.json`, which identified both
+    files by sha256 alone. Each product's own `<JDBOR>` header version and date
+    are now in `mirrors/sources.yaml`, written there by the converter, and the
+    citation prints them: once where both products are one release on one day
+    (the literal in the test above), each by name where they differ, and
+    nothing where no header was recorded -- never a version one product
+    carries attributed to both.
+    """
+    corpus = Corpus(root=Path("."), assertions=(_assertion(),))
+    text = _build(corpus, {TBX5: "TBX5"}, {TBX5: uncurated()}, tmp_path, sources=sources)
+
+    cited = _prose(_section(text, "<h2>Where this data comes from</h2>"))
+    assert stated in cited
+    if "Data version" not in stated:
+        assert "Data version" not in cited
 
 
 def test_a_single_assertion_is_singular_not_plural(tmp_path: Path) -> None:

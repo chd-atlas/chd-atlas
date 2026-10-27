@@ -90,6 +90,7 @@ from chd_atlas.build.profiles import ProfileCensus
 from chd_atlas.build.render import EVIDENCE_POWER_CAVEAT, document, evidence_legend
 from chd_atlas.build.validity import GeneValidity, admitting_grade
 from chd_atlas.corpus import Corpus
+from chd_atlas.validate.sources import SourceRegistry
 
 # Read-only, and not a claim this build can verify — unlike every count on the
 # page, which is derived from the corpus this module was handed. Kept as a
@@ -233,6 +234,45 @@ def _own_lab_sentence(studies: Sequence[str], corpus: Corpus) -> str:
     )
 
 
+# The two Orphadata products, in the order the citation names them.
+_ORPHADATA: Final = (("orphanet_product4", "product 4"), ("orphanet_product1", "product 1"))
+
+
+def _orphadata_version(sources: SourceRegistry) -> str:
+    """The citation's "Data version", from the files' own headers (owner decision 2026-10-26, R11).
+
+    Orphadata asks to be cited "... Data version [date]", and the page pointed
+    to `sources.json`, which identified both files by sha256 alone. Each
+    product's `file_version` and `file_date` are its `<JDBOR>` header,
+    transcribed into `mirrors/sources.yaml` by the converter beside the
+    sha256, so this prints the release actually mirrored and moves when it
+    does. The date is the header's day; its time of day differs between the
+    two products of one release (07:57:18 and 07:53:50 on 2026-06-23), so one
+    release with one day prints once, and products that differ print each.
+    `""` where neither product records one: there is then nothing to cite,
+    and the sentence ends where it did before.
+    """
+    by_id = sources.by_id
+    stated = [
+        (label, source.file_version, source.file_date.split(" ", 1)[0])
+        for source_id, label in _ORPHADATA
+        if (source := by_id.get(source_id)) is not None
+        and source.file_version is not None
+        and source.file_date is not None
+    ]
+    releases = sorted({(version, day) for _, version, day in stated})
+    if not releases:
+        return ""
+    if len(releases) == 1 and len(stated) == len(_ORPHADATA):
+        version, day = releases[0]
+        return f" Data version {html.escape(version)}, {day}."
+    return (
+        " Data version "
+        + "; ".join(f"{html.escape(version)}, {day} ({label})" for label, version, day in stated)
+        + "."
+    )
+
+
 def _stat(label: str, value: str) -> str:
     """One census card: a `<dt>`/`<dd>` pair inside the `<div>` that groups them.
 
@@ -256,6 +296,7 @@ def _render(
     census: BurdenCensus,
     profile_census: ProfileCensus,
     combined_results: int,
+    sources: SourceRegistry,
 ) -> str:
     assertion_count = len(corpus.assertions)
     # The very set `gene_facts` keys `genes/index.json` on, not a recomputation
@@ -373,10 +414,13 @@ def _render(
     # for some published genes (26 of 119 drop when those terms are removed,
     # measured that day) and `sources.json` records both Orphadata products as
     # CC-BY-4.0, attribution required. The
-    # citation is Orphadata's own requested form (`mirrors/sources.yaml`); its
-    # "Data version" is the release `sources.json` pins by sha256, which this
-    # page points to rather than restating a date that would go stale on the
-    # next refresh.
+    # citation is Orphadata's own requested form (`mirrors/sources.yaml`). Its
+    # "Data version" pointed to `sources.json`'s sha256 until owner decision
+    # 2026-10-26 (R11), on the ground that a stated date would go stale; it is
+    # now each file's own header version and date, read from the registry the
+    # converter writes them into, so it moves with the mirror (`_orphadata_
+    # version`).
+    orphadata = _orphadata_version(sources)
     body = f"""  <h1>CHD Atlas</h1>
   <p class="tagline">Curated evidence linking genes, variants and proteins to congenital
     heart disease.</p>
@@ -430,7 +474,7 @@ def _render(
     carries a structural heart malformation; its cardiovascular annotations and its mappings
     to OMIM are mirrored under CC BY 4.0 — <em>Orphadata Science:
     Free access data from Orphanet. &copy; INSERM 1999. Available on
-    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a></em>.
+    <a href="http://sciences.orphadata.com/">http://sciences.orphadata.com/</a>.{orphadata}</em>
     Mondo's mappings of disease terms to Orphanet and OMIM are mirrored under CC BY 4.0;
     developmental expression is the <strong>EMBL-EBI Expression Atlas</strong>'s
     (experiment E-MTAB-6814), under EMBL-EBI's Terms of Use; and rare-variant results are
@@ -476,6 +520,7 @@ def build_landing(
     profile_census: ProfileCensus,
     combined_results: int,
     emitter: Emitter,
+    sources: SourceRegistry,
 ) -> None:
     """Emit `index.html`.
 
@@ -517,5 +562,14 @@ def build_landing(
     """
     emitter.write_text(
         LANDING,
-        _render(corpus, symbols, validity, published, census, profile_census, combined_results),
+        _render(
+            corpus,
+            symbols,
+            validity,
+            published,
+            census,
+            profile_census,
+            combined_results,
+            sources,
+        ),
     )

@@ -37,6 +37,15 @@ class Source(BaseModel):
     redistribution: Redistribution
     ontology_prefix: str | None = None
     ontology_file: str | None = None
+    # What the file itself says it is, beside a `version` that is a checksum
+    # (owner decision 2026-10-26, R11). Orphadata's XML opens on
+    # `<JDBOR date="..." version="...">`, and its citation asks for that data
+    # version; a sha256 proves which file was mirrored but tells a reader
+    # nothing they can cite. Transcribed verbatim from the header by
+    # `scripts/convert_orphanet.py`, which writes both beside the sha256 on
+    # every run so the three cannot describe different files. Both or neither.
+    file_version: str | None = None
+    file_date: str | None = None
 
     @field_validator("licence")
     @classmethod
@@ -67,6 +76,19 @@ class Source(BaseModel):
             raise ValueError(
                 f"source '{self.id}' declares ontology_file "
                 f"'{self.ontology_file}' but no ontology_prefix"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def file_version_and_date_are_paired_and_not_blank(self) -> Source:
+        """A file's own version means little without the date it states, and the reverse."""
+        for label, value in (("file_version", self.file_version), ("file_date", self.file_date)):
+            if value is not None and not value.strip():
+                raise ValueError(f"source '{self.id}' {label} must not be blank")
+        if (self.file_version is None) != (self.file_date is None):
+            raise ValueError(
+                f"source '{self.id}' declares one of file_version and file_date; "
+                f"a file's header states both"
             )
         return self
 

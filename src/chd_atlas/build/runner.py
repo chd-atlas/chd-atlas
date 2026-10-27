@@ -479,6 +479,9 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         profile_census=profile_stats,
         combined_results=combined_results,
         emitter=emitter,
+        # For the Orphadata citation's data version (R11), read off the files'
+        # own headers into `mirrors/sources.yaml` by the converter.
+        sources=registry,
     )
     # The HTML over everything above. Wired here and nowhere else: until this
     # call existed, `pages.py` was imported by its unit test alone, `build_landing`
