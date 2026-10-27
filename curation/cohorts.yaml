@@ -116,7 +116,7 @@ cohorts:
   # the supplement's `s007.xlsx` (sheet "S2 Table") on 2026-10-27.
   #
   # Each description states what S2 states of the series -- its case count,
-  # its phenotype (CHD for all seven) and its platform, quoted -- and that S2
+  # its phenotype (CHD for all seven) and its platform, verbatim -- and that S2
   # lists it, and nothing else: no claim about the series was checked against
   # the paper S2 cites for it. S2's notes column is blank for all seven, so
   # S2 suggests no overlap between one of them and another registered cohort,

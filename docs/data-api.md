@@ -2217,11 +2217,11 @@ one study and could be controls in another, so which it was is a property of the
 burden row that cites it — the column it appears in — not of the collection.
 
 **A row may not name every collection its study drew on.** PMID:34324492's S2
-Table lists case sources that no row names, and
-[`methods.html#cohorts`](#methodshtml) states how many and how many of its cases
-they hold. So two studies that name no collection in common, and none this file
-records as overlapping, may still share people, and `cohort_families` cannot see
-it. The seven `CHD case series of PMID:…` records, added in `2.19`, are the
+Table lists case sources that no row names;
+[`methods.html#cohorts`](#methodshtml) states how many of its sources the rows
+do name, and how many of its cases those hold. So two studies that name no
+collection in common, and none this file records as overlapping, may still
+share people, and `cohort_families` cannot see it. The seven `CHD case series of PMID:…` records, added in `2.19`, are the
 sources that table identifies by PMID with 50 or more cases; each description
 says what the table says of its series and nothing more.
 
