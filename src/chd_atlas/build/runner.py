@@ -32,6 +32,7 @@ from chd_atlas.build.burden import (
     load_burden,
     load_combined,
 )
+from chd_atlas.build.cell_types import cell_type_census, gene_cell_type_expression
 from chd_atlas.build.concordance import (
     cohort_families,
     evidence_axes,
@@ -307,6 +308,14 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
     # see `profile_census`'s own docstring for why neither figure has the
     # `families`-style exception `burden_census` carries.
     profile_stats = profile_census(expression_profiles, published)
+    # Derived once, like the profiles above: `build_genes` restricts it to
+    # `published`, and `cell_type_census` counts the same objects the bundles
+    # carry, so the manifest cannot disagree with them. Tasks 7 and 8 hand it to
+    # the gene pages and the front page too. `mirrors/cell_type_profiles/` is
+    # not committed yet, so a build today publishes `{"datasets": []}` on every
+    # bundle and 0 for both counts.
+    cell_type_expression = gene_cell_type_expression(root, corpus.datasets)
+    cell_type_stats = cell_type_census(cell_type_expression, published)
     # The one flat read of the `Placement`s just computed above -- never a
     # second derivation of a percentile. `percentile_annotations` only walks
     # the nested `ExpressionProfile`s and copies `median_percentile` back out;
@@ -386,6 +395,7 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
         concordance=concordance,
         profiles=expression_profiles,
         combined=combined,
+        cell_types=cell_type_expression,
     )
     build_literature(corpus, emitter)
     # The resolution table for the bare cohort ids every burden row carries.
@@ -514,6 +524,8 @@ def build_site(root: Path, out: Path) -> dict[str, str]:
             "burden_surviving_genes": census.surviving_genes,
             "profile_genes": profile_stats["genes"],
             "profile_datasets": profile_stats["datasets"],
+            "cell_type_genes": cell_type_stats["genes"],
+            "cell_type_datasets": cell_type_stats["datasets"],
         },
     )
     return dict(emitter.checksums)

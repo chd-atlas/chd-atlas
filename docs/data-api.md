@@ -50,8 +50,8 @@ What the build produced, and a checksum for every file in it.
 {
   "counts": {
     "assertions": 1, "burden_combined": 108, "burden_rows": 1210,
-    "burden_surviving_genes": 32, "cohort_families": 2,
-    "cohorts": 20, "datasets": 1, "featured": 1, "functional": 0,
+    "burden_surviving_genes": 32, "cell_type_datasets": 0, "cell_type_genes": 0,
+    "cohort_families": 2, "cohorts": 20, "datasets": 1, "featured": 1, "functional": 0,
     "genes": 119, "phenotypes": 3, "profile_datasets": 1, "profile_genes": 119,
     "publications": 5, "scope_terms": 105
   },
@@ -59,7 +59,7 @@ What the build produced, and a checksum for every file in it.
     "genes/index.json": "sha256:<64 hex>",
     "publications.json": "sha256:<64 hex>"
   },
-  "schema_version": "2.19",
+  "schema_version": "2.20",
   "source_commit": "<40-hex commit sha, or null outside a git checkout>",
   "status": "in-development"
 }
@@ -91,7 +91,7 @@ wrong by the next one.
   classification rather than on curation done here. Read `atlas_curation` on the
   browse row to tell the two apart.
 
-  The other seven keys are computed by the build, and the first three below were
+  The other nine keys are computed by the build, and the first three below were
   added because the object read as a census of the atlas while describing only
   its curation: through `2.6` it published `assertions: 1, datasets: 0,
   functional: 0` for a site serving 23 genes and 290 burden statistics — the
@@ -126,8 +126,13 @@ wrong by the next one.
   - `profile_datasets` is the number of profile datasets those bundles name —
     not `datasets`, which counts every curated omics dataset, published gene or
     not.
+  - `cell_type_genes` (since `2.20`) is the number of published genes whose
+    [`cell_type_expression`](#the-bundles-cell_type_expression-object-a-cell-type-profile-never-a-contrast)
+    is non-empty. It is 0 until a cell-type mirror is committed.
+  - `cell_type_datasets` (since `2.20`) is the number of cell-type datasets
+    those bundles name, 0 likewise.
 
-  Each of the seven counts only what the published genes' bundles carry, except
+  Each of the nine counts only what the published genes' bundles carry, except
   `cohort_families`, which groups the whole burden mirror's cohorts: restricting
   it to the published genes could split one family into what then reads as two
   independent ones. `index.html` states these five keys too: `genes`,
@@ -276,6 +281,9 @@ wrong by the next one.
   record that this atlas leaves open for an expert, or `"not_accessible"`, a
   source the record rests on could not be read, with a note stating what is
   unresolved; `null` and `null` where none is recorded. Additive.
+  `2.20` added [`cell_type_expression`](#the-bundles-cell_type_expression-object-a-cell-type-profile-never-a-contrast)
+  to every gene bundle, `{"datasets": []}` where none is covered, and
+  `cell_type_genes` and `cell_type_datasets` to `counts`. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -713,7 +721,8 @@ abridged, and each is documented in full further down.
       { "studies": ["PMID:40127276"], "state": "corrected", "members": [ … ] }
     ]
   },
-  "expression_profile": { "datasets": [ { "dataset": "E-MTAB-6814", … } ] }
+  "expression_profile": { "datasets": [ { "dataset": "E-MTAB-6814", … } ] },
+  "cell_type_expression": { "datasets": [] }
 }
 ```
 
@@ -1510,6 +1519,37 @@ the breakpoints themselves are not re-derivable, because they were read off
 the whole matrix D32 keeps unpublished. State it as the trade it is —
 auditable one level down, not provably correct all the way back to the source
 data.
+
+### The bundle's `cell_type_expression` object: a cell-type profile, never a contrast
+
+On every gene bundle. Always present, and `{"datasets": []}` for a gene no
+cell-type dataset covers; no cell-type mirror is committed yet, so that is
+every bundle today and `counts.cell_type_genes` and `counts.cell_type_datasets`
+are both 0.
+
+A low or absent value is not evidence against a gene: it describes the cells
+sampled, not the gene's role. Per-region values pool 9 to 15 weeks of
+development, so they are not a stage series. A cell type or region that is
+absent means no heart had at least 10 cells there. `below_floor` marks a
+median under the dataset's `detection_floor`. `specificity` is tau over the
+pooled medians, with its inputs.
+
+```json
+{"datasets": [{"dataset": "hoc", "unit": "cpm", "detection_floor": 1.0, "n_donors": 8,
+  "specificity": {"tau": 0.591, "scale": "log2(x+1)", "method": "<cell_types.CELL_TYPE_TAU_METHOD>",
+    "cell_types": ["aCM", "vCM", "ncCM", "Fibro", "SMC", "Epicardial", "Endocardial",
+                   "BEC", "LEC", "P-RBC", "WBC", "Neuronal"],
+    "n_cell_types": 12, "highest_in": "aCM",
+    "medians": {"aCM": 220.67, "vCM": 41.48, "ncCM": 159.96, "Fibro": 11.16, "SMC": 4.26,
+                "Epicardial": 20.75, "Endocardial": 8.3, "BEC": 2.7, "LEC": 0.41,
+                "P-RBC": 0.2, "WBC": 7.38, "Neuronal": 6.84}},
+  "cell_types": [{"cell_type": "aCM", "label": "Atrial cardiomyocytes",
+    "pooled": {"median": 220.67, "q25": 194.18, "q75": 241.99, "n_donors": 8,
+               "n_cells": 20268, "fraction_expressing": 0.837, "below_floor": false},
+    "regions": [{"region": "LA", "median": 228.06, "q25": 198.51, "q75": 241.66,
+                 "n_donors": 8, "n_cells": 7437, "fraction_expressing": 0.823,
+                 "below_floor": false}]}]}]}
+```
 
 ## `genes/<slug>.html`
 

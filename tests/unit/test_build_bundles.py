@@ -410,6 +410,7 @@ def test_a_bundle_carries_the_whole_gene_page_and_nothing_more(tmp_path: Path) -
         "burden",
         "burden_combined",
         "expression_profile",
+        "cell_type_expression",
     }
     # Always present, empty when the gene has none -- an absent key would make
     # "no study combined its arms" indistinguishable from "the build dropped it".
@@ -1042,6 +1043,48 @@ def test_a_gene_with_no_profile_data_still_carries_the_key(tmp_path: Path) -> No
     bundle = _read(tmp_path, "genes/HGNC_11604.json")
     assert "expression_profile" in bundle
     assert bundle["expression_profile"] == {"datasets": []}
+
+
+def test_every_bundle_carries_cell_type_expression_even_when_empty(tmp_path: Path) -> None:
+    """The rule `omics` and `expression_profile` keep: always present.
+
+    A gene absent from the mapping, and a build handed no mapping at all, both
+    publish exactly `{"datasets": []}`; one covered gene is carried verbatim.
+    """
+    emitter = Emitter(root=tmp_path)
+    covered: Any = {"datasets": [{"dataset": "hoc", "unit": "cpm"}]}
+
+    build_genes(
+        _corpus(),
+        emitter,
+        symbols=SYMBOLS,
+        omics={},
+        variants={},
+        validity={},
+        published={TBX5, GATA4},
+        burden={},
+        concordance=_no_burden(),
+        profiles={},
+        cell_types={TBX5: covered},
+    )
+
+    assert _read(tmp_path, "genes/HGNC_11604.json")["cell_type_expression"] == covered
+    assert _read(tmp_path, "genes/HGNC_4173.json")["cell_type_expression"] == {"datasets": []}
+
+    omitted = tmp_path / "omitted"
+    build_genes(
+        _corpus(),
+        Emitter(root=omitted),
+        symbols=SYMBOLS,
+        omics={},
+        variants={},
+        validity={},
+        published={TBX5},
+        burden={},
+        concordance=_no_burden(),
+        profiles={},
+    )
+    assert _read(omitted, "genes/HGNC_11604.json")["cell_type_expression"] == {"datasets": []}
 
 
 def test_the_bundle_carries_the_medians_tau_was_computed_from(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, load_burden
+from chd_atlas.build.cell_types import CellTypeCensus
 from chd_atlas.build.concordance import survives_own_correction
 from chd_atlas.build.identity import GeneIdentity, read_gene_identities
 from chd_atlas.build.profiles import ProfileCensus
@@ -628,3 +629,29 @@ def test_the_registry_reads_each_genes_identity_with_blank_cells_as_none(tmp_pat
 
     (mirror / "genes.tsv").write_text("hgnc_id\tsymbol\tname\tensembl_gene\nHGNC:1\tA\tB\tC\n")
     assert read_gene_identities(tmp_path) is None
+
+
+def test_the_cell_type_census_reaches_the_manifest_by_key(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`build_site` publishes `genes` under `cell_type_genes`, never swapped.
+
+    Fixed, distinct answers (as `profile_census` is given above), because a
+    real build has no cell-type mirror yet and publishes 0 for both; the empty
+    case is asserted too, on the unpatched build.
+    """
+    out = tmp_path / "dist"
+    build_site(repo, out)
+    counts = json.loads((out / "manifest.json").read_text())["counts"]
+    assert counts["cell_type_genes"] == 0
+    assert counts["cell_type_datasets"] == 0
+
+    monkeypatch.setattr(
+        "chd_atlas.build.runner.cell_type_census",
+        lambda expression, published: CellTypeCensus(genes=5, datasets=2),
+    )
+    patched = tmp_path / "patched"
+    build_site(repo, patched)
+    counts = json.loads((patched / "manifest.json").read_text())["counts"]
+    assert counts["cell_type_genes"] == 5
+    assert counts["cell_type_datasets"] == 2
