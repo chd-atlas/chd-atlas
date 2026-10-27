@@ -720,13 +720,14 @@ BURDEN = TableSchema(
         # Of `n_case_carriers`, how many are congenital heart disease cases,
         # where the study's case set also holds cases of a condition outside
         # this atlas's scope and the study counts its CHD cases' carriers apart
-        # (owner decision R2, 2026-10-27). Empty where it does not. Only
-        # PMID:34324492 does: its cases include 777 sporadic thoracic aortic
-        # aneurysm probands, and its S8 Table gives the "only CHD" case count
-        # for the 528 genes it lists, which `convert_audain2021.py` transcribes.
-        # That table is recorded as `audain2021_s8` in `sources.yaml`; `source`
-        # still names the file the row's statistic came from. Same `count_unit`
-        # as `n_case_carriers`, and never above it (BUR003).
+        # (owner decision R2, 2026-10-27). Empty where it does not. Only the
+        # studies in `CHD_CASE_SPLITS` below may carry it (BUR024), and only
+        # PMID:34324492 is one: its case set combines CHD with a series of 777
+        # sporadic thoracic aortic aneurysm probands, and its S8 Table gives
+        # the "only CHD" case count for 521 of the 528 genes it lists, leaving
+        # 7 blank, which `convert_audain2021.py` transcribes. `source` still
+        # names the file the row's statistic came from. Same `count_unit` as
+        # `n_case_carriers`, and never above it (BUR003).
         Column("n_chd_case_carriers", pl.Int64, nullable=True, minimum=0),
         # The comparator, and the fields each kind requires. `validate_burden`
         # enforces which of the next three must be present and which must be
@@ -782,6 +783,31 @@ BURDEN = TableSchema(
         "maf_max",
     ),
 )
+
+
+@dataclass(frozen=True)
+class CaseSplit:
+    """Where one study's `n_chd_case_carriers` comes from.
+
+    `source` is the `mirrors/sources.yaml` id of the file the column is
+    transcribed from -- not the row's own `source`, which names the file its
+    statistic came from -- and `table` is that file's name as a gene page's
+    card prints it ("the study's S8 Table").
+    """
+
+    source: str
+    table: str
+
+
+# The studies whose burden rows may carry `n_chd_case_carriers`, keyed by study
+# (owner decision R2). One definition for its three readers: `validate_burden`
+# refuses the column on any other study's row (BUR024); the validation runner
+# holds `source` to the registry wherever a row carries the column, as it holds
+# every row's own `source` (SRC003, SRC004); and `pages._chd_only` names the
+# table from here, so a card never names one study's table for another's row.
+CHD_CASE_SPLITS: Final[dict[str, CaseSplit]] = {
+    "PMID:34324492": CaseSplit(source="audain2021_s8", table="S8 Table"),
+}
 
 # One study's own combination of two of its burden arms. Added 2026-10-24 for
 # PMID:40127276's JL-FDR meta-analysis, which `convert_sierant2025.py` declined to

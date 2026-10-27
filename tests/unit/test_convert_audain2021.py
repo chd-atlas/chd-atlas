@@ -244,9 +244,10 @@ def test_every_committed_row_carries_the_current_note_and_denominators() -> None
 
     And the S8 split (owner decision R2, 2026-10-27), on the 12 registered
     genes S8 lists, as the converter transcribed them on 2026-10-27; the other
-    109 rows carry none. Only this study's rows carry the column, which is what
-    lets `pages._chd_only` name "S8 Table": a second study's split fails here
-    first, and that sentence must then name its own study's table.
+    109 rows carry none. Only this study's rows carry the column: BUR024
+    refuses it on a row of any study `CHD_CASE_SPLITS` does not list, and
+    `pages._chd_only` names the table that constant records for the row's
+    study.
     """
     frame, issues = read_table(REPO_ROOT / "mirrors" / "burden.tsv", BURDEN)
     assert frame is not None, issues

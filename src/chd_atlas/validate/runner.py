@@ -15,6 +15,7 @@ from chd_atlas.issues import Severity, ValidationIssue
 from chd_atlas.models.dataset import Dataset
 from chd_atlas.orphanet_scope import load_orphanet_tables, pinned_structural_phenotypes
 from chd_atlas.tables import (
+    CHD_CASE_SPLITS,
     PROFILE_QUANTILES,
     PROFILES,
     TABLE_SCHEMAS,
@@ -113,7 +114,14 @@ class ValidationReport:
 
 
 def _used_sources(root: Path) -> dict[str, set[str]]:
-    """Collect the distinct ``source`` values each mirror table relies on."""
+    """Collect the distinct ``source`` values each mirror table relies on.
+
+    The burden mirror relies on one more for each study in `CHD_CASE_SPLITS`
+    whose rows carry `n_chd_case_carriers`: the file that column is transcribed
+    from, which no row's `source` names (owner decision R2). Collected here so
+    it is held to the registry like every other, and the table a gene page's
+    card cites is one whose licence is recorded and permits redistribution.
+    """
     used: dict[str, set[str]] = {}
     for path, schema_name in mirror_paths(root):
         schema = TABLE_SCHEMAS[schema_name]
@@ -123,6 +131,14 @@ def _used_sources(root: Path) -> dict[str, set[str]]:
         if frame is None or "source" not in frame.columns:
             continue
         values = {str(value) for value in frame["source"].to_list() if value is not None}
+        if {"study", "n_chd_case_carriers"} <= set(frame.columns):
+            values |= {
+                CHD_CASE_SPLITS[study].source
+                for study, chd in zip(
+                    frame["study"].to_list(), frame["n_chd_case_carriers"].to_list(), strict=True
+                )
+                if chd is not None and study in CHD_CASE_SPLITS
+            }
         if values:
             used[str(path)] = values
     return used

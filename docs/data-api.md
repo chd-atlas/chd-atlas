@@ -1112,7 +1112,8 @@ congenital heart disease cases, where the study's case set also holds cases of
 a condition outside this atlas's scope and the study counted the CHD cases'
 carriers apart; it is `null` everywhere else, which is not a count of zero.
 Same unit as `n_case_carriers`, and never above it. Only `PMID:34324492` gives
-one: its cases include 777 sporadic thoracic aortic aneurysm probands (the
+one (validation refuses one on a row of any other study, `BUR024`): its cases
+include 777 sporadic thoracic aortic aneurysm probands (the
 `taa_cases` cohort), and its S8 Table counts the CHD-only carriers for the 528
 genes that reached significance, so the rows for the genes it lists carry that
 count and the rest carry `null`. Every other number on those rows is from S6

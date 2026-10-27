@@ -7583,6 +7583,17 @@ def test_the_card_states_a_studys_summary_caveat_once_beside_its_results(
         "S8 Table counts 7 of the 10 carriers among its CHD cases.</p>"
     ]
 
+    # The table is named from `CHD_CASE_SPLITS` by the row's study. A count on a
+    # row of a study it does not list is BUR024's to refuse, and past a
+    # bypassed gate the card raises rather than name a table that study lacks.
+    with pytest.raises(ValueError, match="a row of PMID:40127276 carries n_chd_case_carriers"):
+        _burden_page(
+            tmp_path / "other",
+            facts_uncurated,
+            [_sierant(n_chd_case_carriers=12)],
+            publications=publications,
+        )
+
 
 def test_the_card_says_how_wide_a_survival_is_where_its_study_records_it(
     tmp_path: Path, facts_uncurated: dict[str, GeneFacts]

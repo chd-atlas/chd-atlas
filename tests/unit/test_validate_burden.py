@@ -230,6 +230,18 @@ def test_a_carrier_count_above_its_denominator_is_reported(tmp_path: Path) -> No
     assert [issue.code for issue in validate_table(negative, BURDEN)] == ["TBL006"]
 
 
+def test_a_chd_only_count_on_a_study_that_gives_none_is_reported(tmp_path: Path) -> None:
+    """BUR024. A gene page's card names the table the count came from, read
+    from `CHD_CASE_SPLITS` by the row's study. Before this code, a count on a
+    PMID:40127276 row validated clean and its card published "Sierant MC et al.
+    2025: ... the study's S8 Table counts ..." (review, 2026-10-27), a table
+    that study does not have. Reported once per row, like every row rule here;
+    the study `CHD_CASE_SPLITS` lists passes (the BUR003 test above).
+    """
+    other = {**_ROW, "n_chd_case_carriers": "4"}
+    assert _codes(tmp_path, other, {**other, "gene": "HGNC:4173"}) == ["BUR024", "BUR024"]
+
+
 def test_an_inverted_confidence_interval_is_reported(tmp_path: Path) -> None:
     """BUR004. Measured 2026-08-04 against all three strata of Supplementary
     Data 3 (138,609 rows): zero rows have `ci_lower > ci_upper`, so this fires

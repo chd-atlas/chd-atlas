@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from chd_atlas.issues import Severity, ValidationIssue
-from chd_atlas.tables import BURDEN, BURDEN_COMBINED, read_table
+from chd_atlas.tables import BURDEN, BURDEN_COMBINED, CHD_CASE_SPLITS, read_table
 from chd_atlas.vocab import (
     EFFECT_MEASURES,
     BurdenComparator,
@@ -178,6 +178,21 @@ def validate_burden(root: Path) -> list[ValidationIssue]:
                     line,
                     f"'{carriers}' ({a}) exceeds '{total}' ({b})",
                 )
+
+        # BUR024 -- a CHD-only count on a row of a study that gives none (owner
+        # decision R2). `CHD_CASE_SPLITS` is the one record of which studies
+        # split their case carriers and in which table; a gene page's card
+        # names that table, so a count on another study's row would publish
+        # under a table that study never had.
+        chd = row["n_chd_case_carriers"]
+        if chd is not None and row["study"] not in CHD_CASE_SPLITS:
+            error(
+                "BUR024",
+                line,
+                f"'n_chd_case_carriers' is {chd} on a row of {row['study']}, which "
+                f"CHD_CASE_SPLITS records no CHD-only count for (only "
+                f"{', '.join(sorted(CHD_CASE_SPLITS))})",
+            )
 
         low, high = row["ci_low"], row["ci_high"]
         if low is not None and high is not None and low > high:

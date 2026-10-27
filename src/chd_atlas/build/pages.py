@@ -125,6 +125,7 @@ from chd_atlas.models.literature import Publication
 from chd_atlas.models.phases import CardiacPhase, CardiacPhaseFile
 from chd_atlas.models.scope import ScopeAuthority, ScopeEntry
 from chd_atlas.orphanet_scope import Warrant
+from chd_atlas.tables import CHD_CASE_SPLITS
 from chd_atlas.vocab import (
     CONTESTED,
     AtlasCuration,
@@ -1013,22 +1014,30 @@ def _chd_only(rows: Sequence[BurdenRow]) -> list[str]:
     the one row where it is smaller, ANKRD11's 12 of 13, is on no published
     page, so the second form is reachable from a fixture only.
 
-    `rows` are the rows the card's lines show, one per line. "S8 Table" is
-    PMID:34324492's table, written here because that study is the only one
-    whose rows carry the column; `test_convert_audain2021` holds the mirror to
-    that, so a second study's split fails there before this names the wrong
-    table. Deduplicated in order, so two lines of one study cannot repeat a
-    sentence.
+    `rows` are the rows the card's lines show, one per line. The table is the
+    one `CHD_CASE_SPLITS` records for the row's study: BUR024 refuses the
+    column on a row of any study it does not list, so a row that reaches here
+    without one means the gate was bypassed, and that raises rather than names
+    a table the study never had. Deduplicated in order, so two lines of one
+    study cannot repeat a sentence.
     """
     sentences: list[str] = []
     for row in rows:
         chd = row.n_chd_case_carriers
-        if chd is None or row.n_case_carriers == 0:
+        if chd is None:
+            continue
+        split = CHD_CASE_SPLITS.get(row.study)
+        if split is None:
+            raise ValueError(
+                f"a row of {row.study} carries n_chd_case_carriers, which only a study in "
+                f"CHD_CASE_SPLITS may (BUR024); the validation gate was bypassed"
+            )
+        if row.n_case_carriers == 0:
             continue
         sentence = (
-            "For this gene, the study's S8 Table counts every carrier among its CHD cases."
+            f"For this gene, the study's {split.table} counts every carrier among its CHD cases."
             if chd == row.n_case_carriers
-            else f"For this gene, the study's S8 Table counts {chd:,} of the "
+            else f"For this gene, the study's {split.table} counts {chd:,} of the "
             f"{row.n_case_carriers:,} carriers among its CHD cases."
         )
         if sentence not in sentences:
