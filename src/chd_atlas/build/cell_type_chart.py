@@ -27,10 +27,7 @@ from chd_atlas.build.cell_types import CellTypeDataset, CellTypeEntry, CellTypeV
 from chd_atlas.models.dataset import Dataset
 
 _HEADING: Final = "Cell types (Farah et al. 2024)"
-_CAPTION: Final = (
-    "One row per cell type on one axis, 0.1 to 10,000 CPM (log); a dot's size is its share "
-    "of cells."
-)
+_CAPTION: Final = "Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells."
 _READING_SUMMARY: Final = "How to read this chart"
 _READING_TEXT: Final = (
     "The dot is the median across hearts; the line spans the middle half of hearts (shown "
@@ -254,7 +251,7 @@ def _tau_line(entry: CellTypeDataset, dataset: Dataset) -> str:
     if spec is None:
         return ""
     labels = {c.token: c.label for c in dataset.cell_types}
-    head = f"τ = {spec['tau']:.2f} across {spec['n_cell_types']} cell types (log2(x+1)), "
+    head = f"τ = {spec['tau']:.2f} ({spec['n_cell_types']} cell types, log2(x+1)), "
     highest = spec["highest_in"]
     tail = "with no single highest." if highest is None else f"highest in {labels[highest]}."
     return f'<p class="ct-tau">{head}{tail}</p>'
@@ -269,7 +266,7 @@ def cell_type_block(entry: CellTypeDataset, dataset: Dataset) -> str:
         f'<p class="ct-caption">{_CAPTION}</p>'
         + _tau_line(entry, dataset)
         + _chart(entry, dataset, by_token)
-        + f"<details><summary>By region ({', '.join(dataset.regions)})</summary>"
+        + "<details><summary>By region</summary>"
         + _region_grid(dataset, by_token)
         + "</details>"
         + f"<details><summary>{_READING_SUMMARY}</summary>"

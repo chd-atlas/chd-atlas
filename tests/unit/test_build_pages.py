@@ -64,6 +64,7 @@ from chd_atlas.vocab import (
 )
 from tests.unit.test_build_cell_type_chart import dataset as cell_type_dataset
 from tests.unit.test_build_cell_type_chart import payload as cell_type_payload
+from tests.unit.test_build_cell_type_chart import specificity as cell_type_specificity
 
 TBX5 = "HGNC:11604"
 GATA4 = "HGNC:4173"
@@ -9256,3 +9257,50 @@ def test_a_gene_without_cell_type_data_keeps_the_bulk_banner_and_no_block(
     assert "Cell-type values pool" not in section
     assert "Cell types (Farah" not in section
     assert '<svg class="ct-svg"' not in section
+
+
+def test_a_gene_with_cell_type_data_and_no_bulk_profile_claims_no_timeline(
+    tmp_path: Path,
+) -> None:
+    page = _expression_page(
+        tmp_path,
+        {GATA4: EMPTY_EXPRESSION_PROFILE},
+        {"hoc": cell_type_dataset()},
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert (
+        '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks. A low or '
+        "absent value is not evidence a gene is unimportant to heart development.</p>"
+    ) in section
+    assert "timeline" not in section
+    assert "not yet curated" not in section
+    assert "<h3>Cell types (Farah et al. 2024)</h3>" in section
+
+
+def test_the_cell_type_block_adds_at_most_42_visible_words_to_a_gene_page(
+    tmp_path: Path,
+) -> None:
+    """Measured with the budget test's own counting (`_prose`, `_words`) on a fixture
+    page (with its tau line) with and without the block. The spec's ceiling is 40;
+    the measured growth is 42 (block 37 + banner 5), pinned here so it cannot grow
+    unseen. The excess is reported to the owner, not absorbed into the budget."""
+    from tests.test_built_site_is_consumable import _prose, _words
+
+    datasets = {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()}
+    profiles = {GATA4: _bulk_profile()}
+    plain = _expression_page(tmp_path / "a", profiles, datasets)
+    with_cells = _expression_page(
+        tmp_path / "b",
+        profiles,
+        datasets,
+        cell_types={
+            GATA4: CellTypeExpression(datasets=[cell_type_payload(spec=cell_type_specificity())])
+        },
+    )
+
+    def words(page: str) -> int:
+        return sum(_words(text) for text in _prose(page))
+
+    assert words(with_cells) - words(plain) <= 42

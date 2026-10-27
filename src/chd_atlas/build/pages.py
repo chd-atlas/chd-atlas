@@ -4167,6 +4167,13 @@ _CELL_TYPE_NOTICE: Final = (
     "to heart development.</p>"
 )
 
+# The same, for a gene with cell-type data and no bulk profile: there is no
+# timeline below, so the banner must not claim one.
+_CELL_TYPE_ONLY_NOTICE: Final = (
+    '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks. A low or '
+    "absent value is not evidence a gene is unimportant to heart development.</p>"
+)
+
 # `_EXPRESSION_READING_NOTES` and `_PERCENTILE_COMPARABILITY_NOTICE` sat here
 # until 2026-10-26: the reading notes every gene page folded under "How to read
 # these figures". They moved, with their histories, to `methods._EXPRESSION`
@@ -5653,8 +5660,9 @@ def _expression_section(
     entry's dataset must be in `datasets` (`KeyError` otherwise): the block
     draws the dataset's own declared cell types and regions, and a missing
     record would leave nothing to draw them from. A gene with cell-type data
-    but no bulk profile gets the cell-type block and the banner in place of
-    `_NOT_CURATED_EXPRESSION`, whose "not yet curated" would contradict it.
+    but no bulk profile gets the block and `_CELL_TYPE_ONLY_NOTICE` (no
+    timeline is claimed) in place of `_NOT_CURATED_EXPRESSION`, whose "not yet
+    curated" would contradict it.
     """
     entries = profile["datasets"]
     cell_entries = cell_types["datasets"]
@@ -5667,7 +5675,8 @@ def _expression_section(
     if not cell_entries:
         return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
     cells = "".join(cell_type_block(entry, datasets[entry["dataset"]]) for entry in cell_entries)
-    return "<h2>Developmental expression</h2>" + _CELL_TYPE_NOTICE + cells + blocks
+    notice = _CELL_TYPE_NOTICE if entries else _CELL_TYPE_ONLY_NOTICE
+    return "<h2>Developmental expression</h2>" + notice + cells + blocks
 
 
 def build_gene_pages(

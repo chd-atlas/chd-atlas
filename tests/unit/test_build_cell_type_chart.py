@@ -186,7 +186,7 @@ def test_a_cell_type_with_no_regions_shows_a_dash_in_every_region_column() -> No
     assert "<circle" in element(grid, "circle", "aCM", "LV")
     assert ">–</text>" in element(grid, "text", "aCM", "RA")
     # Columns follow the dataset's regions, in order.
-    assert "<summary>By region (LA, RA, LV, RV, IVS)</summary>" in block
+    assert "<summary>By region</summary>" in block
     assert re.findall(r'class="ct-small ct-mid"[^>]*>(LA|RA|LV|RV|IVS)<', grid) == list(REGIONS)
 
 
@@ -222,11 +222,11 @@ def test_the_tau_line_names_the_highest_cell_type_or_says_there_is_none() -> Non
     tied = cell_type_block(payload(spec=specificity(None)), dataset())
 
     assert (
-        '<p class="ct-tau">τ = 0.88 across 4 cell types (log2(x+1)), highest in '
+        '<p class="ct-tau">τ = 0.88 (4 cell types, log2(x+1)), highest in '
         "Atrial cardiomyocytes.</p>"
     ) in named
     assert (
-        '<p class="ct-tau">τ = 0.88 across 4 cell types (log2(x+1)), with no single highest.</p>'
+        '<p class="ct-tau">τ = 0.88 (4 cell types, log2(x+1)), with no single highest.</p>'
     ) in tied
     assert "highest in" not in tied
 
@@ -235,10 +235,7 @@ def test_the_heading_and_caption_are_the_pinned_copy() -> None:
     block = cell_type_block(payload(), dataset())
 
     assert "<h3>Cell types (Farah et al. 2024)</h3>" in block
-    assert (
-        "One row per cell type on one axis, 0.1 to 10,000 CPM (log); a dot's size is its share "
-        "of cells.</p>"
-    ) in block
+    assert ("Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells.</p>") in block
     assert "<script" not in block
 
 
