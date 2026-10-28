@@ -26,6 +26,9 @@ cd "$PROJECT_DIR"
 HPC_ENV_MODULE="${HPC_ENV_MODULE:-hpc-env/13.1}"
 HVANTK_PYTHON="${HVANTK_PYTHON:-$HOME/projects/pyvatk/.venv/bin/python}"
 HVANTK_REPO="${HVANTK_REPO:-$HOME/projects/pyvatk}"
+# tables.MIN_CELLS_PER_HEART: the site says a heart counts only with 10 or more
+# cells, and convert_farah2024.py refuses a group under it, so a lower value here
+# fails there.
 MIN_CELLS="${MIN_CELLS:-10}"
 INPUT_H5AD="${INPUT_H5AD:-${WORK:?WORK is unset; pass INPUT_H5AD explicitly}/hvantk-datasets/expression/cardiac/farah_2024.h5ad}"
 

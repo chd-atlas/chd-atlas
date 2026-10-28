@@ -204,6 +204,26 @@ def test_the_census_counts_published_genes_only(tmp_path: Path) -> None:
     assert cell_type_census(expression, {_GENE, "HGNC:9999"}) == {"genes": 1, "datasets": 1}
 
 
+def test_a_bypassed_gate_fails_rather_than_publishes(tmp_path: Path) -> None:
+    """Two inputs only a bypassed validator lets through (CLAUDE.md section 9).
+
+    A key repeated across shards (CTP011): the build kept whichever row it read
+    last, and measured on the review's fixture (2026-10-28) published 230.0
+    from a rerun shard over 220.67. A dataset with no detection floor, which
+    the model refuses: an `assert` guarded it, and `-O` strips those.
+    """
+    _write(tmp_path, [_row("Cardiomyocyte", "all", 5.0)])
+    _write(tmp_path, [_row("Cardiomyocyte", "all", 6.0)], name="hoc_rerun")
+    with pytest.raises(ValueError, match=r"hoc.*HGNC:1100.*Cardiomyocyte.*all"):
+        gene_cell_type_expression(tmp_path, [_dataset()])
+
+    floorless = tmp_path / "floorless"
+    _write(floorless, [_row("Cardiomyocyte", "all", 5.0)])
+    dataset = _dataset().model_copy(update={"detection_floor": None})
+    with pytest.raises(ValueError, match="detection_floor"):
+        gene_cell_type_expression(floorless, [dataset])
+
+
 def test_a_dataset_with_two_units_is_refused(tmp_path: Path) -> None:
     # Different genes, so no single gene's rows disagree: the check is per dataset.
     rows = [

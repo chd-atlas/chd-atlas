@@ -604,9 +604,22 @@ PROFILES = TableSchema(
     sort_key=("dataset", "gene", "tissue", "stage"),
 )
 
-# Four chambers and the interventricular septum, plus `all` for a row that
-# pools them; one column, so a reader filters one field rather than two.
-_CELL_TYPE_REGIONS: Final = frozenset({"LA", "RA", "LV", "RV", "IVS", "all"})
+# Four chambers and the interventricular septum: the regions a cell-type
+# dataset may declare (`Dataset.regions`). A row's `region` is one of them or
+# `POOLED_REGION`, the row that pools them; one column, so a reader filters one
+# field rather than two. Defined once: the model, the converter, the validator
+# and the build import these rather than retype them.
+CELL_TYPE_REGIONS: Final = frozenset({"LA", "RA", "LV", "RV", "IVS"})
+POOLED_REGION: Final = "all"
+# The two rules the cell-type block prints of every value, defined once. A
+# heart counts towards a (cell type, region) only with at least this many cells
+# of it there: hvantk drops a smaller group (`--min-cells`, 10 in the cluster
+# job), `convert_farah2024.py` refuses one that arrives anyway, and CTP010
+# checks what the mirror can show of it.
+MIN_CELLS_PER_HEART: Final = 10
+# Quartiles are published from this many hearts; below it they are null
+# (`convert_farah2024.py` writes them so, and CTP009 holds the mirror to it).
+MIN_HEARTS_FOR_QUARTILES: Final = 3
 
 CELL_TYPE_PROFILES = TableSchema(
     name="cell_type_profiles",
@@ -614,7 +627,7 @@ CELL_TYPE_PROFILES = TableSchema(
         Column("dataset", pl.String),
         Column("gene", pl.String, pattern=HGNC_PATTERN),
         Column("cell_type", pl.String),
-        Column("region", pl.String, allowed=_CELL_TYPE_REGIONS),
+        Column("region", pl.String, allowed=CELL_TYPE_REGIONS | {POOLED_REGION}),
         Column("median_abundance", pl.Float64, minimum=0),
         # `cpm` only, not `_ABUNDANCE_UNITS`: the gene page writes "CPM" on its
         # axis and beside every value whatever this column says, so a second

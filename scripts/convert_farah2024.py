@@ -21,9 +21,9 @@ approved symbol is dropped and reported, and a registry gene whose approved
 symbol the source lacks gets no rows and is named.
 
 Nothing is guessed: no alias, previous symbol or id stands in for a missing
-approved symbol. Two approved symbols carrying one id, a heart counted twice in
-one group, and any malformed input row stop the run before the output is
-touched.
+approved symbol. Two source symbols resolving to one id, a heart counted twice
+in one group, a heart's group with fewer than 10 cells, and any malformed input
+row stop the run before the output is touched.
 """
 
 from __future__ import annotations
@@ -45,10 +45,15 @@ from convert_cardoso_moreira import quantile_linear  # noqa: E402
 
 from chd_atlas.fs import write_bytes_atomically  # noqa: E402
 from chd_atlas.genes import GeneRegistry, Resolution  # noqa: E402
+from chd_atlas.tables import (  # noqa: E402
+    CELL_TYPE_REGIONS,
+    MIN_CELLS_PER_HEART,
+    MIN_HEARTS_FOR_QUARTILES,
+    POOLED_REGION,
+)
 
 UNIT = "cpm"
-REGIONS = frozenset({"LA", "RA", "LV", "RV", "IVS", "all"})
-MIN_HEARTS_FOR_QUARTILES = 3
+REGIONS = CELL_TYPE_REGIONS | {POOLED_REGION}
 COLUMNS = (
     "dataset",
     "gene",
@@ -159,9 +164,12 @@ def map_symbols(symbols: Iterable[str], registry: GeneRegistry) -> tuple[dict[st
     way). Every registry gene whose approved symbol is absent is named, so a
     gene the source lacks is visible rather than missing without comment.
 
-    Two approved symbols reaching one id would pool one gene's counts under two
-    names, so that stops the run. Only a registry listing one id twice can do
-    it, which TBL007 refuses; the guard stays for a bypassed gate.
+    Two source symbols reaching one id would pool one gene's counts under two
+    names, so that stops the run. Two inputs can do it: a registry listing one
+    id twice, which TBL007 refuses, and a source symbol padded with whitespace
+    beside its bare form (`'SOS1 '` and `'SOS1'`), because `resolve` strips
+    and `read_pseudobulk` does not. `farah_extract.py` writes neither: it keeps
+    only names equal to a stripped registry symbol.
     """
     mapping: dict[str, str] = {}
     report: list[str] = []
@@ -196,12 +204,23 @@ def summarise(
 ) -> list[dict[str, object]]:
     """One row per (gene, cell_type, region), sorted to the table's sort key.
 
-    Rows whose symbol is not in `symbol_to_gene` are skipped.
+    Rows whose symbol is not in `symbol_to_gene` are skipped. A heart's group
+    with fewer than `MIN_CELLS_PER_HEART` cells stops the run, whatever its
+    symbol: hvantk drops such a group at the job's `--min-cells`, so one
+    arriving means the job ran without it, and its whole output is suspect.
+    Refused rather than dropped, because dropping it would publish the rest of
+    that output as though the rule had held.
     """
     cpm: dict[tuple[str, str, str], dict[str, float]] = defaultdict(dict)
     nonzero: dict[tuple[str, str, str], int] = defaultdict(int)
     cells: dict[tuple[str, str, str], int] = defaultdict(int)
     for row in rows:
+        if row.n_cells < MIN_CELLS_PER_HEART:
+            raise _fail(
+                f"group {row.heart}/{row.cell_type}/{row.region} has n_cells {row.n_cells}, "
+                f"below {MIN_CELLS_PER_HEART}: hvantk drops such groups at --min-cells "
+                f"{MIN_CELLS_PER_HEART}, so this pseudobulk was made without it"
+            )
         gene = symbol_to_gene.get(row.symbol)
         if gene is None:
             continue

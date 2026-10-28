@@ -31,7 +31,7 @@ from typing import Any, Final, TypedDict
 
 from chd_atlas.build.profiles import TAU_METHOD, specificity
 from chd_atlas.models.dataset import Dataset
-from chd_atlas.tables import CELL_TYPE_PROFILES, mirror_paths, read_table
+from chd_atlas.tables import CELL_TYPE_PROFILES, POOLED_REGION, mirror_paths, read_table
 from chd_atlas.vocab import DatasetDesign
 
 # `TAU_METHOD` with "organs"/"organ's" replaced; pinned in full by
@@ -39,8 +39,6 @@ from chd_atlas.vocab import DatasetDesign
 CELL_TYPE_TAU_METHOD: Final = TAU_METHOD.replace("organs", "cell types").replace(
     "organ's", "cell type's"
 )
-
-_POOLED: Final = "all"
 
 
 class CellTypeValues(TypedDict):
@@ -126,12 +124,15 @@ def _dataset_entry(
     dataset: Dataset, unit: str, rows: Mapping[tuple[str, str], Mapping[str, Any]]
 ) -> CellTypeDataset:
     """One gene's entry for one dataset; `rows` is keyed by (cell_type, region)."""
-    assert dataset.detection_floor is not None  # a cell_type_profile dataset declares one
     floor = dataset.detection_floor
+    if floor is None:
+        # The model refuses a cell_type_profile dataset without one, so only a
+        # bypassed gate reaches here; `raise`, because `-O` strips an `assert`.
+        raise ValueError(f"dataset {str(dataset.id)!r} has no detection_floor")
     entries: list[CellTypeEntry] = []
     medians: dict[str, float] = {}
     for declared in dataset.cell_types:
-        pooled = rows.get((declared.token, _POOLED))
+        pooled = rows.get((declared.token, POOLED_REGION))
         if pooled is None:
             continue
         values = _values(pooled, floor)
@@ -177,7 +178,9 @@ def gene_cell_type_expression(
     A gene's `datasets` are ordered by dataset id. Rows for a dataset that is
     not a registered `cell_type_profile` dataset, and rows naming a cell type
     or region the dataset does not declare, are skipped: `validate_table` and
-    `validate_cell_type_profiles` report them against the same files.
+    `validate_cell_type_profiles` report them against the same files. A key
+    repeated across rows raises: TBL007 and CTP011 refuse it, and keeping
+    either row would publish one value and drop the other without a word.
     """
     by_id = {
         str(dataset.id): dataset
@@ -205,11 +208,17 @@ def gene_cell_type_expression(
             tokens = {c.token for c in dataset.cell_types}
             region = str(record["region"])
             if record["cell_type"] not in tokens or (
-                region != _POOLED and region not in dataset.regions
+                region != POOLED_REGION and region not in dataset.regions
             ):
                 continue
             cells = rows.setdefault(str(record["gene"]), {}).setdefault(str(dataset.id), {})
-            cells[str(record["cell_type"]), region] = record
+            key = (str(record["cell_type"]), region)
+            if key in cells:
+                raise ValueError(
+                    f"dataset {str(dataset.id)!r} repeats {record['gene']}/{key[0]}/{key[1]} "
+                    f"in cell_type_profiles (again in {path})"
+                )
+            cells[key] = record
 
     for dataset_id, found in sorted(units.items()):
         if len(found) > 1:

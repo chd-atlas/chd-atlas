@@ -125,6 +125,18 @@ def test_a_heart_counted_twice_in_one_group_is_refused() -> None:
         _summarise([_row("9pcw-1"), _row("9pcw-1")])
 
 
+@pytest.mark.parametrize("symbol", ["AAA", "ZZZ"])
+def test_a_group_under_ten_cells_stops_the_run(symbol: str) -> None:
+    """hvantk drops a group under `--min-cells` (matrix_utils.py:205 at commit
+    96ceafb4), and the job passes 10. A group under 10 cells means the job ran
+    without it, so its whole output is suspect: refused, not dropped, and
+    whether or not the row's symbol joins. Before this (review, 2026-10-28) two
+    hearts of 2 and 1 cells were written as `n_donors 2, n_cells 3`."""
+    small = _row("10pcw-1", cells=9, nonzero=1, symbol=symbol)
+    with pytest.raises(SystemExit, match="10pcw-1/cardiomyocyte/LV has n_cells 9"):
+        _summarise([_row("9pcw-1"), small])
+
+
 # Three rows' symbol columns transcribed from `mirrors/genes.tsv` (2026-10-28).
 # Each carries an alias that is an unrelated gene's approved symbol: HGF is
 # hepatocyte growth factor's, PKD1 polycystin 1's, and POP1 the ribonuclease P
@@ -170,17 +182,37 @@ def test_the_join_is_on_approved_symbols_only(
     assert len(report) == len(named) + len(dropped)
 
 
-def test_two_approved_symbols_for_one_id_stop_the_run() -> None:
-    """Only a registry carrying one id twice can do this, and TBL007 refuses
-    that; the converter stops rather than pooling two names' counts."""
+@pytest.mark.parametrize(
+    ("rows", "symbols", "match"),
+    [
+        pytest.param(
+            [("HGNC:1", "AAA"), ("HGNC:1", "AAB")],
+            ["AAA", "AAB"],
+            "'AAA' and 'AAB' both resolve to HGNC:1",
+            id="one-id-twice-in-the-registry",
+        ),
+        pytest.param(
+            [("HGNC:1", "AAA")],
+            ["AAA", "AAA "],
+            "'AAA' and 'AAA ' both resolve to HGNC:1",
+            id="a-padded-symbol-beside-its-bare-form",
+        ),
+    ],
+)
+def test_two_source_symbols_for_one_id_stop_the_run(
+    rows: list[tuple[str, str]], symbols: list[str], match: str
+) -> None:
+    """Two ways to reach it: a registry carrying one id twice, which TBL007
+    refuses, and a source symbol padded with whitespace beside its bare form,
+    because `resolve` strips and `read_pseudobulk` does not. `farah_extract.py`
+    writes neither (it keeps only names equal to a stripped registry symbol);
+    the converter still stops rather than pooling two names' counts."""
     registry = GeneRegistry(
-        [
-            {"hgnc_id": "HGNC:1", "symbol": "AAA", "aliases": "", "prev_symbols": ""},
-            {"hgnc_id": "HGNC:1", "symbol": "AAB", "aliases": "", "prev_symbols": ""},
-        ]
+        {"hgnc_id": gene, "symbol": symbol, "aliases": "", "prev_symbols": ""}
+        for gene, symbol in rows
     )
-    with pytest.raises(SystemExit, match="'AAA' and 'AAB' both resolve to HGNC:1"):
-        map_symbols(["AAA", "AAB"], registry)
+    with pytest.raises(SystemExit, match=match):
+        map_symbols(symbols, registry)
 
 
 def test_extract_rows_keeps_only_wanted_symbols_and_tags_the_region() -> None:

@@ -710,10 +710,14 @@ def validate_repository(root: Path) -> ValidationReport:
                 phases=corpus.cardiac_phases,
             )
         )
-        # CTP001-007: cell-type rows against their dataset record. The same
-        # `or None` as above, for the same reason: an unreadable or header-only
-        # registry skips CTP007 rather than flagging every gene; TBL008 or
-        # REF001 reports why.
+        # CTP001-011: cell-type rows against their dataset record and the rules
+        # the cell-type block prints of them. The same `or None` as above, for the same
+        # reason: an unreadable or header-only registry skips CTP007 rather
+        # than flagging every gene; TBL008 or REF001 reports why. The other
+        # checks still run, which
+        # `test_a_header_only_gene_registry_skips_only_the_cell_type_gene_check`
+        # pins: with this call deleted the whole suite once passed (review,
+        # 2026-10-28).
         issues.extend(
             validate_cell_type_profiles(
                 root, datasets=corpus.datasets, known_genes=known_genes or None
