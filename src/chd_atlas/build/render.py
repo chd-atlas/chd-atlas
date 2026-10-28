@@ -324,7 +324,9 @@ STYLESHEET: Final = """
   .ct-floor { stroke: var(--notice-border); stroke-width: 1.2; stroke-dasharray: 4 3; }
   .ct-below { fill: var(--notice-bg); }
   .ct-whisker { stroke: var(--evidence); stroke-width: 2; }
-  .ct-dot { fill: var(--evidence); fill-opacity: 0.85; }
+  /* No fill-opacity here: the region grid steps each dot's by decade in an
+     attribute, and a CSS property would override it on every dot. */
+  .ct-dot { fill: var(--evidence); }
   .ct-ring { fill: none; stroke: var(--muted); stroke-width: 1.2; }
   .chart { width: 100%; height: auto; max-width: 40rem; overflow: visible; }
   .chart-line { fill: none; stroke: var(--link); stroke-width: 2; }

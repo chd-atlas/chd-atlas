@@ -15,8 +15,11 @@ from chd_atlas.build.cell_types import (
     CellTypeValues,
     RegionEntry,
 )
+from chd_atlas.build.render import STYLESHEET
 from chd_atlas.models.dataset import Dataset
+from tests.test_built_site_is_consumable import _FIXED_PRECISION, _GEOMETRY
 
+GENE = "GATA4"
 REGIONS = ("LA", "RA", "LV", "RV", "IVS")
 AXIS_MIN_X = "190.0"  # _LEFT: the x of 0.1 CPM
 
@@ -29,7 +32,10 @@ _DECLARED = (
 )
 
 
-def dataset() -> Dataset:
+def dataset(
+    declared: tuple[tuple[str, str, str], ...] = _DECLARED,
+    regions: tuple[str, ...] = REGIONS,
+) -> Dataset:
     return Dataset(
         id="hoc",
         archive="ucsc_cell_browser",
@@ -40,8 +46,8 @@ def dataset() -> Dataset:
         organism="NCBITaxon:9606",
         n_samples=8,
         licence="CC BY 4.0",
-        cell_types=[{"token": t, "label": n, "compartment": c} for t, n, c in _DECLARED],
-        regions=list(REGIONS),
+        cell_types=[{"token": t, "label": n, "compartment": c} for t, n, c in declared],
+        regions=list(regions),
         detection_floor=1.0,
         floor_source="source methods, section 2",
         quantile_estimator="linear",
@@ -127,7 +133,7 @@ def attr(markup: str, name: str) -> float:
 
 
 def test_each_row_states_median_share_and_hearts_beside_its_dot() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
 
     assert ">1,235 CPM · 62% · 7 hearts<" in element(block, "text", "aCM")
     assert ">57 CPM · 38% · 6 hearts<" in element(block, "text", "vCM")
@@ -152,7 +158,7 @@ def test_each_row_states_median_share_and_hearts_beside_its_dot() -> None:
 
 
 def test_every_declared_cell_type_has_a_row_and_one_without_data_says_so() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
     labels = re.findall(r'<text[^>]*class="ct-label"[^>]*>(.*?)</text>', block)
 
     # Declared order, each label once in the chart and once in the region grid.
@@ -166,7 +172,7 @@ def test_every_declared_cell_type_has_a_row_and_one_without_data_says_so() -> No
 
 def test_a_zero_median_draws_at_the_axis_minimum_and_reads_0_cpm() -> None:
     zero = values(0.0, fraction=0.03, donors=5, cells=700, q25=0.0, q75=0.0)
-    block = cell_type_block(payload(extra=[entry("SMC", zero)]), dataset())
+    block = cell_type_block(payload(extra=[entry("SMC", zero)]), dataset(), GENE)
 
     assert ">0 CPM · 3% · 5 hearts<" in element(block, "text", "SMC")
     dot = element(block, "circle", "SMC")
@@ -175,7 +181,7 @@ def test_a_zero_median_draws_at_the_axis_minimum_and_reads_0_cpm() -> None:
 
 
 def test_a_cell_type_with_no_regions_shows_a_dash_in_every_region_column() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
     grid = block.split("<details>")[1]
 
     for region in REGIONS:
@@ -205,6 +211,7 @@ def test_a_region_dot_is_a_ring_below_the_floor_and_steps_its_opacity_by_decade(
             cell_types=[entry("aCM", pooled, LA=low, RA=mid, LV=high)],
         ),
         dataset(),
+        GENE,
     )
     grid = block.split("<details>")[1]
 
@@ -214,12 +221,12 @@ def test_a_region_dot_is_a_ring_below_the_floor_and_steps_its_opacity_by_decade(
 
 
 def test_the_tau_line_is_omitted_when_specificity_is_null() -> None:
-    assert "τ =" not in cell_type_block(payload(spec=None), dataset())
+    assert "τ =" not in cell_type_block(payload(spec=None), dataset(), GENE)
 
 
 def test_the_tau_line_names_the_highest_cell_type_or_says_there_is_none() -> None:
-    named = cell_type_block(payload(spec=specificity("aCM")), dataset())
-    tied = cell_type_block(payload(spec=specificity(None)), dataset())
+    named = cell_type_block(payload(spec=specificity("aCM")), dataset(), GENE)
+    tied = cell_type_block(payload(spec=specificity(None)), dataset(), GENE)
 
     assert (
         '<p class="ct-tau">τ = 0.88 (4 cell types, log2(x+1)), highest in '
@@ -232,7 +239,7 @@ def test_the_tau_line_names_the_highest_cell_type_or_says_there_is_none() -> Non
 
 
 def test_the_heading_and_caption_are_the_pinned_copy() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
 
     assert "<h3>Cell types (Farah 2024)</h3>" in block
     assert ("Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells.</p>") in block
@@ -240,7 +247,7 @@ def test_the_heading_and_caption_are_the_pinned_copy() -> None:
 
 
 def test_the_how_to_read_fold_is_at_most_80_words_and_links_methods() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
     fold = block.split("<summary>How to read this chart</summary>")[1].split("</details>")[0]
     text = re.sub(r"<[^>]+>", "", fold)
 
@@ -255,7 +262,7 @@ def test_the_how_to_read_fold_is_at_most_80_words_and_links_methods() -> None:
 
 
 def test_the_shaded_band_ends_at_the_datasets_own_floor() -> None:
-    block = cell_type_block(payload(), dataset())
+    block = cell_type_block(payload(), dataset(), GENE)
 
     band = re.search(r'<rect x="([0-9.]+)"[^>]*width="([0-9.]+)"[^>]*class="ct-below"', block)
     assert band is not None
@@ -280,3 +287,113 @@ def test_the_shaded_band_ends_at_the_datasets_own_floor() -> None:
 )
 def test_the_median_format_steps_at_1_10_and_100(median: float, text: str) -> None:
     assert format_median(median) == text
+
+
+def test_the_stylesheet_sets_no_fill_opacity_on_a_class_the_region_grid_draws() -> None:
+    """The grid's decade shading is each dot's `fill-opacity` attribute, and a CSS
+    rule setting that property on the same element wins over the attribute.
+    `.ct-dot { fill-opacity: 0.85 }` drew every grid dot identically until the
+    final review (2026-10-28); the chart's own dots carry their 0.85 as an
+    attribute instead."""
+    block = cell_type_block(payload(), dataset(), GENE)
+    grid = block.split("<details>")[1]
+    drawn = {name for value in re.findall(r'class="([^"]*)"', grid) for name in value.split()}
+    assert {"ct-dot", "ct-ring"} <= drawn
+    rules = re.findall(r"([^{}]+)\{([^{}]*)\}", re.sub(r"/\*.*?\*/", "", STYLESHEET, flags=re.S))
+    styled = [
+        (selector.strip(), body)
+        for selector, body in rules
+        if set(re.findall(r"\.([\w-]+)", selector)) & drawn or re.search(r"\bcircle\b", selector)
+    ]
+    assert any(selector == ".ct-dot" for selector, _ in styled), "no rule styles the grid's dots"
+    assert [selector for selector, body in styled if "fill-opacity" in body] == []
+    assert 'fill-opacity="0.85"' in element(block, "circle", "aCM")
+
+
+def test_every_coordinate_the_block_draws_has_coordinate_s_fixed_shape() -> None:
+    """The site-wide scan (`test_every_geometry_the_pages_publish_...`) reads the
+    real build, which has no cell-type mirror yet, so it could not see this
+    block's `r="6.97"`. The same check, over a fixture with whiskers, a dot in
+    every grid state and the legend."""
+    low = values(0.4, fraction=0.21, donors=5, cells=300)
+    block = cell_type_block(
+        payload(extra=[entry("SMC", low, LA=low, RA=low)], spec=specificity()), dataset(), GENE
+    )
+    tokens = [token for value in _GEOMETRY.findall(block) for token in value.split()]
+    assert len(tokens) > 100, len(tokens)
+    assert [token for token in tokens if not _FIXED_PRECISION.match(token)] == []
+
+
+def test_one_heart_reads_singular_in_the_column_and_the_tooltip() -> None:
+    one = values(12.0, fraction=0.5, donors=1, cells=40)
+    block = cell_type_block(payload(extra=[entry("SMC", one, RV=one)]), dataset(), GENE)
+
+    assert ">12 CPM · 50% · 1 heart<" in element(block, "text", "SMC")
+    pooled = re.search(r"<title>(.*?)</title>", element(block, "circle", "SMC"))
+    regional = re.search(r"<title>(.*?)</title>", element(block, "circle", "SMC", "RV"))
+    assert pooled is not None and pooled.group(1).endswith(", 50% of 40 cells, 1 heart")
+    assert regional is not None and regional.group(1).endswith(", 1 heart")
+    assert "1 hearts" not in block
+
+
+def test_curated_strings_are_escaped() -> None:
+    """Labels, compartments, tokens and regions are free text in a curated
+    record; a `<` in one would open a tag on the page."""
+    declared = (("T<1", "Cells <10 um", "Blood & immune"),)
+    odd = values(5.0, fraction=0.3, donors=4, cells=200)
+    block = cell_type_block(
+        CellTypeDataset(
+            dataset="hoc",
+            unit="cpm",
+            detection_floor=1.0,
+            n_donors=8,
+            specificity=CellTypeSpecificity(
+                tau=0.5,
+                scale="log2(x+1)",
+                method="m",
+                cell_types=("T<1",),
+                n_cell_types=2,
+                highest_in="T<1",
+                medians={},
+            ),
+            cell_types=[
+                CellTypeEntry(
+                    cell_type="T<1",
+                    label="Cells <10 um",
+                    pooled=odd,
+                    regions=[RegionEntry(region="L<A", **odd)],
+                )
+            ],
+        ),
+        dataset(declared, ("L<A",)),
+        "A<B",
+    )
+
+    assert "<10" not in block and "<1" not in block and "<A" not in block and "<B" not in block
+    assert "& " not in block
+    assert ">Cells &lt;10 um</text>" in block
+    assert ">Blood &amp; immune</text>" in block
+    assert 'data-cell-type="T&lt;1" data-region="L&lt;A"' in block
+    assert ">L&lt;A</text>" in block
+    assert "highest in Cells &lt;10 um." in block
+    assert 'aria-label="A&lt;B expression by cell type"' in block
+
+
+def test_the_tau_line_sits_below_the_chart_and_the_figures_name_the_gene() -> None:
+    block = cell_type_block(payload(spec=specificity()), dataset(), GENE)
+    chart_end = block.index("</svg>")
+
+    assert chart_end < block.index('<p class="ct-tau">') < block.index("<details>")
+    assert 'aria-label="GATA4 expression by cell type"' in block
+    assert 'aria-label="GATA4 expression by cell type and region"' in block
+    assert "hoc expression" not in block
+
+
+def test_the_region_grid_s_key_defines_its_dash() -> None:
+    grid = cell_type_block(payload(), dataset(), GENE).split("<details>")[1]
+    key = grid.split('class="ct-small">1,000+ CPM</text>')[1]
+
+    assert re.findall(r"<text[^>]*>([^<]*)</text>", key) == [
+        "–",
+        "no heart had 10 or more cells there",
+    ]

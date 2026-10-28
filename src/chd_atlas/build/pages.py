@@ -5621,6 +5621,8 @@ def _expression_section(
     datasets: Mapping[str, Dataset],
     phases: CardiacPhaseFile | None,
     cell_types: CellTypeExpression = EMPTY_CELL_TYPE_EXPRESSION,
+    *,
+    gene: str,
 ) -> str:
     """Developmental expression: percentile, tau and phase, per organ and stage.
 
@@ -5662,7 +5664,8 @@ def _expression_section(
     record would leave nothing to draw them from. A gene with cell-type data
     but no bulk profile gets the block and `_CELL_TYPE_ONLY_NOTICE` (no
     timeline is claimed) in place of `_NOT_CURATED_EXPRESSION`, whose "not yet
-    curated" would contradict it.
+    curated" would contradict it. `gene` is the symbol (or id) the block's
+    figures are named by for a screen reader.
     """
     entries = profile["datasets"]
     cell_entries = cell_types["datasets"]
@@ -5674,7 +5677,9 @@ def _expression_section(
     )
     if not cell_entries:
         return "<h2>Developmental expression</h2>" + _BULK_TISSUE_NOTICE + blocks
-    cells = "".join(cell_type_block(entry, datasets[entry["dataset"]]) for entry in cell_entries)
+    cells = "".join(
+        cell_type_block(entry, datasets[entry["dataset"]], gene) for entry in cell_entries
+    )
     notice = _CELL_TYPE_NOTICE if entries else _CELL_TYPE_ONLY_NOTICE
     return "<h2>Developmental expression</h2>" + notice + cells + blocks
 
@@ -5825,6 +5830,7 @@ def build_gene_pages(
                 dataset_registry,
                 phases,
                 cell_type_by_gene.get(gene, EMPTY_CELL_TYPE_EXPRESSION),
+                gene=symbol,
             )
             + "</div></div>"
         )

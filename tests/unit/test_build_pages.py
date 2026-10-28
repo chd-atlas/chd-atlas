@@ -9234,6 +9234,8 @@ def test_a_gene_with_cell_type_data_carries_the_combined_banner_and_not_the_bulk
     # The cell-type block opens the section, before the first bulk dataset block.
     assert section.index("<h3>Cell types (Farah 2024)</h3>") < section.index("E-MTAB-6814")
     assert section.index(_COMBINED_BANNER) < section.index("<h3>Cell types")
+    # The figures are named by the page's symbol, not by its id or the dataset's.
+    assert 'aria-label="GATA4 expression by cell type"' in section
 
 
 def test_a_gene_without_cell_type_data_keeps_the_bulk_banner_and_no_block(
@@ -9284,8 +9286,10 @@ def test_the_cell_type_block_adds_at_most_40_visible_words_to_a_gene_page(
 ) -> None:
     """Measured with the budget test's own counting (`_prose`, `_words`) on a fixture
     page (with its tau line) with and without the block. The spec's ceiling is 40;
-    the measured growth is 40 (block 35 + banner 5), pinned here so it cannot grow
-    unseen. The excess is reported to the owner, not absorbed into the budget."""
+    the measured growth is 40 (block 35 + banner 5, re-measured 2026-10-28 after
+    the tau line moved below the chart), so the block is at its ceiling and any
+    visible word it adds fails here. Words inside an SVG or a closed fold do not
+    count, which is why the region grid's key costs none."""
     from tests.test_built_site_is_consumable import _prose, _words
 
     datasets = {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()}
