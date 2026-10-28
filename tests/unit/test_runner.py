@@ -1347,8 +1347,15 @@ def test_a_cell_type_mirror_with_an_unregistered_source_fails_validation(
     assert any("'not_in_sources'" in i.message for i in report.issues if i.code == "SRC003")
 
 
-def test_a_header_only_gene_registry_skips_the_cell_type_gene_check(tmp_path: Path) -> None:
-    """CTP007 is skipped for an empty registry; REF001 names the cause instead."""
+def test_a_header_only_gene_registry_skips_only_the_cell_type_gene_check(tmp_path: Path) -> None:
+    """CTP007 is skipped for an empty registry; REF001 names the cause instead.
+
+    The other cell-type checks still run: the row's dataset has no record, and
+    CTP001 says so. That assertion is the one that fails if `validate_repository`
+    stops calling `validate_cell_type_profiles` at all (review, 2026-10-28: with
+    the call deleted, the suite passed and a build skipped every row naming an
+    undeclared cell type or region in silence).
+    """
     root = _real_repo(tmp_path)
     genes = root / "mirrors" / "genes.tsv"
     genes.write_text(genes.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
@@ -1365,3 +1372,4 @@ def test_a_header_only_gene_registry_skips_the_cell_type_gene_check(tmp_path: Pa
 
     assert "REF001" in codes
     assert "CTP007" not in codes
+    assert "CTP001" in codes

@@ -5704,7 +5704,7 @@ def build_gene_pages(
     scope_labels: Mapping[str, str] | None = None,
     identities: Mapping[str, GeneIdentity] | None = None,
     scope_terms: Mapping[str, ScopeEntry] | None = None,
-    cell_types: Mapping[str, CellTypeExpression] | None = None,
+    cell_types: Mapping[str, CellTypeExpression],
 ) -> None:
     """Emit one HTML page per gene in `facts`.
 
@@ -5749,7 +5749,10 @@ def build_gene_pages(
     every figure it would have summarised is in the tables regardless.
 
     `cell_types` is `gene_cell_type_expression`'s return; a gene absent from it
-    gets `EMPTY_CELL_TYPE_EXPRESSION` and keeps the bulk-only section.
+    gets `EMPTY_CELL_TYPE_EXPRESSION` and keeps the bulk-only section. Required,
+    with no default, for the reason `build_genes` gives: with one, deleting it
+    from the runner's call passed the whole suite (review, 2026-10-28). A
+    caller with no cell-type data passes `{}`.
 
     Sorted, like every loop in this build that iterates a mapping: `sort_keys`
     orders dict keys in a JSON payload and has nothing to say about the order
@@ -5759,7 +5762,6 @@ def build_gene_pages(
     profile_by_gene = profiles or {}
     dataset_registry = datasets or {}
     combined_by_gene = combined or {}
-    cell_type_by_gene = cell_types or {}
     warrants = scope_warrants or {}
     labels = scope_labels or {}
     graders = _panel_graders(validity, symbols)
@@ -5829,7 +5831,7 @@ def build_gene_pages(
                 profile_by_gene.get(gene, EMPTY_EXPRESSION_PROFILE),
                 dataset_registry,
                 phases,
-                cell_type_by_gene.get(gene, EMPTY_CELL_TYPE_EXPRESSION),
+                cell_types.get(gene, EMPTY_CELL_TYPE_EXPRESSION),
                 gene=symbol,
             )
             + "</div></div>"
