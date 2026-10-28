@@ -3,10 +3,13 @@
 
 Static SVG, no script. One shared log axis from `_AXIS_MIN` to `_AXIS_MAX` CPM
 with a gridline at each decade and a shaded band below the dataset's detection
-floor. A row's dot sits at the pooled median, its area is proportional to the
-share of the cell type's cells with at least one count, and its whisker spans
-the quartiles across hearts. The tau line follows the chart. A "By region" fold
-repeats the cell types against the dataset's declared regions.
+floor. A row's dot sits at the pooled median and its whisker spans the
+quartiles across hearts. Its radius is `2.5 + 7.5 * sqrt(share)` (8 in place of
+7.5 in the region grid), where share is the fraction of the cell type's cells
+with at least one count: it grows with the share but is not proportional to
+it, and a share of 0 still draws a dot of radius 2.5 (`_radius`). The tau line
+follows the chart. A "By region" fold repeats the cell types against the
+dataset's declared regions.
 
 **Every declared cell type gets a row, in the dataset's own order.**
 `cell_types.py` omits a cell type no heart reached 10 cells of, so this module
@@ -33,6 +36,13 @@ from chd_atlas.build.cell_types import CellTypeDataset, CellTypeEntry, CellTypeV
 from chd_atlas.build.charts import coordinate
 from chd_atlas.models.dataset import Dataset
 
+# What the fixed copy states of its dataset: `_HEADING`'s "(Farah 2024)", the
+# two `pages._CELL_TYPE_*NOTICE` banners' "8 hearts" and `_READING_TEXT`'s "1 CPM".
+_DESCRIBED: Final = (
+    ("publication", "PMID:38480880"),
+    ("n_samples", 8),
+    ("detection_floor", 1.0),
+)
 _HEADING: Final = "Cell types (Farah 2024)"
 _CAPTION: Final = "Log axis, 0.1 to 10,000 CPM; a dot's size is its share of cells."
 _READING_SUMMARY: Final = "How to read this chart"
@@ -317,6 +327,14 @@ def cell_type_block(entry: CellTypeDataset, dataset: Dataset, gene: str) -> str:
     `gene` is what the figures' accessible names call the gene -- its symbol,
     or its id where it has none.
     """
+    # The copy here and in the page's banner states these values, so a dataset
+    # that differs needs that copy generalised before it can render.
+    for field, value in _DESCRIBED:
+        if getattr(dataset, field) != value:
+            raise ValueError(
+                f"dataset {str(dataset.id)!r} has {field} {getattr(dataset, field)!r}; the "
+                f"cell-type copy states {value!r}"
+            )
     by_token = {item["cell_type"]: item for item in entry["cell_types"]}
     return (
         '<section class="cell-types">'

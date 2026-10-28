@@ -51,6 +51,8 @@ def dataset(
         detection_floor=1.0,
         floor_source="source methods, section 2",
         quantile_estimator="linear",
+        # The values the block's fixed copy states; `cell_type_block` refuses others.
+        publication="PMID:38480880",
     )
 
 
@@ -246,6 +248,25 @@ def test_the_heading_and_caption_are_the_pinned_copy() -> None:
     assert "<script" not in block
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("publication", "PMID:8988165"),
+        ("publication", None),
+        ("n_samples", 9),
+        ("detection_floor", 0.5),
+    ],
+)
+def test_a_dataset_the_fixed_copy_does_not_describe_is_refused(field: str, value: object) -> None:
+    """The heading says "(Farah 2024)", both banners "8 hearts" and the fold
+    "1 CPM", whatever the record says. A second dataset needs that copy
+    generalised before it can render, so the block refuses it, naming the
+    field, rather than print one study's facts above another's figures."""
+    other = dataset().model_copy(update={field: value})
+    with pytest.raises(ValueError, match=field):
+        cell_type_block(payload(), other, GENE)
+
+
 def test_the_how_to_read_fold_is_at_most_80_words_and_links_methods() -> None:
     block = cell_type_block(payload(), dataset(), GENE)
     fold = block.split("<summary>How to read this chart</summary>")[1].split("</details>")[0]
@@ -337,8 +358,10 @@ def test_one_heart_reads_singular_in_the_column_and_the_tooltip() -> None:
 
 
 def test_curated_strings_are_escaped() -> None:
-    """Labels, compartments, tokens and regions are free text in a curated
-    record; a `<` in one would open a tag on the page."""
+    """Labels, compartments and tokens are free text in a curated record; a
+    `<` in one would open a tag on the page. A region is one of five tokens
+    since review (2026-10-28) and is escaped all the same: the record's
+    regions here bypass the model to show it."""
     declared = (("T<1", "Cells <10 um", "Blood & immune"),)
     odd = values(5.0, fraction=0.3, donors=4, cells=200)
     block = cell_type_block(
@@ -365,7 +388,7 @@ def test_curated_strings_are_escaped() -> None:
                 )
             ],
         ),
-        dataset(declared, ("L<A",)),
+        dataset(declared).model_copy(update={"regions": ("L<A",)}),
         "A<B",
     )
 

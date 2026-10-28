@@ -2208,7 +2208,9 @@ tissue tokens this atlas reads as "the heart" for that dataset.
 `cell_types` (each `token`, `label`, `compartment`) and `regions` are `[]` on
 every record except a `"cell_type_profile"`-design one, the single-cell design
 that is indexed by cell type and region instead of by stage; the curation model
-rejects them on any other design. No such record is curated yet.
+rejects them on any other design. On that design each region appears once and
+is one of `LA`, `RA`, `LV`, `RV` and `IVS`; the pooled `all` is never declared.
+No such record is curated yet.
 
 `stages` is one entry per developmental stage the dataset declares. Each
 carries the stage's own `token` — the literal string the mirror's rows use,

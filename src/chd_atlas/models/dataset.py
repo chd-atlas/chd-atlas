@@ -4,10 +4,18 @@ from __future__ import annotations
 import re
 from typing import Final
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from chd_atlas.duplicates import duplicates
 from chd_atlas.identifiers import AccessionId, ContrastId, Pmid, TaxonId
+from chd_atlas.tables import CELL_TYPE_REGIONS
 from chd_atlas.vocab import Archive, DatasetDesign, Technology
 
 _ACCESSION_PATTERN: Final[dict[Archive, re.Pattern[str]]] = {
@@ -103,7 +111,7 @@ class CellTypeDecl(BaseModel):
 
     `token` is the string the source's matrix uses; `label` is what a page
     shows; `compartment` groups tokens for display. All three are required
-    because a blank one renders as an unlabelled row.
+    and must not be blank, because a blank one renders as an unlabelled row.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -111,6 +119,14 @@ class CellTypeDecl(BaseModel):
     token: str = Field(min_length=1)
     label: str = Field(min_length=1)
     compartment: str = Field(min_length=1)
+
+    # `min_length=1` alone accepted whitespace, `'   '` (review, 2026-10-28).
+    @field_validator("token", "label", "compartment")
+    @classmethod
+    def is_not_blank(cls, value: str, info: ValidationInfo) -> str:
+        if not value.strip():
+            raise ValueError(f"{info.field_name} must not be blank")
+        return value
 
 
 class Dataset(BaseModel):
@@ -265,6 +281,28 @@ class Dataset(BaseModel):
         if found:
             raise ValueError(f"duplicate cell_type tokens: {found}")
         return self
+
+    @field_validator("regions")
+    @classmethod
+    def regions_are_the_mirror_s_own(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        """Unique, and each a region the mirror can carry, `all` excepted.
+
+        The page draws one column per declared region. A region the mirror's
+        `region` column cannot hold (`tables.CELL_TYPE_REGIONS`) would draw a
+        column of dashes captioned "no heart had 10 or more cells there", which
+        no heart could have; `all` is the pooled row, not a region. The model
+        accepted `['LV', 'LV', 'all', 'Apex', ' ']` until review (2026-10-28).
+        """
+        found = duplicates(value)
+        if found:
+            raise ValueError(f"duplicate regions: {found}")
+        unknown = [region for region in value if region not in CELL_TYPE_REGIONS]
+        if unknown:
+            raise ValueError(
+                f"regions {unknown} are not among {sorted(CELL_TYPE_REGIONS)}; the pooled "
+                "row 'all' is not declared"
+            )
+        return value
 
     @model_validator(mode="after")
     def stage_tokens_are_unique(self) -> Dataset:

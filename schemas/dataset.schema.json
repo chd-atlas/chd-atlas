@@ -13,7 +13,7 @@
     },
     "CellTypeDecl": {
       "additionalProperties": false,
-      "description": "One of a cell-type dataset's own cell-type tokens.\n\n`token` is the string the source's matrix uses; `label` is what a page\nshows; `compartment` groups tokens for display. All three are required\nbecause a blank one renders as an unlabelled row.",
+      "description": "One of a cell-type dataset's own cell-type tokens.\n\n`token` is the string the source's matrix uses; `label` is what a page\nshows; `compartment` groups tokens for display. All three are required\nand must not be blank, because a blank one renders as an unlabelled row.",
       "properties": {
         "compartment": {
           "minLength": 1,

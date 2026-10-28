@@ -347,6 +347,26 @@ def test_a_ucsc_dataset_id_is_its_lowercase_browser_name() -> None:
             "design 'cell_type_profile' declares no contrasts",
             id="contrasts",
         ),
+        # Measured before the check (review, 2026-10-28): the model accepted
+        # ['LV', 'LV', 'all', 'Apex', ' '], and "Apex" would draw a column of
+        # dashes captioned "no heart had 10 or more cells there".
+        pytest.param({"regions": ["LV", "LV"]}, "duplicate regions", id="duplicate_regions"),
+        pytest.param({"regions": ["LV", "all"]}, "'all'", id="pooled_region"),
+        pytest.param({"regions": ["LV", "Apex"]}, "'Apex'", id="unknown_region"),
+        pytest.param({"regions": ["LV", " "]}, "' '", id="blank_region"),
+        *(
+            pytest.param(
+                {
+                    "cell_types": [
+                        {"token": "Fibroblast", "label": "Fibroblast", "compartment": "stromal"}
+                        | {field: "   "}
+                    ]
+                },
+                f"{field} must not be blank",
+                id=f"blank_{field}",
+            )
+            for field in ("token", "label", "compartment")
+        ),
     ],
 )
 def test_a_cell_type_profile_dataset_is_fully_declared(
