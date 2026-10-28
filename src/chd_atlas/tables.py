@@ -616,7 +616,10 @@ CELL_TYPE_PROFILES = TableSchema(
         Column("cell_type", pl.String),
         Column("region", pl.String, allowed=_CELL_TYPE_REGIONS),
         Column("median_abundance", pl.Float64, minimum=0),
-        Column("unit", pl.String, allowed=_ABUNDANCE_UNITS),
+        # `cpm` only, not `_ABUNDANCE_UNITS`: the gene page writes "CPM" on its
+        # axis and beside every value whatever this column says, so a second
+        # unit would publish under the wrong name.
+        Column("unit", pl.String, allowed=frozenset({"cpm"})),
         Column("q25", pl.Float64, nullable=True, minimum=0),
         Column("q75", pl.Float64, nullable=True, minimum=0),
         Column("n_donors", pl.Int64, minimum=1),

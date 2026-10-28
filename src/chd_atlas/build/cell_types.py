@@ -17,8 +17,10 @@ wants every declared cell type lists the dataset's own declaration and writes
 
 Tau is computed over the pooled medians of the cell types present, through
 `profiles.specificity`, the same function the bulk layer uses, so the two
-cannot disagree on the arithmetic. Only its wording differs: its `method`
-string says "organs", which is false for cell types.
+cannot disagree on the arithmetic. Two things differ: its `method` string says
+"organs", which is false for cell types, and its `tissues` are sorted, where
+`specificity.cell_types` lists the present cell types in declared order, the
+order every other list in this payload and on the page follows.
 """
 
 from __future__ import annotations
@@ -157,7 +159,7 @@ def _dataset_entry(
                 tau=tau["tau"],
                 scale=tau["scale"],
                 method=CELL_TYPE_TAU_METHOD,
-                cell_types=tau["tissues"],
+                cell_types=tuple(c.token for c in dataset.cell_types if c.token in medians),
                 n_cell_types=tau["n_tissues"],
                 highest_in=tau["highest_in"],
                 medians=tau["medians"],
@@ -183,9 +185,10 @@ def gene_cell_type_expression(
         if dataset.design == DatasetDesign.CELL_TYPE_PROFILE
     }
     # gene -> dataset -> (cell_type, region) -> row. `units` collects every
-    # distinct unit over all of a dataset's rows, across genes; no validator
-    # rule holds a dataset to one unit, so the check below refuses a mixed
-    # dataset rather than publish one unit for values measured in another.
+    # distinct unit over all of a dataset's rows, across genes. TBL004 holds
+    # every row to `cpm`, so a mixed dataset reaches here only past a bypassed
+    # validator; the check below refuses it rather than publish one unit for
+    # values measured in another (CLAUDE.md section 9: a bypassed gate fails).
     units: dict[str, set[str]] = {}
     rows: dict[str, dict[str, dict[tuple[str, str], Mapping[str, Any]]]] = {}
     for path, schema_name in mirror_paths(root):

@@ -154,12 +154,16 @@ def test_tau_uses_pooled_medians_and_the_bulk_method(tmp_path: Path) -> None:
         # A regional row must not enter tau.
         _row("Endothelial", "LV", 900.0),
     ]
-    specificity = _entry(tmp_path, rows)["datasets"][0]["specificity"]
+    # "Pericyte" is declared and has no rows, so tau is over the other three.
+    declared = _dataset(tokens=("Cardiomyocyte", "Pericyte", "Fibroblast", "Endothelial"))
+    specificity = _entry(tmp_path, rows, declared)["datasets"][0]["specificity"]
     assert specificity is not None
     assert specificity["tau"] == 0.6651179051469356
     assert specificity["highest_in"] == "Cardiomyocyte"
     assert specificity["n_cell_types"] == 3
-    assert set(specificity["cell_types"]) == set(_TOKENS)
+    # The dataset's declared order, present types only; sorted would put
+    # Endothelial second. `cell_types` beside it is in the same order.
+    assert specificity["cell_types"] == ("Cardiomyocyte", "Fibroblast", "Endothelial")
     assert specificity["medians"] == {
         "Cardiomyocyte": 100.0,
         "Fibroblast": 10.0,

@@ -1132,13 +1132,16 @@ def test_polars_pattern_engine_agrees_with_python_re(tmp_path: Path) -> None:
         assert py_offenders == pl_offenders, pattern
 
 
-def test_cell_type_profiles_refuses_an_unknown_region_and_a_fraction_above_one(
+def test_cell_type_profiles_refuses_an_unknown_region_a_unit_but_cpm_and_a_fraction_above_one(
     tmp_path: Path,
 ) -> None:
-    """One row, two defects: region `LX` is outside the vocabulary, 1.2 outside 0..1.
+    """One row, three defects: region `LX` is outside the vocabulary, `tpm` is
+    not `cpm`, and 1.2 is outside 0..1.
 
-    Registered and sharded per dataset, like `profiles`; `source` is what makes
-    the SRC003 gate apply to it, so it must stay a column.
+    `cpm` alone because the gene page writes "CPM" beside every value and on
+    its axis whatever the row says; a `tpm` row would publish under the wrong
+    unit. Registered and sharded per dataset, like `profiles`; `source` is what
+    makes the SRC003 gate apply to it, so it must stay a column.
     """
     schema = TABLE_SCHEMAS["cell_type_profiles"]
     assert SHARDED_TABLES["cell_type_profiles"] == "cell_type_profiles"
@@ -1159,12 +1162,16 @@ def test_cell_type_profiles_refuses_an_unknown_region_and_a_fraction_above_one(
     assert schema.sort_key == ("dataset", "gene", "cell_type", "region")
     header = "\t".join(schema.column_names)
     good = "hoc\tHGNC:1100\tcardiomyocyte\tLV\t2.5\tcpm\t1.0\t3.0\t4\t900\t0.4\tsrc"
-    bad = "hoc\tHGNC:1100\tcardiomyocyte\tLX\t2.5\tcpm\t1.0\t3.0\t4\t900\t1.2\tsrc"
+    bad = "hoc\tHGNC:1100\tcardiomyocyte\tLX\t2.5\ttpm\t1.0\t3.0\t4\t900\t1.2\tsrc"
     path = _write(tmp_path / "hoc.tsv", f"{header}\n{good}\n")
     assert validate_table(path, schema) == []
     path = _write(tmp_path / "hoc.tsv", f"{header}\n{bad}\n")
     issues = validate_table(path, schema)
-    assert sorted(i.code for i in issues) == ["TBL004", "TBL006"]
-    assert {"region", "fraction_expressing"} == {
-        name for i in issues for name in ("region", "fraction_expressing") if name in i.message
-    }
+    named = sorted(
+        (i.code, name)
+        for i in issues
+        for name in ("region", "unit", "fraction_expressing")
+        if f"column '{name}'" in i.message
+    )
+    assert named == [("TBL004", "region"), ("TBL004", "unit"), ("TBL006", "fraction_expressing")]
+    assert len(issues) == 3
