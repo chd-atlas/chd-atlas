@@ -619,20 +619,29 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 # visible) and links here; the next two were its folded "How to read these
 # figures" notes, and left it; the next two define tau and the developmental
 # phases, which the pages print and nothing defined (review, the same day, each
-# recorded where it is written); the last states in general the axes each
+# recorded where it is written); the sixth states in general the axes each
 # chart's visible caption line states of its own figure, and is where every
-# chart's "How to read this chart" toggle links (`pages._chart_notes`).
+# chart's "How to read this chart" toggle links (`pages._chart_notes`); the
+# last two, added 2026-10-28, say how a cell-type figure is computed and what
+# it does not say.
 #
 # Each was re-read for a page with no gene, dataset or figure on it, and read
 # against the code and a build of 0fc451a that day. Narrower or different from
 # the text this was drafted from:
 #
-# * The bulk claim names *developmental* expression: the profile datasets the
-#   gene page's section renders, all `bulk_rnaseq` today (E-MTAB-6814 alone).
-#   Unconditional by design, it reads no data, so
-#   `test_every_curated_dataset_is_the_bulk_tissue_the_expression_notes_say`
-#   holds it to the curation instead -- every curated dataset, whatever its
-#   design, since review (2026-10-26). Its "the detection floor" was "a
+# * The bulk claim names the developmental *timeline*: the profile datasets
+#   whose stage series the gene page's section renders, all `bulk_rnaseq`
+#   today (E-MTAB-6814 alone). It named every "developmental expression
+#   measurement" until the final review (2026-10-28); the cell-type
+#   paragraphs at the end of this section made that false, being single-cell
+#   values that pool 9 to 15 weeks rather than follow a timeline.
+#   Unconditional by design, it reads
+#   no data, so
+#   `test_every_timeline_dataset_is_the_bulk_tissue_the_expression_notes_say`
+#   holds it to every `profile`-design dataset instead; it held every curated
+#   dataset from review (2026-10-26) until the sentence was scoped, since a
+#   contrast dataset of fetal tissue was a developmental measurement and is
+#   on no timeline. Its "the detection floor" was "a
 #   dataset's" for one revision and is "the" again since review (2026-10-26):
 #   "a dataset's" read as the source's, and the second paragraph now says
 #   whose a floor is.
@@ -680,7 +689,7 @@ _EXPRESSION: Final = (
     # sets the Expression Atlas's organ tokens (forebrain, hindbrain) against
     # the paper's (brain, cerebellum), so a sample need not be a whole organ;
     # the dilution argument rests on bulk, mixed cell types, alone.
-    '<p class="notice-inline"><strong>Every developmental expression measurement in this '
+    '<p class="notice-inline"><strong>Every measurement on a developmental timeline in this '
     "atlas is from bulk tissue, never a single cell type.</strong> An embryonic heart "
     "sample mixes cardiomyocytes with endocardium, epicardium, cardiac neural crest, "
     "cushion mesenchyme and blood, and many congenital heart disease genes act in one rare "
@@ -768,12 +777,12 @@ _EXPRESSION: Final = (
     # The single-cell layer (Farah et al. 2024): how a cell-type figure is
     # computed and what it does not say.
     "<p><strong>Cell types</strong> come from single-cell RNA sequencing of 8 hearts at 9 to "
-    "15 weeks (Farah et al. 2024). For each heart, this atlas sums the reads of every cell "
-    "of one type, and of that type in one region, and divides by all of that group's reads: "
+    "15 weeks (Farah et al. 2024). For each heart, this atlas sums the counts of every cell "
+    "of one type, and of that type in one region, and divides by all of that group's counts: "
     "counts per million (CPM). A page shows the median across hearts and the middle half of "
     "hearts. A heart counts only with 10 or more cells of that type there. Values below 1 CPM "
     "are below this atlas's detection floor, the Human Protein Atlas's \"not detected\" cut. "
-    "A dot's size is the share of that type's cells with at least one read.</p>"
+    "A dot's size is the share of that type's cells with at least one count.</p>"
     "<p>Regions pool all four ages. τ is computed across cell types as for organs above. "
     "Single-cell methods dissociate tissue, so how many cells of a type were captured "
     "reflects the method, not the heart. A high share of cells describes that cell type, "

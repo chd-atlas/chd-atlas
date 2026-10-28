@@ -474,6 +474,15 @@ from chd_atlas.corpus import Corpus
 #   genes with a non-empty `cell_type_expression` and the distinct datasets
 #   those bundles name (`cell_types.cell_type_census`). Both are 0 until
 #   `mirrors/cell_type_profiles/` is committed.
+# * Every `datasets.json` record gains `cell_types` (each `token`, `label`,
+#   `compartment`) and `regions`, both `[]` on every design but
+#   `cell_type_profile`.
+# * `design` gains the value `cell_type_profile`, and `archive` the value
+#   `ucsc_cell_browser` (`vocab.DatasetDesign`, `vocab.Archive`).
+# * A dataset id may be a lowercase slug (`hoc`, `heart-atlas`), the UCSC Cell
+#   Browser's name for a dataset, as well as an archive accession: in
+#   `datasets.json`'s `id` and in the `dataset` an assertion's evidence names
+#   (`identifiers.AccessionId`). No curated record uses one yet.
 SCHEMA_VERSION: Final = "2.20"
 
 # What `status` publishes today. A literal rather than something derived from

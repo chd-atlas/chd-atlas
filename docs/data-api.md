@@ -135,10 +135,10 @@ wrong by the next one.
   Each of the nine counts only what the published genes' bundles carry, except
   `cohort_families`, which groups the whole burden mirror's cohorts: restricting
   it to the published genes could split one family into what then reads as two
-  independent ones. `index.html` states these five keys too: `genes`,
-  `burden_rows`, `cohort_families`, `burden_surviving_genes` and
-  `profile_genes`. They are derived once in the build and handed to both, so
-  the page and this object cannot disagree.
+  independent ones. `index.html` states these six keys too: `genes`,
+  `burden_rows`, `cohort_families`, `burden_surviving_genes`, `profile_genes`
+  and `cell_type_genes`. They are derived once in the build and handed to
+  both, so the page and this object cannot disagree.
 - `schema_version` is `major.minor`. **Minor** rises when a field is added and
   nothing is removed or repurposed, so a consumer written against an earlier
   version keeps working; **major** rises when a field changes shape or leaves.
@@ -283,7 +283,11 @@ wrong by the next one.
   unresolved; `null` and `null` where none is recorded. Additive.
   `2.20` added [`cell_type_expression`](#the-bundles-cell_type_expression-object-a-cell-type-profile-never-a-contrast)
   to every gene bundle, `{"datasets": []}` where none is covered, and
-  `cell_type_genes` and `cell_type_datasets` to `counts`. Additive.
+  `cell_type_genes` and `cell_type_datasets` to `counts`. It added
+  `cell_types` and `regions` to every [`datasets.json`](#datasetsjson) record,
+  `[]` on every design but the new `"cell_type_profile"`, and the archive
+  `"ucsc_cell_browser"`, whose datasets are named by a lowercase slug (`hoc`)
+  rather than an accession, so a dataset id may now be one. Additive.
 - `status` is the atlas's own readiness, so a program can read it without
   scraping `index.html`'s prose. Today it is always `"in-development"` — one
   curated gene-disease assertion alongside mirrored ClinGen/GenCC validity for
@@ -398,8 +402,8 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   section under *About these cohorts, and the caveats recorded for them*, and
   that fold ends with a link here.
 - `#expression` says how to read a gene page's developmental expression
-  section: that every developmental expression measurement here is from bulk
-  tissue, so a low or absent figure is not evidence a gene is unimportant
+  section: that every measurement on a developmental timeline here is from
+  bulk tissue, so a low or absent figure is not evidence a gene is unimportant
   to heart development; how a median is placed against its organ's percentile
   grid, and that none is placed below its dataset's detection floor, a
   threshold this atlas records per dataset and not necessarily one its source
@@ -407,9 +411,13 @@ and each carries an `id`, so a page can link the paragraph it shortens.
   gives the floor and its basis); that percentiles are not comparable across
   organs or developmental stages; what τ measures and when none is published;
   what a stage's developmental phases are, where their boundaries come from
-  and how a stage is matched to them; and what the charts' axes are. A gene
-  page keeps a one-line form of the first and links here, and each expression
-  chart's folded key ends with a link here.
+  and how a stage is matched to them; what the charts' axes are; and, for the
+  single-cell layer, how a cell-type value is computed (counts per million,
+  the median across hearts, a heart counting only with 10 or more cells of a
+  type), its detection floor, what a dot's size is, and what a cell-type
+  figure does not say. A gene page keeps a one-line form of the first and
+  links here, and each expression chart's folded key, and the cell-type
+  block's reading fold, end with a link here.
 
 Like the other pages it is for people: its markup is not a contract, and no
 payload depends on it.
@@ -1532,7 +1540,9 @@ sampled, not the gene's role. Per-region values pool 9 to 15 weeks of
 development, so they are not a stage series. A cell type or region that is
 absent means no heart had at least 10 cells there. `below_floor` marks a
 median under the dataset's `detection_floor`. `specificity` is tau over the
-pooled medians, with its inputs.
+pooled medians, with its inputs; its `cell_types` are those with a pooled value,
+in the dataset's declared order. It is `null` when fewer than two cell types
+have a pooled value, or when every pooled median is below the floor.
 
 ```json
 {"datasets": [{"dataset": "hoc", "unit": "cpm", "detection_floor": 1.0, "n_donors": 8,
@@ -2181,8 +2191,9 @@ this file, with nothing filtered out: `id`, `archive`, `technology`, `tissue`,
 This is what an omics row's `dataset` column resolves against, the way
 `publications.json` resolves a PMID.
 
-**The eight from `design` to `quantile_estimator` are what distinguishes a bulk developmental
-expression dataset from every other kind mirrored here.** `design` is one of
+**The eight from `design` to `quantile_estimator` are what distinguish a
+developmental expression dataset, bulk or single-cell, from every other kind
+mirrored here, and the two from each other.** `design` is one of
 `"contrast"` (a differential-expression comparison — `expression`,
 `proteomics`, `phospho`), `"profile"` (a raw abundance series across
 development — `profiles`, see

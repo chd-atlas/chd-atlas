@@ -18,8 +18,9 @@ sampled, and how many donors it had. Seven ways a row can disagree with them:
   runner passes `known_genes or None`, so there a missing, unreadable or
   header-only registry skips CTP007 and TBL008 or REF001 reports why.
 
-CTP002 and CTP003 need the dataset's declarations, so they are skipped for a
-row whose dataset is unrecorded (CTP001 already names that). A shard that
+CTP002, CTP003 and CTP006 need the dataset's record (its cell types, regions
+and `n_samples`), so they are skipped for a row whose dataset is unrecorded
+(CTP001 already names that). A shard that
 cannot be read, or lacks a column a rule needs, is skipped: TBL001/TBL002
 already report it. Each rule reports once per offending value per shard, not
 once per row.

@@ -362,7 +362,8 @@ def test_a_cell_type_profile_dataset_is_fully_declared(
 
 def test_a_cell_type_profile_dataset_needs_no_stages() -> None:
     """Stages and cardiac_tissues belong to the bulk profile design; a cell-type
-    dataset is one adult atlas indexed by cell type and region instead.
+    dataset is indexed by cell type and region instead -- Farah et al. 2024's
+    fetal hearts pool 9 to 15 weeks rather than follow a stage series.
     """
     dataset = _cell_type_dataset()
     assert dataset.stages == ()
