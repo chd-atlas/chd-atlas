@@ -15,6 +15,7 @@ from typing import Final
 import pytest
 
 from chd_atlas.build.burden import BurdenRow, CombinedRow
+from chd_atlas.build.cell_types import CellTypeExpression
 from chd_atlas.build.concordance import cohort_families, evidence_axes, gene_concordance
 from chd_atlas.build.derive import GeneFacts
 from chd_atlas.build.emit import Emitter
@@ -61,6 +62,9 @@ from chd_atlas.vocab import (
     ValiditySource,
     ValidityState,
 )
+from tests.unit.test_build_cell_type_chart import dataset as cell_type_dataset
+from tests.unit.test_build_cell_type_chart import payload as cell_type_payload
+from tests.unit.test_build_cell_type_chart import specificity as cell_type_specificity
 
 TBX5 = "HGNC:11604"
 GATA4 = "HGNC:4173"
@@ -261,6 +265,7 @@ def test_an_uncurated_gene_page_says_the_atlas_has_not_curated_it(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -311,6 +316,7 @@ def test_a_curated_gene_page_carries_its_evidence_quote_and_pmid(
         publications=publications,
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_11604.html")
@@ -367,6 +373,7 @@ def test_a_symbol_carrying_markup_is_escaped(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -420,6 +427,7 @@ def test_a_non_http_report_url_never_becomes_a_link(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -468,6 +476,7 @@ def test_panelapp_australias_homepage_link_opens_the_genes_own_page_and_nothing_
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     groups = _validity_table(_page(tmp_path, "HGNC_4173.html"))
@@ -515,6 +524,7 @@ def test_an_uncurated_notice_never_denies_functional_records_the_rail_counts(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -546,6 +556,7 @@ def test_a_mirrored_disease_label_carrying_markup_is_escaped(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     assert "<img src=x" not in _page(tmp_path, "HGNC_4173.html")
@@ -656,6 +667,7 @@ def test_a_contested_gene_is_never_chipped_as_settled(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -720,6 +732,7 @@ def test_every_gene_in_the_facts_gets_exactly_one_page(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     assert sorted(path.name for path in (tmp_path / "genes").iterdir()) == [
@@ -1029,6 +1042,7 @@ def test_a_gene_definitive_for_two_in_scope_diseases_names_both_in_a_fixed_order
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     browse = _page(tmp_path, "index.html")
@@ -1085,6 +1099,7 @@ def test_both_page_kinds_state_the_rule_that_admits_a_gene_to_this_atlas(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     for name in ("index.html", "HGNC_11604.html", "HGNC_4173.html"):
@@ -1164,6 +1179,7 @@ def test_a_gene_page_names_the_disease_beside_the_chip_that_says_definitive(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -1191,6 +1207,7 @@ def test_every_browse_row_links_to_a_page_that_was_written(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
     build_gene_index_page(facts_two, emitter, symbols={}, validity=validity_two, burden_counts={})
 
@@ -1444,6 +1461,7 @@ def _burden_page(
         cohorts=registry,
         families=families if families is not None else cohort_families(rows, registry),
         axes=axes if axes is not None else evidence_axes(rows),
+        cell_types={},
     )
     return _page(tmp_path, name)
 
@@ -4217,6 +4235,7 @@ def test_the_rail_names_the_grade_the_panel_gave_and_the_disease_it_gave_it_for(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_11604.html")
@@ -4253,6 +4272,7 @@ def test_a_gene_no_panel_graded_names_the_submitters_that_admitted_it(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -4312,6 +4332,7 @@ def test_both_page_kinds_leave_the_grade_key_to_methods_html(tmp_path: Path) -> 
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     for name in ("index.html", "HGNC_11604.html"):
@@ -4501,6 +4522,7 @@ def _expression_page(
     facts: dict[str, GeneFacts] | None = None,
     name: str = "HGNC_4173.html",
     phases: CardiacPhaseFile | None = None,
+    cell_types: dict[str, CellTypeExpression] | None = None,
 ) -> str:
     """One gene page, built only to exercise the expression section.
 
@@ -4528,6 +4550,7 @@ def _expression_page(
         profiles=profiles,
         datasets=datasets or {},
         phases=phases,
+        cell_types=cell_types or {},
     )
     return _page(tmp_path, name)
 
@@ -4621,6 +4644,7 @@ def test_the_gloss_never_calls_a_gene_heart_preferential_on_another_organs_peak(
         cohorts={},
         profiles={TBX5: heart_peak, GATA4: liver_peak},
         datasets={"E-MTAB-6814": dataset},
+        cell_types={},
     )
 
     heart_section = _expression_section_text(_page(tmp_path, "HGNC_11604.html"))
@@ -4984,6 +5008,21 @@ def test_the_bulk_dilution_caveat_is_unconditional_not_only_beside_bad_news(
         )
     )
     assert caveat in unfolded(bad_news_section)
+
+    # The combined banner replaces the bulk one on a gene with cell-type data;
+    # it carries the same caveat sentence, outside every fold.
+    with_cells = _expression_section_text(
+        _expression_page(
+            tmp_path,
+            {GATA4: below_floor},
+            {"E-MTAB-6814": _profile_dataset(detection_floor=1.0), "hoc": cell_type_dataset()},
+            cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+        )
+    )
+    assert (
+        "A low or absent value is not evidence a gene is unimportant to heart development."
+        in unfolded(with_cells)
+    )
 
 
 def test_the_expression_reading_notes_are_on_methods_html_and_not_on_the_gene_page(
@@ -6647,6 +6686,7 @@ def test_a_study_s_own_combination_is_stated_in_its_block_and_labelled_for_what_
         families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         combined={GATA4: [_combined()]},
+        cell_types={},
     )
     section = _burden_section_text(_page(tmp_path, "HGNC_4173.html"))
     block = _study_block(section, "40127276")
@@ -6755,6 +6795,7 @@ def test_an_orphanet_scoped_syndrome_says_why_it_counts_as_chd_above_both_groups
             "MONDO:0012547": "Noonan syndrome 4",
             _NSML: "Noonan syndrome with multiple lentigines",
         },
+        cell_types={},
     )
     page = _page(tmp_path, "HGNC_4173.html")
     section = _slice_between(page, "<h2>Mirrored gene&ndash;disease validity</h2>", ("<h2",))
@@ -6941,6 +6982,7 @@ def test_clingens_own_gencc_copy_is_listed_only_where_it_differs_from_the_panel(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     page = _page(tmp_path, "HGNC_4173.html")
@@ -6987,6 +7029,7 @@ def test_a_copy_spelling_the_panels_rung_differently_is_still_folded(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     others = _slice_between(
@@ -7045,6 +7088,7 @@ def test_the_validity_section_groups_by_authority_and_reads_one_vocabulary(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     section = _validity_table(_page(tmp_path, "HGNC_4173.html"))
@@ -7113,6 +7157,7 @@ def test_an_empty_authority_group_is_a_sentence_not_an_empty_table(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     section = _validity_table(_page(tmp_path, "HGNC_4173.html"))
@@ -7152,6 +7197,7 @@ def test_a_gene_page_names_its_gene_and_links_gnomad_and_clinvar_first(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     rail = _slice_between(_page(tmp_path, "HGNC_4173.html"), '<aside class="rail">', ("</aside>",))
@@ -7193,6 +7239,7 @@ def test_the_rails_identity_text_is_escaped(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
 
     rail = _slice_between(_page(tmp_path, "HGNC_4173.html"), '<aside class="rail">', ("</aside>",))
@@ -7226,6 +7273,7 @@ def test_a_gene_page_that_cannot_carry_its_required_links_is_refused(
             publications={},
             burden={},
             cohorts={},
+            cell_types={},
         )
 
 
@@ -8074,6 +8122,7 @@ def _card_page(
         cohorts={},
         scope_warrants=warrants,
         scope_terms=scope_terms,
+        cell_types={},
     )
     return _rail_of(_page(tmp_path, "HGNC_4173.html"))
 
@@ -9052,6 +9101,7 @@ def test_the_card_says_in_plain_words_what_the_atlas_itself_curated(
         publications={},
         burden={},
         cohorts={},
+        cell_types={},
     )
     page = _page(tmp_path, "HGNC_4173.html")
     rail = _rail_of(page)
@@ -9121,6 +9171,7 @@ def test_every_value_the_card_interpolates_is_escaped(tmp_path: Path) -> None:
         families=cohort_families(rows, _COHORTS),
         axes=evidence_axes(rows),
         scope_warrants=_ORPHANET_WARRANTS,
+        cell_types={},
     )
     rail = _rail_of(_page(tmp_path, "HGNC_4173.html"))
 
@@ -9178,3 +9229,112 @@ def test_a_study_no_cohort_family_holds_is_refused_rather_than_miscounted(
 def test_a_count_of_one_names_one_carrier(carriers: int, total: int, unit: str, shown: str) -> None:
     """ "1 carriers / 14,040" rendered in tables and on the card until 2026-10-26."""
     assert _count(carriers, total, unit) == shown
+
+
+_COMBINED_BANNER = (
+    '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks; the timeline '
+    "below is from bulk tissue. A low or absent value is not evidence a gene is unimportant "
+    "to heart development.</p>"
+)
+
+
+def _bulk_profile() -> ExpressionProfile:
+    return _expression_profile(
+        (
+            _dataset_profile_entry(
+                stages=(_stage_entry(tissues=(_tissue_entry(placement=_placement()),)),)
+            ),
+        )
+    )
+
+
+def test_a_gene_with_cell_type_data_carries_the_combined_banner_and_not_the_bulk_only_one(
+    tmp_path: Path,
+) -> None:
+    page = _expression_page(
+        tmp_path,
+        {GATA4: _bulk_profile()},
+        {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()},
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert _COMBINED_BANNER in section
+    assert "Every measurement below is from bulk tissue" not in section
+    # The cell-type block opens the section, before the first bulk dataset block.
+    assert section.index("<h3>Cell types (Farah 2024)</h3>") < section.index("E-MTAB-6814")
+    assert section.index(_COMBINED_BANNER) < section.index("<h3>Cell types")
+    # The figures are named by the page's symbol, not by its id or the dataset's.
+    assert 'aria-label="GATA4 expression by cell type"' in section
+
+
+def test_a_gene_without_cell_type_data_keeps_the_bulk_banner_and_no_block(
+    tmp_path: Path,
+) -> None:
+    # TBX5 has no entry in `cell_types`; GATA4 beside it does.
+    page = _expression_page(
+        tmp_path,
+        {GATA4: _bulk_profile(), TBX5: _bulk_profile()},
+        {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()},
+        facts={
+            GATA4: _facts(GATA4, AtlasCuration.NOT_YET_CURATED),
+            TBX5: _facts(TBX5, AtlasCuration.NOT_YET_CURATED),
+        },
+        name="HGNC_11604.html",
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert "Every measurement below is from bulk tissue" in section
+    assert "Cell-type values pool" not in section
+    assert "Cell types (Farah" not in section
+    assert '<svg class="ct-svg"' not in section
+
+
+def test_a_gene_with_cell_type_data_and_no_bulk_profile_claims_no_timeline(
+    tmp_path: Path,
+) -> None:
+    page = _expression_page(
+        tmp_path,
+        {GATA4: EMPTY_EXPRESSION_PROFILE},
+        {"hoc": cell_type_dataset()},
+        cell_types={GATA4: CellTypeExpression(datasets=[cell_type_payload()])},
+    )
+    section = _expression_section_text(page)
+
+    assert (
+        '<p class="notice-inline">Cell-type values pool 8 hearts at 9 to 15 weeks. A low or '
+        "absent value is not evidence a gene is unimportant to heart development.</p>"
+    ) in section
+    assert "timeline" not in section
+    assert "not yet curated" not in section
+    assert "<h3>Cell types (Farah 2024)</h3>" in section
+
+
+def test_the_cell_type_block_adds_at_most_40_visible_words_to_a_gene_page(
+    tmp_path: Path,
+) -> None:
+    """Measured with the budget test's own counting (`_prose`, `_words`) on a fixture
+    page (with its tau line) with and without the block. The spec's ceiling is 40;
+    the measured growth is 40 (block 35 + banner 5, re-measured 2026-10-28 after
+    the tau line moved below the chart), so the block is at its ceiling and any
+    visible word it adds fails here. Words inside an SVG or a closed fold do not
+    count, which is why the region grid's key costs none."""
+    from tests.test_built_site_is_consumable import _prose, _words
+
+    datasets = {"E-MTAB-6814": _profile_dataset(), "hoc": cell_type_dataset()}
+    profiles = {GATA4: _bulk_profile()}
+    plain = _expression_page(tmp_path / "a", profiles, datasets)
+    with_cells = _expression_page(
+        tmp_path / "b",
+        profiles,
+        datasets,
+        cell_types={
+            GATA4: CellTypeExpression(datasets=[cell_type_payload(spec=cell_type_specificity())])
+        },
+    )
+
+    def words(page: str) -> int:
+        return sum(_words(text) for text in _prose(page))
+
+    assert words(with_cells) - words(plain) <= 40
