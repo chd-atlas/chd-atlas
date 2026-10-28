@@ -635,16 +635,14 @@ def _cohorts(cohorts: Mapping[str, Cohort]) -> str:
 #   measurement" until the final review (2026-10-28); the cell-type
 #   paragraphs at the end of this section made that false, being single-cell
 #   values that pool 9 to 15 weeks rather than follow a timeline.
-#   Unconditional by design, it reads
-#   no data, so
+#   Unconditional by design, it reads no data, so
 #   `test_every_timeline_dataset_is_the_bulk_tissue_the_expression_notes_say`
 #   holds it to every `profile`-design dataset instead; it held every curated
 #   dataset from review (2026-10-26) until the sentence was scoped, since a
 #   contrast dataset of fetal tissue was a developmental measurement and is
-#   on no timeline. Its "the detection floor" was "a
-#   dataset's" for one revision and is "the" again since review (2026-10-26):
-#   "a dataset's" read as the source's, and the second paragraph now says
-#   whose a floor is.
+#   on no timeline. Its "the detection floor" was "a dataset's" for one
+#   revision and is "the" again since review (2026-10-26): "a dataset's" read
+#   as the source's, and the second paragraph now says whose a floor is.
 # * "Each organ's median abundance" had a gene in view; it is "a gene's median
 #   abundance in an organ". "the number of genes measured" is the number the
 #   grid was built from (`Placement.n_genes`, 58,735 in every cell of
@@ -781,7 +779,8 @@ _EXPRESSION: Final = (
     "of one type, and of that type in one region, and divides by all of that group's counts: "
     "counts per million (CPM). A page shows the median across hearts and the middle half of "
     "hearts. A heart counts only with 10 or more cells of that type there. Values below 1 CPM "
-    "are below this atlas's detection floor, the Human Protein Atlas's \"not detected\" cut. "
+    "are below this atlas's detection floor, which borrows the Human Protein Atlas's "
+    '"not detected" cut of 1. '
     "A dot's size is the share of that type's cells with at least one count.</p>"
     "<p>Regions pool all four ages. τ is computed across cell types as for organs above. "
     "Single-cell methods dissociate tissue, so how many cells of a type were captured "

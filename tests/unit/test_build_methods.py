@@ -922,7 +922,8 @@ _CELL_TYPE_PARAGRAPHS = (
     "of one type, and of that type in one region, and divides by all of that group's counts: "
     "counts per million (CPM). A page shows the median across hearts and the middle half of "
     "hearts. A heart counts only with 10 or more cells of that type there. Values below 1 CPM "
-    "are below this atlas's detection floor, the Human Protein Atlas's \"not detected\" cut. "
+    "are below this atlas's detection floor, which borrows the Human Protein Atlas's "
+    '"not detected" cut of 1. '
     "A dot's size is the share of that type's cells with at least one count.</p>"
     "<p>Regions pool all four ages. τ is computed across cell types as for organs above. "
     "Single-cell methods dissociate tissue, so how many cells of a type were captured "

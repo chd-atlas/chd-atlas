@@ -6,7 +6,7 @@ per-group AnnData files hvantk writes -- layers `sum` and `count_nonzero`
 (groups x genes), `obs['n_cells']`, the group-by columns in `obs`, gene symbols
 as the var index -- and writes one row per (symbol, heart, cell type, region)
 for the approved symbols in `--registry`. Aliases and previous symbols are not
-read: the source carries no Ensembl id, and an alias is often an unrelated
+read: the source carries no Ensembl id, and an alias can be an unrelated
 gene's approved symbol (`HGF` is SOS1's alias), so keeping one would carry the
 wrong gene's column into the pseudobulk.
 
