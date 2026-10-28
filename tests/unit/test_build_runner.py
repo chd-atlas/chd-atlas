@@ -770,7 +770,7 @@ def test_a_cell_type_dataset_reaches_the_bundle_the_page_the_manifest_and_the_fr
         assert [c["cell_type"] for c in entry["cell_types"]] == ["aCM", "Fibro"]
         assert entry["cell_types"][0]["pooled"]["median"] == median
         page = (out / "genes" / f"{slug}.html").read_text()
-        section = page.split("<h2>Developmental expression</h2>", 1)[1]
+        section = page.split("<h2>Developmental expression</h2>", 1)[1].split("<h2", 1)[0]
         assert heading in section
 
     other = without.replace(":", "_")
