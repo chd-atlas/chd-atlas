@@ -54,12 +54,18 @@ fi
 # A cluster module must not shadow the venv's own packages.
 unset PYTHONPATH
 
+# Captured rather than echoed inline: a command substitution inside `echo`
+# fails silently under `set -e` and would print an empty commit. The output's
+# provenance needs this line, so an empty one stops the job.
+HVANTK_HEAD="$(git -C "$HVANTK_REPO" rev-parse HEAD)"
+: "${HVANTK_HEAD:?could not read the hvantk commit from $HVANTK_REPO}"
+
 echo "== farah celltypes =="
 echo "date:         $(date -Iseconds)"
 echo "host:         $(hostname)"
 echo "job:          ${SLURM_JOB_ID:-<none>}"
 echo "python:       $("$HVANTK_PYTHON" -V 2>&1)"
-echo "hvantk HEAD:  $(git -C "$HVANTK_REPO" rev-parse HEAD)"
+echo "hvantk HEAD:  $HVANTK_HEAD"
 echo "min cells:    $MIN_CELLS"
 echo "input:        $INPUT_H5AD"
 echo "out:          $OUT_DIR"

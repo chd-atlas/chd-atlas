@@ -1333,7 +1333,7 @@ def test_a_cell_type_mirror_with_an_unregistered_source_fails_validation(
     """
     root = _real_repo(tmp_path)
     shard = root / "mirrors" / "cell_type_profiles"
-    shard.mkdir()
+    shard.mkdir(parents=True, exist_ok=True)
     (shard / "hoc.tsv").write_text(
         "dataset\tgene\tcell_type\tregion\tmedian_abundance\tunit\tq25\tq75\t"
         "n_donors\tn_cells\tfraction_expressing\tsource\n"
@@ -1353,7 +1353,7 @@ def test_a_header_only_gene_registry_skips_the_cell_type_gene_check(tmp_path: Pa
     genes = root / "mirrors" / "genes.tsv"
     genes.write_text(genes.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
     shard = root / "mirrors" / "cell_type_profiles"
-    shard.mkdir()
+    shard.mkdir(parents=True, exist_ok=True)
     (shard / "hoc.tsv").write_text(
         "dataset\tgene\tcell_type\tregion\tmedian_abundance\tunit\tq25\tq75\t"
         "n_donors\tn_cells\tfraction_expressing\tsource\n"
