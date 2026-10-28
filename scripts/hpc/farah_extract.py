@@ -5,7 +5,10 @@ Runs on the cluster under the hvantk venv (it needs anndata). Reads one or both
 per-group AnnData files hvantk writes -- layers `sum` and `count_nonzero`
 (groups x genes), `obs['n_cells']`, the group-by columns in `obs`, gene symbols
 as the var index -- and writes one row per (symbol, heart, cell type, region)
-for the symbols in `--registry` (approved, alias or previous names).
+for the approved symbols in `--registry`. Aliases and previous symbols are not
+read: the source carries no Ensembl id, and an alias is often an unrelated
+gene's approved symbol (`HGF` is SOS1's alias), so keeping one would carry the
+wrong gene's column into the pseudobulk.
 
 `--by-region` is the run grouped by Age, Rep, major_cell_class and Region; its
 rows take each group's own Region. `--pooled` is the run without Region; its
@@ -87,13 +90,12 @@ def extract_rows(
 
 
 def read_wanted(registry: Path) -> set[str]:
-    """Every approved, alias and previous symbol in the registry TSV."""
+    """Every approved symbol in the registry TSV, and nothing from its alias or
+    previous-symbol columns."""
     wanted: set[str] = set()
     with registry.open(newline="", encoding="utf-8") as handle:
         for record in csv.DictReader(handle, delimiter="\t"):
             wanted.add((record.get("symbol") or "").strip())
-            for column in ("aliases", "prev_symbols"):
-                wanted.update(p.strip() for p in (record.get(column) or "").split("|"))
     wanted.discard("")
     return wanted
 

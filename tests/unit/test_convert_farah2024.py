@@ -33,7 +33,7 @@ from convert_farah2024 import (  # noqa: E402
     map_symbols,
     summarise,
 )
-from farah_extract import extract_rows  # noqa: E402
+from farah_extract import extract_rows, read_wanted  # noqa: E402
 
 from chd_atlas.genes import GeneRegistry  # noqa: E402
 
@@ -125,23 +125,62 @@ def test_a_heart_counted_twice_in_one_group_is_refused() -> None:
         _summarise([_row("9pcw-1"), _row("9pcw-1")])
 
 
-def test_an_ambiguous_symbol_is_refused_and_a_missing_gene_named() -> None:
+# Three rows' symbol columns transcribed from `mirrors/genes.tsv` (2026-10-28).
+# Each carries an alias that is an unrelated gene's approved symbol: HGF is
+# hepatocyte growth factor's, PKD1 polycystin 1's, and POP1 the ribonuclease P
+# subunit's. None of those three genes is in the registry, so `resolve` answers
+# each at the alias tier with the registry gene's id.
+_COLLIDING = GeneRegistry(
+    {"hgnc_id": gene, "symbol": symbol, "aliases": aliases, "prev_symbols": previous}
+    for gene, symbol, aliases, previous in (
+        ("HGNC:11187", "SOS1", "HGF|GF1", "GINGF"),
+        ("HGNC:9407", "PRKD1", "PKD1|PKCM|PKD|PKC-mu", "PRKCM"),
+        ("HGNC:1152", "POPDC1", "POP1|HBVES", "BVES"),
+    )
+)
+
+
+@pytest.mark.parametrize(
+    ("symbols", "mapped", "absent"),
+    [
+        (["SOS1"], {"SOS1": "HGNC:11187"}, ["HGNC:1152 (POPDC1)", "HGNC:9407 (PRKD1)"]),
+        (["HGF", "SOS1"], {"SOS1": "HGNC:11187"}, ["HGNC:1152 (POPDC1)", "HGNC:9407 (PRKD1)"]),
+        (["PKD1", "PRKD1"], {"PRKD1": "HGNC:9407"}, ["HGNC:1152 (POPDC1)", "HGNC:11187 (SOS1)"]),
+        (["POP1"], {}, ["HGNC:1152 (POPDC1)", "HGNC:9407 (PRKD1)", "HGNC:11187 (SOS1)"]),
+        (["BVES", "POP1"], {}, ["HGNC:1152 (POPDC1)", "HGNC:9407 (PRKD1)", "HGNC:11187 (SOS1)"]),
+    ],
+)
+def test_the_join_is_on_approved_symbols_only(
+    symbols: list[str], mapped: dict[str, str], absent: list[str]
+) -> None:
+    """The source names its genes by symbol and carries no Ensembl id, so an
+    alias or previous symbol cannot be told from another gene's approved one.
+
+    Joined through every tier, `HGF` + `SOS1` stopped the run as two names for
+    one gene, and a lone `POP1` published the ribonuclease's counts as POPDC1's.
+    Only an approved symbol joins; a registry gene the source does not name by
+    its approved symbol gets no rows and is reported.
+    """
+    mapping, report = map_symbols(symbols, _COLLIDING)
+    assert mapping == mapped
+    named = [line for line in report if line.endswith(": approved symbol not in the pseudobulk")]
+    assert named == [f"{gene}: approved symbol not in the pseudobulk" for gene in absent]
+    dropped = [line for line in report if line.endswith(", not an approved symbol, dropped")]
+    assert [line.split(":")[0] for line in dropped] == sorted(set(symbols) - set(mapped))
+    assert len(report) == len(named) + len(dropped)
+
+
+def test_two_approved_symbols_for_one_id_stop_the_run() -> None:
+    """Only a registry carrying one id twice can do this, and TBL007 refuses
+    that; the converter stops rather than pooling two names' counts."""
     registry = GeneRegistry(
         [
-            {"hgnc_id": "HGNC:1", "symbol": "AAA", "aliases": "DUP", "prev_symbols": ""},
-            {"hgnc_id": "HGNC:2", "symbol": "BBB", "aliases": "DUP", "prev_symbols": ""},
-            {"hgnc_id": "HGNC:3", "symbol": "CCC", "aliases": "", "prev_symbols": "OLDC"},
+            {"hgnc_id": "HGNC:1", "symbol": "AAA", "aliases": "", "prev_symbols": ""},
+            {"hgnc_id": "HGNC:1", "symbol": "AAB", "aliases": "", "prev_symbols": ""},
         ]
     )
-    mapping, report = map_symbols(["AAA", "DUP", "OLDC"], registry)
-    assert mapping == {"AAA": "HGNC:1", "OLDC": "HGNC:3"}
-    text = "\n".join(report)
-    assert "DUP" in text and "ambiguous" in text
-    assert "BBB" in text and "HGNC:2" in text
-    assert "CCC" not in text
-
-    with pytest.raises(SystemExit):
-        map_symbols(["CCC", "OLDC"], registry)
+    with pytest.raises(SystemExit, match="'AAA' and 'AAB' both resolve to HGNC:1"):
+        map_symbols(["AAA", "AAB"], registry)
 
 
 def test_extract_rows_keeps_only_wanted_symbols_and_tags_the_region() -> None:
@@ -198,6 +237,19 @@ def test_extract_rows_keeps_only_wanted_symbols_and_tags_the_region() -> None:
     pooled = extract_rows(groups, genes, sums, nonzero, {"BBB"}, "all")
     assert {r["region"] for r in pooled} == {"all"}
     assert [r["library_size"] for r in pooled] == [10.0, 10.0]
+
+
+def test_the_extract_keeps_only_the_registry_s_approved_symbols(tmp_path: Path) -> None:
+    """An alias kept here would carry an unrelated gene's column into the
+    pseudobulk -- `HGF` is SOS1's alias and hepatocyte growth factor's symbol."""
+    registry = tmp_path / "genes.tsv"
+    registry.write_text(
+        "hgnc_id\tsymbol\taliases\tprev_symbols\n"
+        "HGNC:11187\tSOS1\tHGF|GF1\tGINGF\n"
+        "HGNC:1152\tPOPDC1\tPOP1|HBVES\tBVES\n",
+        encoding="utf-8",
+    )
+    assert read_wanted(registry) == {"SOS1", "POPDC1"}
 
 
 def _registry_file(tmp_path: Path) -> Path:

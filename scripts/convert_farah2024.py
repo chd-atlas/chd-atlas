@@ -12,9 +12,18 @@ number of hearts, the cells pooled, and the share of those cells expressing the
 gene. A heart is `{age}pcw-{replicate}`: two hearts of one gestational age are
 two donors.
 
-Nothing is guessed. A symbol that more than one gene claims is dropped and
-reported; two symbols that resolve to one gene, a heart counted twice in one
-group, and any malformed input row stop the run before the output is touched.
+Genes join on the registry's approved symbols only. The source names its genes
+by symbol and carries no Ensembl id, so an alias or previous symbol cannot be
+told from an unrelated gene's approved symbol: `HGF` is SOS1's alias and
+hepatocyte growth factor's symbol, and `POP1` is POPDC1's alias and the
+ribonuclease P subunit's symbol. A source symbol that is not a registry gene's
+approved symbol is dropped and reported, and a registry gene whose approved
+symbol the source lacks gets no rows and is named.
+
+Nothing is guessed: no alias, previous symbol or id stands in for a missing
+approved symbol. Two approved symbols carrying one id, a heart counted twice in
+one group, and any malformed input row stop the run before the output is
+touched.
 """
 
 from __future__ import annotations
@@ -35,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_cardoso_moreira import quantile_linear  # noqa: E402
 
 from chd_atlas.fs import write_bytes_atomically  # noqa: E402
-from chd_atlas.genes import GeneRegistry  # noqa: E402
+from chd_atlas.genes import GeneRegistry, Resolution  # noqa: E402
 
 UNIT = "cpm"
 REGIONS = frozenset({"LA", "RA", "LV", "RV", "IVS", "all"})
@@ -138,24 +147,33 @@ def read_pseudobulk(path: Path) -> list[PseudobulkRow]:
 
 
 def map_symbols(symbols: Iterable[str], registry: GeneRegistry) -> tuple[dict[str, str], list[str]]:
-    """symbol -> HGNC id, plus report lines.
+    """symbol -> HGNC id for the approved symbols, plus report lines.
 
-    A symbol that no gene claims, or that several do, is left out and reported;
-    it is never resolved to one candidate. Two symbols resolving to the same id
-    would pool one gene's counts under two names, so that stops the run. Every
-    registry gene that no symbol reached is named, so a gene absent from the
-    source is visible rather than missing without comment.
+    A symbol joins only when `registry.resolve` answers it at the approved
+    tier. An alias or previous symbol is dropped and reported even when one
+    gene alone claims it, because the source's column of that name may be
+    another gene's: joined through every tier, `HGF` and `SOS1` together
+    stopped the run as two names for one gene, and a lone `POP1` mapped the
+    ribonuclease P subunit's counts to POPDC1 (measured 2026-10-28 against
+    `mirrors/genes.tsv`; DLC1 with `HP` and PRKD1 with `PKD1` collide the same
+    way). Every registry gene whose approved symbol is absent is named, so a
+    gene the source lacks is visible rather than missing without comment.
+
+    Two approved symbols reaching one id would pool one gene's counts under two
+    names, so that stops the run. Only a registry listing one id twice can do
+    it, which TBL007 refuses; the guard stays for a bypassed gate.
     """
     mapping: dict[str, str] = {}
     report: list[str] = []
     claimed_by: dict[str, str] = {}
     for symbol in sorted(set(symbols)):
         resolved = registry.resolve(symbol)
-        if not resolved.ok:
-            kind = "ambiguous" if resolved.candidates else "unknown"
-            report.append(f"{symbol}: {kind} {list(resolved.candidates)}, dropped")
+        if resolved.resolution is not Resolution.APPROVED or resolved.gene is None:
+            report.append(
+                f"{symbol}: {resolved.resolution} {list(resolved.candidates)}, "
+                "not an approved symbol, dropped"
+            )
             continue
-        assert resolved.gene is not None
         if resolved.gene in claimed_by:
             raise _fail(
                 f"{claimed_by[resolved.gene]!r} and {symbol!r} both resolve to {resolved.gene}"
@@ -165,7 +183,7 @@ def map_symbols(symbols: Iterable[str], registry: GeneRegistry) -> tuple[dict[st
     for approved in registry.approved_symbols():
         gene = registry.resolve(approved).gene
         if gene is not None and gene not in claimed_by:
-            report.append(f"{gene} ({approved}): no symbol in the pseudobulk")
+            report.append(f"{gene} ({approved}): approved symbol not in the pseudobulk")
     return mapping, report
 
 
